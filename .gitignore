@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+*.js.map
+
+# Go binaries
+go/bin/
+/sc-scan
+/sc-agent
+/sc-certmon
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test & coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Logs
+*.log
+logs/
+
+# Docker volumes
+docker-data/
+
+# Prisma
+prisma/migrations/*.sql.bak
+
+# OS
+Thumbs.db

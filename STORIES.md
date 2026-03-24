@@ -23,12 +23,12 @@ Set up monorepo structure, tooling, and initial configuration for all components
 
 **Tasks:**
 
-- [ ] **T-1.1.1** Initialize monorepo root with `package.json` (workspaces), `.gitignore`, `.editorconfig`, `prettier`/`eslint` configs — `size: S`
-- [ ] **T-1.1.2** Scaffold `platform-api/` — Node.js + TypeScript with Express, `tsconfig.json`, directory structure (`src/modules/`, `src/jobs/`, `src/ws/`, `src/middleware/`, `src/lib/`) — `size: M`
-- [ ] **T-1.1.3** Scaffold `dashboard/` — React + TypeScript (Vite), directory structure (`src/pages/`, `src/components/`, `src/hooks/`, `src/api/`, `src/ws/`) — `size: M`
-- [ ] **T-1.1.4** Scaffold `go/` — Go module with `cmd/sc-scan/`, `cmd/sc-agent/`, `cmd/sc-certmon/`, `internal/`, `pkg/models/`, `go.mod` — `size: M`
-- [ ] **T-1.1.5** Add Docker Compose for local dev: PostgreSQL 16, Redis 7, OpenSearch, with health checks and volume mounts — `size: M`
-- [ ] **T-1.1.6** Add `Makefile` with targets: `dev`, `test`, `lint`, `build`, `docker-up`, `docker-down`, `migrate` — `size: S`
+- [x] **T-1.1.1** Initialize monorepo root with `package.json` (workspaces), `.gitignore`, `.editorconfig`, `prettier`/`eslint` configs — `size: S`
+- [x] **T-1.1.2** Scaffold `platform-api/` — Node.js + TypeScript with Express, `tsconfig.json`, directory structure (`src/modules/`, `src/jobs/`, `src/ws/`, `src/middleware/`, `src/lib/`) — `size: M`
+- [x] **T-1.1.3** Scaffold `dashboard/` — React + TypeScript (Vite), directory structure (`src/pages/`, `src/components/`, `src/hooks/`, `src/api/`, `src/ws/`) — `size: M`
+- [x] **T-1.1.4** Scaffold `go/` — Go module with `cmd/sc-scan/`, `cmd/sc-agent/`, `cmd/sc-certmon/`, `internal/`, `pkg/models/`, `go.mod` — `size: M`
+- [x] **T-1.1.5** Add Docker Compose for local dev: PostgreSQL 16, Redis 7, OpenSearch, with health checks and volume mounts — `size: M`
+- [x] **T-1.1.6** Add `Makefile` with targets: `dev`, `test`, `lint`, `build`, `docker-up`, `docker-down`, `migrate` — `size: S`
 
 ### Story 1.2: Database Schema & Migrations
 
