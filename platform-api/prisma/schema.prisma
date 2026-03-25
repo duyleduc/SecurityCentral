@@ -1,0 +1,337 @@
+// ─── Generator & Datasource ─────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ──────────────────────────────────────────────────
+
+enum FindingSource {
+  code_scanner
+  infra_agent
+  cert_monitor
+}
+
+enum SeverityLevel {
+  critical
+  high
+  medium
+  low
+  info
+}
+
+enum FindingStatus {
+  open
+  in_progress
+  resolved
+  suppressed
+  false_positive
+}
+
+enum ScanType {
+  code_dependencies
+  code_secrets
+  infra_packages
+  infra_compliance
+  cert_discovery
+  cert_check
+}
+
+enum ScanStatus {
+  pending
+  running
+  completed
+  failed
+  cancelled
+}
+
+// ─── T-1.2.2: Core Identity Models ─────────────────────────
+
+model Organization {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  slug      String   @unique
+  plan      String   @default("starter") // starter | growth | enterprise
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  users          User[]
+  apiKeys        ApiKey[]
+  repositories   Repository[]
+  servers        Server[]
+  certificates   Certificate[]
+  scans          Scan[]
+  findings       Finding[]
+  integrations   Integration[]
+
+  @@map("organizations")
+}
+
+model User {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId        String   @map("org_id") @db.Uuid
+  email        String   @unique
+  name         String
+  role         String   @default("member") // owner | admin | member | viewer
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  organization            Organization              @relation(fields: [orgId], references: [id])
+  apiKeys                 ApiKey[]
+  notificationPreferences NotificationPreference[]
+
+  @@map("users")
+}
+
+model ApiKey {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId     String    @map("org_id") @db.Uuid
+  createdBy String    @map("created_by") @db.Uuid
+  name      String
+  keyHash   String    @unique @map("key_hash")
+  keyPrefix String    @map("key_prefix")
+  scopes    String[]  @default([])
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz()
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz()
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  creator      User         @relation(fields: [createdBy], references: [id])
+
+  @@map("api_keys")
+}
+
+// ─── T-1.2.3: Asset Models ─────────────────────────────────
+
+model Repository {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId         String    @map("org_id") @db.Uuid
+  provider      String    // github | gitlab | bitbucket
+  providerId    String    @map("provider_id")
+  owner         String
+  name          String
+  defaultBranch String    @default("main") @map("default_branch")
+  language      String?
+  lastScanAt    DateTime? @map("last_scan_at") @db.Timestamptz()
+  settings      Json      @default("{}")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  scans        Scan[]
+  findings     Finding[]
+
+  @@unique([orgId, provider, providerId])
+  @@map("repositories")
+}
+
+model Server {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId           String    @map("org_id") @db.Uuid
+  agentId         String?   @unique @map("agent_id")
+  hostname        String
+  osFamily        String    @map("os_family") // ubuntu | centos | alpine | rhel | debian
+  osVersion       String    @map("os_version")
+  arch            String    @default("amd64") // amd64 | arm64
+  cloudProvider   String?   @map("cloud_provider") // aws | gcp | azure | null (on-prem)
+  cloudRegion     String?   @map("cloud_region")
+  cloudInstanceId String?   @map("cloud_instance_id")
+  environment     String    @default("production") // production | staging | development
+  agentVersion    String?   @map("agent_version")
+  lastHeartbeat   DateTime? @map("last_heartbeat") @db.Timestamptz()
+  lastScanAt      DateTime? @map("last_scan_at") @db.Timestamptz()
+  status          String    @default("active") // active | inactive | decommissioned
+  metadata        Json      @default("{}")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  organization Organization  @relation(fields: [orgId], references: [id])
+  scans        Scan[]
+  findings     Finding[]
+  certificates Certificate[] @relation("SourceAsset")
+
+  @@map("servers")
+}
+
+model Certificate {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId              String    @map("org_id") @db.Uuid
+  subjectCn          String    @map("subject_cn")
+  sans               String[]  @default([])
+  issuerCn           String    @map("issuer_cn")
+  serialNumber       String    @map("serial_number")
+  fingerprintSha256  String    @map("fingerprint_sha256")
+  notBefore          DateTime  @map("not_before") @db.Timestamptz()
+  notAfter           DateTime  @map("not_after") @db.Timestamptz()
+  keyAlgorithm       String    @map("key_algorithm") // RSA-2048 | RSA-4096 | ECDSA-P256
+  signatureAlgorithm String    @map("signature_algorithm")
+  chainValid         Boolean?  @map("chain_valid")
+  chainDepth         Int?      @map("chain_depth")
+  discoveredFrom     String    @map("discovered_from") // alb:arn:... | nginx:/etc/... | port:443
+  sourceAssetId      String?   @map("source_asset_id") @db.Uuid
+  lastCheckedAt      DateTime  @default(now()) @map("last_checked_at") @db.Timestamptz()
+  status             String    @default("active") // active | expiring | expired | revoked
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  sourceAsset  Server?      @relation("SourceAsset", fields: [sourceAssetId], references: [id])
+  findings     Finding[]
+  certAlerts   CertAlert[]
+
+  @@unique([orgId, fingerprintSha256])
+  @@map("certificates")
+}
+
+// ─── T-1.2.4: Operational Models ────────────────────────────
+
+model Scan {
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId           String     @map("org_id") @db.Uuid
+  scanType        ScanType   @map("scan_type")
+  status          ScanStatus @default(pending)
+  trigger         String     @default("scheduled") // scheduled | manual | webhook | agent
+  repositoryId    String?    @map("repository_id") @db.Uuid
+  serverId        String?    @map("server_id") @db.Uuid
+  findingsTotal   Int        @default(0) @map("findings_total")
+  findingsNew     Int        @default(0) @map("findings_new")
+  findingsResolved Int       @default(0) @map("findings_resolved")
+  errorMessage    String?    @map("error_message")
+  startedAt       DateTime?  @map("started_at") @db.Timestamptz()
+  completedAt     DateTime?  @map("completed_at") @db.Timestamptz()
+  durationMs      Int?       @map("duration_ms")
+  metadata        Json       @default("{}") @db.JsonB
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  repository   Repository?  @relation(fields: [repositoryId], references: [id])
+  server       Server?      @relation(fields: [serverId], references: [id])
+  findings     Finding[]
+
+  @@map("scans")
+}
+
+model Finding {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId         String        @map("org_id") @db.Uuid
+  source        FindingSource
+  severity      SeverityLevel
+  status        FindingStatus @default(open)
+  title         String
+  description   String?
+  cveId         String?       @map("cve_id")
+  cvssScore     Decimal?      @map("cvss_score") @db.Decimal(3, 1)
+  cvssVector    String?       @map("cvss_vector")
+  repositoryId  String?       @map("repository_id") @db.Uuid
+  serverId      String?       @map("server_id") @db.Uuid
+  certificateId String?       @map("certificate_id") @db.Uuid
+  detail        Json          @default("{}") @db.JsonB
+  remediation   String?
+  autoFixable   Boolean       @default(false) @map("auto_fixable")
+  fixPrUrl      String?       @map("fix_pr_url")
+  scanId        String        @map("scan_id") @db.Uuid
+  firstSeenAt   DateTime      @default(now()) @map("first_seen_at") @db.Timestamptz()
+  resolvedAt    DateTime?     @map("resolved_at") @db.Timestamptz()
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  repository   Repository?  @relation(fields: [repositoryId], references: [id])
+  server       Server?      @relation(fields: [serverId], references: [id])
+  certificate  Certificate? @relation(fields: [certificateId], references: [id])
+  scan         Scan         @relation(fields: [scanId], references: [id])
+
+  // T-1.2.6: Indexes per spec
+  @@index([orgId, status], map: "idx_findings_org_status")
+  @@index([orgId, severity], map: "idx_findings_org_severity")
+  @@index([cveId], map: "idx_findings_cve")
+  @@index([repositoryId], map: "idx_findings_repo")
+  @@index([serverId], map: "idx_findings_server")
+  @@index([certificateId], map: "idx_findings_cert")
+  @@map("findings")
+}
+
+model Integration {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  provider  String   // github | gitlab | slack
+  status    String   @default("active")
+  config    Json     @default("{}") @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, provider])
+  @@map("integrations")
+}
+
+model CertAlert {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  certificateId String   @map("certificate_id") @db.Uuid
+  alertType     String   @map("alert_type") // expiry_90d | expiry_60d | expiry_30d | ...
+  sentAt        DateTime @default(now()) @map("sent_at") @db.Timestamptz()
+  channel       String   // slack | email
+
+  certificate Certificate @relation(fields: [certificateId], references: [id])
+
+  @@unique([certificateId, alertType])
+  @@map("cert_alerts")
+}
+
+model NotificationPreference {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String  @map("user_id") @db.Uuid
+  channel   String  // slack | email
+  eventType String  @map("event_type") // critical_finding | scan_complete | cert_expiry | agent_offline
+  enabled   Boolean @default(true)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, channel, eventType])
+  @@map("notification_preferences")
+}
+
+// ─── T-1.2.5: Vulnerability Models ─────────────────────────
+
+model Vulnerability {
+  id          String        @id // CVE-XXXX-YYYYY (natural key)
+  title       String
+  description String?
+  cvssScore   Decimal?      @map("cvss_score") @db.Decimal(3, 1)
+  cvssVector  String?       @map("cvss_vector")
+  severity    SeverityLevel
+  publishedAt DateTime?     @map("published_at") @db.Timestamptz()
+  modifiedAt  DateTime?     @map("modified_at") @db.Timestamptz()
+  references  String[]      @default([])
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  affects VulnerabilityAffects[]
+
+  @@map("vulnerabilities")
+}
+
+model VulnerabilityAffects {
+  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vulnerabilityId String  @map("vulnerability_id")
+  ecosystem       String  // npm | pypi | maven | ubuntu | centos | alpine
+  packageName     String  @map("package_name")
+  versionRange    String  @map("version_range") // e.g., ">=1.0.0 <1.0.5"
+  fixedVersion    String? @map("fixed_version")
+  osFamily        String? @map("os_family")
+  osVersion       String? @map("os_version")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  vulnerability Vulnerability @relation(fields: [vulnerabilityId], references: [id])
+
+  // T-1.2.6: Index per spec
+  @@index([ecosystem, packageName], map: "idx_vuln_affects_lookup")
+  @@map("vulnerability_affects")
+}
