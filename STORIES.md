@@ -59,10 +59,10 @@ Configure Elasticsearch index for findings search/aggregation.
 
 **Tasks:**
 
-- [ ] **T-1.3.1** Create ES index template with mapping per spec: keyword fields (id, org_id, source, severity, status, cve_id, repository_id, server_id, certificate_id), text (title, description), float (cvss_score), boolean (auto_fixable), date (first_seen_at, resolved_at, created_at) — `size: M` | `depends: T-1.1.5`
-- [ ] **T-1.3.2** Implement ES client wrapper in `platform-api/src/lib/elasticsearch.ts` with connection pooling, health check, and index initialization on startup — `size: M`
-- [ ] **T-1.3.3** Implement finding sync service: on finding INSERT/UPDATE in PostgreSQL, enqueue BullMQ job to upsert document into ES by `id` — `size: M` | `depends: T-1.4.1`
-- [ ] **T-1.3.4** Write integration test verifying finding → ES sync roundtrip (insert finding in PG, verify it appears in ES within timeout) — `size: S`
+- [x] **T-1.3.1** Create ES index template with mapping per spec: keyword fields (id, org_id, source, severity, status, cve_id, repository_id, server_id, certificate_id), text (title, description), float (cvss_score), boolean (auto_fixable), date (first_seen_at, resolved_at, created_at) — `size: M` | `depends: T-1.1.5`
+- [x] **T-1.3.2** Implement ES client wrapper in `platform-api/src/lib/elasticsearch.ts` with connection pooling, health check, and index initialization on startup — `size: M`
+- [x] **T-1.3.3** Implement finding sync service: on finding INSERT/UPDATE in PostgreSQL, enqueue BullMQ job to upsert document into ES by `id` — `size: M` | `depends: T-1.4.1`
+- [x] **T-1.3.4** Write integration test verifying finding → ES sync roundtrip (insert finding in PG, verify it appears in ES within timeout) — `size: S`
 
 ### Story 1.4: Job Queue Infrastructure
 
