@@ -75,9 +75,9 @@ Set up BullMQ queues and worker process.
 
 **Tasks:**
 
-- [ ] **T-1.4.1** Define BullMQ queues in `platform-api/src/jobs/queues.ts`: `scan-orchestration`, `finding-ingestion`, `notifications`, `vulndb-sync`, `github-pr`, `es-sync` — `size: S` | `depends: T-1.1.5`
-- [ ] **T-1.4.2** Implement worker entrypoint (`src/worker.ts`) — register processors for all queues with concurrency limits, graceful shutdown — `size: M`
-- [ ] **T-1.4.3** Add health check endpoint for worker process (`/health` returns queue connection status) — `size: S`
+- [x] **T-1.4.1** Define BullMQ queues in `platform-api/src/jobs/queues.ts`: `scan-orchestration`, `finding-ingestion`, `notifications`, `vulndb-sync`, `github-pr`, `es-sync` — `size: S` | `depends: T-1.1.5`
+- [x] **T-1.4.2** Implement worker entrypoint (`src/worker.ts`) — register processors for all queues with concurrency limits, graceful shutdown — `size: M`
+- [x] **T-1.4.3** Add health check endpoint for worker process (`/health` returns queue connection status) — `size: S`
 
 ### Story 1.5: Cross-Cutting Middleware
 
