@@ -916,8 +916,8 @@ View scan history and trigger manual scans.
 
 **Tasks:**
 
-- [ ] **T-12.6.1** Implement scans list page — table with type icon, status badge (pending/running/completed/failed), asset name, trigger, started/completed time, findings counts (total/new/resolved) — `size: M`
-- [ ] **T-12.6.2** Implement scan detail page — progress indicator for running scans, findings breakdown, error message if failed, duration — `size: M`
+- [x] **T-12.6.1** Implement scans list page — table with type icon, status badge (pending/running/completed/failed), asset name, trigger, started/completed time, findings counts (total/new/resolved) — `size: M`
+- [x] **T-12.6.2** Implement scan detail page — progress indicator for running scans, findings breakdown, error message if failed, duration — `size: M`
 
 ### Story 12.7: Integrations Page
 
@@ -930,11 +930,11 @@ Configure GitHub, GitLab, and Slack connections.
 
 **Tasks:**
 
-- [ ] **T-12.7.1** Implement integrations page — cards for GitHub, GitLab, Slack showing connection status (connected/disconnected), connected date — `size: M`
-- [ ] **T-12.7.2** Implement GitHub connection flow — "Connect GitHub" button → redirect to GitHub App install → callback handling → refresh status — `size: M`
-- [ ] **T-12.7.3** Implement GitLab connection flow — modal: input access token, save, test connection — `size: S`
-- [ ] **T-12.7.4** Implement Slack connection flow — modal: input webhook URL, "Test" button sends test message, save — `size: S`
-- [ ] **T-12.7.5** Implement disconnect button — confirm dialog, call `DELETE /integrations/:id`, refresh status — `size: S`
+- [x] **T-12.7.1** Implement integrations page — cards for GitHub, GitLab, Slack showing connection status (connected/disconnected), connected date — `size: M`
+- [x] **T-12.7.2** Implement GitHub connection flow — "Connect GitHub" button → redirect to GitHub App install → callback handling → refresh status — `size: M`
+- [x] **T-12.7.3** Implement GitLab connection flow — modal: input access token, save, test connection — `size: S`
+- [x] **T-12.7.4** Implement Slack connection flow — modal: input webhook URL, "Test" button sends test message, save — `size: S`
+- [x] **T-12.7.5** Implement disconnect button — confirm dialog, call `DELETE /integrations/:id`, refresh status — `size: S`
 
 ### Story 12.8: Settings Page
 
@@ -947,9 +947,9 @@ Organization settings, API keys, and notification preferences.
 
 **Tasks:**
 
-- [ ] **T-12.8.1** Implement org settings section — display org name, plan, member count — `size: S`
-- [ ] **T-12.8.2** Implement API keys management — list keys (prefix, name, scopes, last used), "Create API Key" form (name, scopes checkboxes) with modal showing raw key once, revoke button with confirm — `size: L`
-- [ ] **T-12.8.3** Implement notification preferences — grid of toggles: rows = event types (critical finding, scan complete, cert expiry, agent offline), columns = channels (Slack, email); call `PUT /notification-preferences` on change — `size: M`
+- [x] **T-12.8.1** Implement org settings section — display org name, plan, member count — `size: S`
+- [x] **T-12.8.2** Implement API keys management — list keys (prefix, name, scopes, last used), "Create API Key" form (name, scopes checkboxes) with modal showing raw key once, revoke button with confirm — `size: L`
+- [x] **T-12.8.3** Implement notification preferences — grid of toggles: rows = event types (critical finding, scan complete, cert expiry, agent offline), columns = channels (Slack, email); call `PUT /notification-preferences` on change — `size: M`
 
 ---
 
