@@ -7,3 +7,4 @@ export { validate } from './validate.js';
 export { requestLoggerMiddleware } from './request-logger.js';
 export { requireAuth, requireScope, type AuthContext } from './auth.js';
 export { requireRole, requirePermission, PERMISSIONS } from './rbac.js';
+export { requireMtls } from './mtls.js';

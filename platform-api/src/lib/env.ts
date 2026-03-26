@@ -14,6 +14,8 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().default('change-me-refresh-in-production'),
   JWT_EXPIRES_IN: z.string().default('1h'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  AGENT_CA_CERT: z.string().optional(),  // PEM-encoded CA cert (loaded from env or auto-generated for dev)
+  AGENT_CA_KEY: z.string().optional(),   // PEM-encoded CA private key
 });
 
 export const env = envSchema.parse(process.env);

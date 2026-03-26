@@ -320,10 +320,10 @@ Set up mutual TLS for agent-to-platform communication.
 
 **Tasks:**
 
-- [ ] **T-4.1.1** Create self-managed CA utility: generate CA key pair (ECDSA P-256) for dev/test; production CA loaded from `AGENT_CA_CERT`/`AGENT_CA_KEY` env vars — `size: M`
-- [ ] **T-4.1.2** Implement CSR signing utility in `platform-api/src/lib/ca.ts` — accept PKCS10 CSR, sign with CA key, return signed cert (1-year validity, CN=`ag_<id>.agents.securitycentral.io`) — `size: M`
-- [ ] **T-4.1.3** Configure platform API to accept mTLS connections on agent routes (`/v1/agents/*`) — verify client cert signed by platform CA — `size: M`
-- [ ] **T-4.1.4** Write tests for CSR signing, certificate validation, and mTLS connection rejection — `size: M`
+- [x] **T-4.1.1** Create self-managed CA utility: generate CA key pair (ECDSA P-256) for dev/test; production CA loaded from `AGENT_CA_CERT`/`AGENT_CA_KEY` env vars — `size: M`
+- [x] **T-4.1.2** Implement CSR signing utility in `platform-api/src/lib/ca.ts` — accept PKCS10 CSR, sign with CA key, return signed cert (1-year validity, CN=`ag_<id>.agents.securitycentral.io`) — `size: M`
+- [x] **T-4.1.3** Configure platform API to accept mTLS connections on agent routes (`/v1/agents/*`) — verify client cert signed by platform CA — `size: M`
+- [x] **T-4.1.4** Write tests for CSR signing, certificate validation, and mTLS connection rejection — `size: M`
 
 ### Story 4.2: Agent Registration & Heartbeat
 
