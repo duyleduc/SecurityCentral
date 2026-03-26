@@ -812,11 +812,11 @@ Live dashboard updates via Socket.IO.
 
 **Tasks:**
 
-- [ ] **T-11.1.1** Set up Socket.IO server in `platform-api/src/ws/` — authenticate connections via JWT in handshake, join org-scoped room — `size: M`
-- [ ] **T-11.1.2** Implement Redis pub/sub adapter for Socket.IO — enable fan-out across multiple ECS tasks — `size: M`
-- [ ] **T-11.1.3** Implement event emission functions for: `finding:new`, `finding:resolved`, `scan:started`, `scan:completed`, `agent:connected`, `agent:disconnected`, `cert:expiring` — emit to org room with payload per spec — `size: M`
-- [ ] **T-11.1.4** Connect event emission to BullMQ job hooks — emit after finding ingestion, scan completion, heartbeat processing, cert check — `size: M` | `depends: T-4.3.3, T-4.2.3`
-- [ ] **T-11.1.5** Write tests for WebSocket authentication, org-scoping, and event delivery — `size: M`
+- [x] **T-11.1.1** Set up Socket.IO server in `platform-api/src/ws/` — authenticate connections via JWT in handshake, join org-scoped room — `size: M`
+- [x] **T-11.1.2** Implement Redis pub/sub adapter for Socket.IO — enable fan-out across multiple ECS tasks — `size: M`
+- [x] **T-11.1.3** Implement event emission functions for: `finding:new`, `finding:resolved`, `scan:started`, `scan:completed`, `agent:connected`, `agent:disconnected`, `cert:expiring` — emit to org room with payload per spec — `size: M`
+- [x] **T-11.1.4** Connect event emission to BullMQ job hooks — emit after finding ingestion, scan completion, heartbeat processing, cert check — `size: M` | `depends: T-4.3.3, T-4.2.3`
+- [x] **T-11.1.5** Write tests for WebSocket authentication, org-scoping, and event delivery — `size: M`
 
 ---
 
