@@ -218,13 +218,13 @@ Manage code repository assets.
 
 **Tasks:**
 
-- [ ] **T-3.2.1** Create assets module structure: `assets/repositories.router.ts`, `repositories.service.ts` — `size: S`
-- [ ] **T-3.2.2** Implement `GET /repositories` — list repos for org, paginated — `size: S`
-- [ ] **T-3.2.3** Implement `POST /repositories` — register repository (provider, provider_id, owner, name, default_branch); enforce unique constraint — `size: S`
-- [ ] **T-3.2.4** Implement `GET /repositories/:id` — repo detail + latest scan summary + finding counts grouped by severity — `size: M`
-- [ ] **T-3.2.5** Implement `DELETE /repositories/:id` — remove repository and associated data — `size: S`
-- [ ] **T-3.2.6** Implement `POST /repositories/:id/scan` — validate no active scan (`SCAN_ALREADY_RUNNING`), create pending scan record, enqueue `scan-orchestration` BullMQ job — `size: M` | `depends: T-1.4.1`
-- [ ] **T-3.2.7** Write tests for repository CRUD and manual scan trigger — `size: M`
+- [x] **T-3.2.1** Create assets module structure: `assets/repositories.router.ts`, `repositories.service.ts` — `size: S`
+- [x] **T-3.2.2** Implement `GET /repositories` — list repos for org, paginated — `size: S`
+- [x] **T-3.2.3** Implement `POST /repositories` — register repository (provider, provider_id, owner, name, default_branch); enforce unique constraint — `size: S`
+- [x] **T-3.2.4** Implement `GET /repositories/:id` — repo detail + latest scan summary + finding counts grouped by severity — `size: M`
+- [x] **T-3.2.5** Implement `DELETE /repositories/:id` — remove repository and associated data — `size: S`
+- [x] **T-3.2.6** Implement `POST /repositories/:id/scan` — validate no active scan (`SCAN_ALREADY_RUNNING`), create pending scan record, enqueue `scan-orchestration` BullMQ job — `size: M` | `depends: T-1.4.1`
+- [x] **T-3.2.7** Write tests for repository CRUD and manual scan trigger — `size: M`
 
 ### Story 3.3: Assets Module — Servers
 
