@@ -1,16 +1,130 @@
-.PHONY: dev test lint build docker-up docker-down migrate clean
+.PHONY: dev start stop restart status test lint build docker-up docker-down migrate clean
 
-# ── Development ──────────────────────────────────────────────
+ROOT_DIR := $(shell pwd)
+PID_DIR := $(ROOT_DIR)/.pids
+LOG_DIR := $(ROOT_DIR)/logs
+API_PID := $(PID_DIR)/api.pid
+WORKER_PID := $(PID_DIR)/worker.pid
+DASHBOARD_PID := $(PID_DIR)/dashboard.pid
+
+# ── Start / Stop ────────────────────────────────────────────
+
+start: docker-up _ensure_pid_dir start-api start-worker start-dashboard
+	@echo ""
+	@echo "✓ All services started"
+	@echo "  Platform API:  http://localhost:3000"
+	@echo "  API Docs:      http://localhost:3000/docs"
+	@echo "  Dashboard:     http://localhost:5173"
+	@echo "  Worker:        health on :3001"
+	@echo ""
+	@echo "  Run 'make status' to check, 'make stop' to stop all"
+
+start-api: _ensure_pid_dir
+	@if [ -f $(API_PID) ] && kill -0 $$(cat $(API_PID)) 2>/dev/null; then \
+		echo "→ API already running (PID $$(cat $(API_PID)))"; \
+	else \
+		echo "→ Starting platform-api..."; \
+		cd $(ROOT_DIR)/platform-api && nohup npx tsx watch src/server.ts > $(LOG_DIR)/api.log 2>&1 & echo $$! > $(API_PID); \
+		sleep 0.5; \
+		echo "  PID: $$(cat $(API_PID))"; \
+	fi
+
+start-worker: _ensure_pid_dir
+	@if [ -f $(WORKER_PID) ] && kill -0 $$(cat $(WORKER_PID)) 2>/dev/null; then \
+		echo "→ Worker already running (PID $$(cat $(WORKER_PID)))"; \
+	else \
+		echo "→ Starting worker..."; \
+		cd $(ROOT_DIR)/platform-api && nohup npx tsx watch src/worker.ts > $(LOG_DIR)/worker.log 2>&1 & echo $$! > $(WORKER_PID); \
+		sleep 0.5; \
+		echo "  PID: $$(cat $(WORKER_PID))"; \
+	fi
+
+start-dashboard: _ensure_pid_dir
+	@if [ -f $(DASHBOARD_PID) ] && kill -0 $$(cat $(DASHBOARD_PID)) 2>/dev/null; then \
+		echo "→ Dashboard already running (PID $$(cat $(DASHBOARD_PID)))"; \
+	else \
+		echo "→ Starting dashboard..."; \
+		cd $(ROOT_DIR)/dashboard && nohup npx vite --port 5173 > $(LOG_DIR)/dashboard.log 2>&1 & echo $$! > $(DASHBOARD_PID); \
+		sleep 0.5; \
+		echo "  PID: $$(cat $(DASHBOARD_PID))"; \
+	fi
+
+stop: stop-dashboard stop-worker stop-api
+	@echo "✓ All services stopped"
+
+stop-api:
+	@if [ -f $(API_PID) ]; then \
+		echo "→ Stopping API (PID $$(cat $(API_PID)))..."; \
+		kill $$(cat $(API_PID)) 2>/dev/null || true; \
+		rm -f $(API_PID); \
+	else \
+		echo "→ API not running"; \
+	fi
+
+stop-worker:
+	@if [ -f $(WORKER_PID) ]; then \
+		echo "→ Stopping Worker (PID $$(cat $(WORKER_PID)))..."; \
+		kill $$(cat $(WORKER_PID)) 2>/dev/null || true; \
+		rm -f $(WORKER_PID); \
+	else \
+		echo "→ Worker not running"; \
+	fi
+
+stop-dashboard:
+	@if [ -f $(DASHBOARD_PID) ]; then \
+		echo "→ Stopping Dashboard (PID $$(cat $(DASHBOARD_PID)))..."; \
+		kill $$(cat $(DASHBOARD_PID)) 2>/dev/null || true; \
+		rm -f $(DASHBOARD_PID); \
+	else \
+		echo "→ Dashboard not running"; \
+	fi
+
+restart: stop start
+
+status:
+	@echo "=== SecurityCentral Services ==="
+	@echo ""
+	@printf "  %-12s " "API:"; \
+	if [ -f $(API_PID) ] && kill -0 $$(cat $(API_PID)) 2>/dev/null; then \
+		echo "✓ running (PID $$(cat $(API_PID)))"; \
+	else echo "✗ stopped"; fi
+	@printf "  %-12s " "Worker:"; \
+	if [ -f $(WORKER_PID) ] && kill -0 $$(cat $(WORKER_PID)) 2>/dev/null; then \
+		echo "✓ running (PID $$(cat $(WORKER_PID)))"; \
+	else echo "✗ stopped"; fi
+	@printf "  %-12s " "Dashboard:"; \
+	if [ -f $(DASHBOARD_PID) ] && kill -0 $$(cat $(DASHBOARD_PID)) 2>/dev/null; then \
+		echo "✓ running (PID $$(cat $(DASHBOARD_PID)))"; \
+	else echo "✗ stopped"; fi
+	@echo ""
+	@printf "  %-12s " "PostgreSQL:"; docker compose ps --format '{{.Status}}' postgres 2>/dev/null | head -1 || echo "not running"
+	@printf "  %-12s " "Redis:"; docker compose ps --format '{{.Status}}' redis 2>/dev/null | head -1 || echo "not running"
+	@printf "  %-12s " "OpenSearch:"; docker compose ps --format '{{.Status}}' opensearch 2>/dev/null | head -1 || echo "not running"
+
+logs-api:
+	@tail -f logs/api.log
+
+logs-worker:
+	@tail -f logs/worker.log
+
+logs-dashboard:
+	@tail -f logs/dashboard.log
+
+logs:
+	@tail -f logs/api.log logs/worker.log logs/dashboard.log
+
+# ── Dev (foreground — old behavior) ─────────────────────────
 
 dev: docker-up
-	@echo "Starting platform-api and dashboard in dev mode..."
-	cd platform-api && npm run dev &
-	cd dashboard && npm run dev &
+	@echo "Starting all services in foreground (Ctrl+C to stop)..."
+	cd platform-api && npx tsx watch src/server.ts &
+	cd platform-api && npx tsx watch src/worker.ts &
+	cd dashboard && npx vite --port 5173 &
 	wait
 
 # ── Testing ──────────────────────────────────────────────────
 
-test: test-api test-dashboard test-go
+test: test-api test-dashboard
 
 test-api:
 	cd platform-api && npm test
@@ -23,7 +137,7 @@ test-go:
 
 # ── Linting ──────────────────────────────────────────────────
 
-lint: lint-api lint-dashboard lint-go
+lint: lint-api lint-dashboard
 
 lint-api:
 	cd platform-api && npm run lint
@@ -36,7 +150,7 @@ lint-go:
 
 # ── Build ────────────────────────────────────────────────────
 
-build: build-api build-dashboard build-go
+build: build-api build-dashboard
 
 build-api:
 	cd platform-api && npm run build
@@ -52,8 +166,9 @@ build-go:
 # ── Docker ───────────────────────────────────────────────────
 
 docker-up:
-	docker compose up -d
+	@docker compose up -d
 	@echo "Waiting for services to be healthy..."
+	@sleep 2
 	@docker compose ps
 
 docker-down:
@@ -72,6 +187,11 @@ seed:
 
 # ── Cleanup ──────────────────────────────────────────────────
 
-clean:
+clean: stop
 	rm -rf platform-api/dist dashboard/dist go/bin
-	rm -rf node_modules platform-api/node_modules dashboard/node_modules
+	rm -rf $(PID_DIR) logs
+
+# ── Internal ─────────────────────────────────────────────────
+
+_ensure_pid_dir:
+	@mkdir -p $(PID_DIR) $(LOG_DIR)
