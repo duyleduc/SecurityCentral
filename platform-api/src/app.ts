@@ -6,7 +6,7 @@ import helmet from 'helmet';
 import { corsMiddleware, requestIdMiddleware, requestLoggerMiddleware, apiRateLimit, errorHandler } from './middleware/index.js';
 import { authRouter } from './modules/auth/index.js';
 import { findingsRouter } from './modules/findings/index.js';
-import { repositoriesRouter, serversRouter } from './modules/assets/index.js';
+import { repositoriesRouter, serversRouter, certificatesRouter } from './modules/assets/index.js';
 
 export const app = express();
 
@@ -40,6 +40,7 @@ app.use('/api/v1/findings', findingsRouter);
 // --- Assets routes ---
 app.use('/api/v1/repositories', repositoriesRouter);
 app.use('/api/v1/servers', serversRouter);
+app.use('/api/v1/certificates', certificatesRouter);
 
 // API routes placeholder
 app.get('/api/v1', (_req, res) => {

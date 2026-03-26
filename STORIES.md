@@ -253,10 +253,10 @@ Manage discovered SSL certificates.
 
 **Tasks:**
 
-- [ ] **T-3.4.1** Implement `GET /certificates` — list certificates for org with status filter (active, expiring, expired, revoked) — `size: S`
-- [ ] **T-3.4.2** Implement `GET /certificates/:id` — certificate detail with chain info, SANs, algorithm, issuer — `size: S`
-- [ ] **T-3.4.3** Implement `GET /certificates/expiring` — certificates expiring within N days (query param, default 30) — `size: S`
-- [ ] **T-3.4.4** Write tests for certificate endpoints — `size: S`
+- [x] **T-3.4.1** Implement `GET /certificates` — list certificates for org with status filter (active, expiring, expired, revoked) — `size: S`
+- [x] **T-3.4.2** Implement `GET /certificates/:id` — certificate detail with chain info, SANs, algorithm, issuer — `size: S`
+- [x] **T-3.4.3** Implement `GET /certificates/expiring` — certificates expiring within N days (query param, default 30) — `size: S`
+- [x] **T-3.4.4** Write tests for certificate endpoints — `size: S`
 
 ### Story 3.5: Scans Module
 
