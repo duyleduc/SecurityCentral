@@ -741,10 +741,10 @@ Send security notifications to Slack.
 
 **Tasks:**
 
-- [ ] **T-9.3.1** Implement `POST /integrations/slack` — accept webhook URL, store encrypted in integrations table — `size: S`
-- [ ] **T-9.3.2** Implement Slack notification sender (`src/lib/slack.ts`) — post to webhook URL with Slack Block Kit formatted payload — `size: M`
-- [ ] **T-9.3.3** Create message templates per spec: critical finding (CVE, severity, package, asset, "View Finding" button), scan completed (summary counts), certificate expiring (subject, days remaining), agent offline (hostname, last seen) — `size: M`
-- [ ] **T-9.3.4** Write tests for message formatting and webhook posting (mock webhook endpoint) — `size: M`
+- [x] **T-9.3.1** Implement `POST /integrations/slack` — accept webhook URL, store encrypted in integrations table — `size: S`
+- [x] **T-9.3.2** Implement Slack notification sender (`src/lib/slack.ts`) — post to webhook URL with Slack Block Kit formatted payload — `size: M`
+- [x] **T-9.3.3** Create message templates per spec: critical finding (CVE, severity, package, asset, "View Finding" button), scan completed (summary counts), certificate expiring (subject, days remaining), agent offline (hostname, last seen) — `size: M`
+- [x] **T-9.3.4** Write tests for message formatting and webhook posting (mock webhook endpoint) — `size: M`
 
 ### Story 9.4: Integration Management
 

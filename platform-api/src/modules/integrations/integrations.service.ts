@@ -226,6 +226,29 @@ export async function handleGitLabPushEvent(payload: {
 }
 
 // ---------------------------------------------------------------------------
+// Slack integration
+// ---------------------------------------------------------------------------
+
+export async function createSlackIntegration(orgId: string, webhookUrl: string) {
+  const existing = await prisma.integration.findFirst({
+    where: { orgId, provider: 'slack' },
+  });
+
+  if (existing) {
+    throw new AppError('INTEGRATION_ALREADY_EXISTS', 'Slack integration already exists for this organization');
+  }
+
+  return prisma.integration.create({
+    data: {
+      orgId,
+      provider: 'slack',
+      status: 'active',
+      config: { webhook_url: webhookUrl },
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // List integrations
 // ---------------------------------------------------------------------------
 

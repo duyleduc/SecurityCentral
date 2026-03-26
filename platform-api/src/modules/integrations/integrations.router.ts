@@ -78,6 +78,31 @@ integrationsRouter.post('/github/webhook', express_raw_body, async (req, res, ne
 });
 
 // ---------------------------------------------------------------------------
+// T-9.3.1: POST /integrations/slack — setup Slack webhook
+// ---------------------------------------------------------------------------
+const CreateSlackSchema = z.object({
+  webhookUrl: z.string().url(),
+});
+
+integrationsRouter.post(
+  '/slack',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ body: CreateSlackSchema }),
+  async (req, res, next) => {
+    try {
+      const result = await integrationsService.createSlackIntegration(
+        req.auth!.orgId,
+        req.body.webhookUrl,
+      );
+      res.status(201).json(successEnvelope(result));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
 // T-9.2.1: POST /integrations/gitlab — setup GitLab integration
 // ---------------------------------------------------------------------------
 const CreateGitLabSchema = z.object({
