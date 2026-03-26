@@ -237,10 +237,10 @@ Manage infrastructure server assets (populated by agent registration).
 
 **Tasks:**
 
-- [ ] **T-3.3.1** Implement `GET /servers` — list servers for org with filters: status, environment, os_family; include last_heartbeat, finding counts — `size: M`
-- [ ] **T-3.3.2** Implement `GET /servers/:id` — server detail with agent info, OS info, resource usage, recent findings — `size: M`
-- [ ] **T-3.3.3** Implement `DELETE /servers/:id` — mark server as `decommissioned` (soft delete) — `size: S`
-- [ ] **T-3.3.4** Write tests for server listing, detail, and decommission — `size: S`
+- [x] **T-3.3.1** Implement `GET /servers` — list servers for org with filters: status, environment, os_family; include last_heartbeat, finding counts — `size: M`
+- [x] **T-3.3.2** Implement `GET /servers/:id` — server detail with agent info, OS info, resource usage, recent findings — `size: M`
+- [x] **T-3.3.3** Implement `DELETE /servers/:id` — mark server as `decommissioned` (soft delete) — `size: S`
+- [x] **T-3.3.4** Write tests for server listing, detail, and decommission — `size: S`
 
 ### Story 3.4: Assets Module — Certificates
 
