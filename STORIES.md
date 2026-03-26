@@ -491,10 +491,10 @@ Submit scan results to the SecurityCentral platform.
 
 **Tasks:**
 
-- [ ] **T-6.5.1** Implement platform client (`internal/platform/client.go`) — HTTPS client, authenticate with API key via `X-API-Key` header, submit findings batch to `POST /v1/agents/findings` — `size: M`
-- [ ] **T-6.5.2** Implement `--no-upload` mode — skip platform submission, output results locally only — `size: S`
-- [ ] **T-6.5.3** Implement retry with exponential backoff on upload failure (1s, 2s, 4s, ... up to 30s, max 5 attempts) — `size: S`
-- [ ] **T-6.5.4** Write tests for platform client with mock HTTP server (success, retry, auth failure) — `size: M`
+- [x] **T-6.5.1** Implement platform client (`internal/platform/client.go`) — HTTPS client, authenticate with API key via `X-API-Key` header, submit findings batch to `POST /v1/agents/findings` — `size: M`
+- [x] **T-6.5.2** Implement `--no-upload` mode — skip platform submission, output results locally only — `size: S`
+- [x] **T-6.5.3** Implement retry with exponential backoff on upload failure (1s, 2s, 4s, ... up to 30s, max 5 attempts) — `size: S`
+- [x] **T-6.5.4** Write tests for platform client with mock HTTP server (success, retry, auth failure) — `size: M`
 
 ---
 
