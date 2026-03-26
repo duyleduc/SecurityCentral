@@ -833,9 +833,9 @@ Typed API client — prerequisite for all dashboard pages.
 
 **Tasks:**
 
-- [ ] **T-12.1.1** Implement API client (`src/api/client.ts`) — fetch wrapper with JWT auth (Authorization header), auto-refresh on 401 via `/auth/refresh`, typed error handling using envelope format — `size: M`
-- [ ] **T-12.1.2** Implement API hooks using React Query or SWR: `useFindings`, `useServers`, `useRepositories`, `useCertificates`, `useScans`, `useDashboardSummary`, `useDashboardTopRisks`, `useDashboardAssets`, `useFindingsTrends` — `size: L`
-- [ ] **T-12.1.3** Implement WebSocket client (`src/ws/client.ts`) — Socket.IO connection with JWT auth in handshake, event handlers, auto-reconnect with backoff — `size: M`
+- [x] **T-12.1.1** Implement API client (`src/api/client.ts`) — fetch wrapper with JWT auth (Authorization header), auto-refresh on 401 via `/auth/refresh`, typed error handling using envelope format — `size: M`
+- [x] **T-12.1.2** Implement API hooks using React Query or SWR: `useFindings`, `useServers`, `useRepositories`, `useCertificates`, `useScans`, `useDashboardSummary`, `useDashboardTopRisks`, `useDashboardAssets`, `useFindingsTrends` — `size: L`
+- [x] **T-12.1.3** Implement WebSocket client (`src/ws/client.ts`) — Socket.IO connection with JWT auth in handshake, event handlers, auto-reconnect with backoff — `size: M`
 
 ### Story 12.2: App Shell & Auth
 
