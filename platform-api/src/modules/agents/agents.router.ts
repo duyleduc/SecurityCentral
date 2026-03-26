@@ -5,7 +5,8 @@ import { successEnvelope } from '../../middleware/errors.js';
 import { requireAuth, requireScope } from '../../middleware/auth.js';
 import { requireMtls } from '../../middleware/mtls.js';
 import * as agentsService from './agents.service.js';
-import { RegisterAgentSchema, HeartbeatSchema } from './agents.validation.js';
+import { RegisterAgentSchema, HeartbeatSchema, SubmitFindingsSchema } from './agents.validation.js';
+import { ingestFindings } from './findings-ingestion.service.js';
 
 export const agentsRouter = Router();
 
@@ -42,6 +43,39 @@ agentsRouter.post(
 
       const result = await agentsService.processHeartbeat(agentId, req.body);
       res.json(successEnvelope(result));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /agents/findings — authenticated via mTLS
+// ---------------------------------------------------------------------------
+agentsRouter.post(
+  '/findings',
+  requireMtls,
+  validate({ body: SubmitFindingsSchema }),
+  async (req, res, next) => {
+    try {
+      const cn = req.agentCn!;
+      const agentId = cn.replace(/^ag_/, '').replace(/\.agents\.securitycentral\.io$/, '');
+
+      // Resolve org from agent's server record
+      const server = await import('../../lib/prisma.js').then((m) =>
+        m.prisma.server.findFirst({ where: { agentId }, select: { orgId: true } }),
+      );
+
+      if (!server) {
+        return res.status(404).json({
+          data: null,
+          meta: null,
+          errors: [{ code: 'RESOURCE_NOT_FOUND', message: 'Agent not registered', status: 404 }],
+        });
+      }
+
+      const result = await ingestFindings(server.orgId, req.body, req.requestId);
+      res.status(201).json(successEnvelope(result));
     } catch (err) {
       next(err);
     }

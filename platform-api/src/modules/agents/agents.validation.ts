@@ -29,3 +29,40 @@ export const HeartbeatSchema = z.object({
 });
 
 export type HeartbeatInput = z.infer<typeof HeartbeatSchema>;
+
+// ---------------------------------------------------------------------------
+// Finding submission
+// ---------------------------------------------------------------------------
+
+const FindingItemSchema = z.object({
+  type: z.string().min(1),
+  severity: z.enum(['critical', 'high', 'medium', 'low', 'info']),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  cve_id: z.string().optional(),
+  cvss_score: z.number().min(0).max(10).optional(),
+  cvss_vector: z.string().optional(),
+  detail: z.record(z.unknown()).default({}),
+  remediation: z.string().optional(),
+  auto_fixable: z.boolean().default(false),
+});
+
+export type FindingItem = z.infer<typeof FindingItemSchema>;
+
+export const SubmitFindingsSchema = z.object({
+  agent_id: z.string().min(1),
+  scan_id: z.string().optional(),
+  scan_type: z.enum([
+    'code_dependencies',
+    'code_secrets',
+    'infra_packages',
+    'infra_compliance',
+    'cert_discovery',
+    'cert_check',
+  ]),
+  started_at: z.string().datetime(),
+  completed_at: z.string().datetime(),
+  findings: z.array(FindingItemSchema),
+});
+
+export type SubmitFindingsInput = z.infer<typeof SubmitFindingsSchema>;

@@ -355,10 +355,10 @@ Handle batch finding uploads from agents and code scanner.
 
 **Tasks:**
 
-- [ ] **T-4.3.1** Implement `POST /agents/findings` — accept batch finding payload per spec format (agent_id, scan_id, scan_type, findings array), Zod validate, create/update scan record — `size: L` | `depends: T-1.4.1, T-1.3.3`
-- [ ] **T-4.3.2** Implement finding deduplication: for each finding, match by (CVE+asset) or (title+asset) for non-CVE findings — if open finding exists, update it; if a previously open finding for this asset+scan_type is not in the new batch, mark as resolved with `resolved_at = now()` — `size: L`
-- [ ] **T-4.3.3** After ingestion, enqueue notification jobs for new critical/high findings; emit WebSocket events (`finding:new`, `scan:completed`) — `size: M` | `depends: T-1.4.1`
-- [ ] **T-4.3.4** Write tests for batch ingestion, deduplication, auto-resolution, and notification triggering — `size: L`
+- [x] **T-4.3.1** Implement `POST /agents/findings` — accept batch finding payload per spec format (agent_id, scan_id, scan_type, findings array), Zod validate, create/update scan record — `size: L` | `depends: T-1.4.1, T-1.3.3`
+- [x] **T-4.3.2** Implement finding deduplication: for each finding, match by (CVE+asset) or (title+asset) for non-CVE findings — if open finding exists, update it; if a previously open finding for this asset+scan_type is not in the new batch, mark as resolved with `resolved_at = now()` — `size: L`
+- [x] **T-4.3.3** After ingestion, enqueue notification jobs for new critical/high findings; emit WebSocket events (`finding:new`, `scan:completed`) — `size: M` | `depends: T-1.4.1`
+- [x] **T-4.3.4** Write tests for batch ingestion, deduplication, auto-resolution, and notification triggering — `size: L`
 
 ---
 
