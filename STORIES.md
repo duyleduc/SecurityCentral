@@ -848,12 +848,12 @@ Dashboard layout, routing, and authentication.
 
 **Tasks:**
 
-- [ ] **T-12.2.1** Set up routing (React Router): `/login`, `/register`, `/dashboard`, `/findings`, `/findings/:id`, `/assets/repositories`, `/assets/servers`, `/assets/certificates`, `/scans`, `/integrations`, `/settings` — `size: M`
-- [ ] **T-12.2.2** Implement login page — email/password form, call `POST /auth/login`, store access token in memory — `size: M` | `depends: T-12.1.1`
-- [ ] **T-12.2.3** Implement registration page — org name + admin user details form, call `POST /auth/register` — `size: M`
-- [ ] **T-12.2.4** Implement auth context/provider — manage JWT lifecycle, auto-refresh before expiry, redirect to login on 401, persist auth state — `size: M`
-- [ ] **T-12.2.5** Implement protected route wrapper — redirect unauthenticated users to `/login` — `size: S`
-- [ ] **T-12.2.6** Implement app shell layout — sidebar navigation (Dashboard, Findings, Assets, Scans, Integrations, Settings), header with org name + user menu + logout — `size: M`
+- [x] **T-12.2.1** Set up routing (React Router): `/login`, `/register`, `/dashboard`, `/findings`, `/findings/:id`, `/assets/repositories`, `/assets/servers`, `/assets/certificates`, `/scans`, `/integrations`, `/settings` — `size: M`
+- [x] **T-12.2.2** Implement login page — email/password form, call `POST /auth/login`, store access token in memory — `size: M` | `depends: T-12.1.1`
+- [x] **T-12.2.3** Implement registration page — org name + admin user details form, call `POST /auth/register` — `size: M`
+- [x] **T-12.2.4** Implement auth context/provider — manage JWT lifecycle, auto-refresh before expiry, redirect to login on 401, persist auth state — `size: M`
+- [x] **T-12.2.5** Implement protected route wrapper — redirect unauthenticated users to `/login` — `size: S`
+- [x] **T-12.2.6** Implement app shell layout — sidebar navigation (Dashboard, Findings, Assets, Scans, Integrations, Settings), header with org name + user menu + logout — `size: M`
 
 ### Story 12.3: Dashboard Overview Page
 
