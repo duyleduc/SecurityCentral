@@ -3,13 +3,16 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
+
+	"github.com/security-central/security-central/internal/logging"
 )
 
 func main() {
-	fmt.Println("sc-scan: SecurityCentral Code Scanner")
-	fmt.Printf("Version: %s\n", version)
+	logging.Init("sc-scan")
+
+	slog.Info("starting", slog.String("version", version))
 	os.Exit(0)
 }
 

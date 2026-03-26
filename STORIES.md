@@ -108,10 +108,10 @@ Consistent JSON logging across all services.
 
 **Tasks:**
 
-- [ ] **T-1.6.1** Implement structured logger in platform-api — JSON format, configurable level via `LOG_LEVEL` env var, `request_id` correlation — `size: S`
-- [ ] **T-1.6.2** Add request logging middleware — log method, path, status, duration, request_id for every request — `size: S` | `depends: T-1.5.4`
-- [ ] **T-1.6.3** Propagate `request_id` through BullMQ jobs (attach to job data, include in all job logs) — `size: S` | `depends: T-1.4.1`
-- [ ] **T-1.6.4** Implement structured logging in Go components — JSON format with correlation IDs — `size: M`
+- [x] **T-1.6.1** Implement structured logger in platform-api — JSON format, configurable level via `LOG_LEVEL` env var, `request_id` correlation — `size: S`
+- [x] **T-1.6.2** Add request logging middleware — log method, path, status, duration, request_id for every request — `size: S` | `depends: T-1.5.4`
+- [x] **T-1.6.3** Propagate `request_id` through BullMQ jobs (attach to job data, include in all job logs) — `size: S` | `depends: T-1.4.1`
+- [x] **T-1.6.4** Implement structured logging in Go components — JSON format with correlation IDs — `size: M`
 
 ### Story 1.7: CI/CD Pipeline
 

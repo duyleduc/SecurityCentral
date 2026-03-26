@@ -12,6 +12,7 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
   JWT_SECRET: z.string().default('change-me-in-production'),
   JWT_EXPIRES_IN: z.string().default('24h'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 
 export const env = envSchema.parse(process.env);

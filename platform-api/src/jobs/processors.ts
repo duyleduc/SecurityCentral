@@ -1,13 +1,16 @@
 import type { Job } from 'bullmq';
 
+import { jobLogger } from '../lib/logger.js';
 import { processFindingSync, type EsSyncJobData } from './es-sync.processor.js';
+import type { JobContext } from './context.js';
 
 /**
  * Placeholder processor — logs and completes.
  * Replace with real logic as each feature is implemented.
  */
-async function placeholder(job: Job): Promise<void> {
-  console.log(`[worker] Processing ${job.queueName}/${job.name} (id=${job.id})`);
+async function placeholder(job: Job<JobContext>): Promise<void> {
+  const log = jobLogger(job.queueName, job.id ?? 'unknown', job.data.request_id);
+  log.info(`Processing ${job.name}`);
 }
 
 /**

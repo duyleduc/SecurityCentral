@@ -2,7 +2,7 @@ import compression from 'compression';
 import express from 'express';
 import helmet from 'helmet';
 
-import { corsMiddleware, requestIdMiddleware, apiRateLimit, errorHandler } from './middleware/index.js';
+import { corsMiddleware, requestIdMiddleware, requestLoggerMiddleware, apiRateLimit, errorHandler } from './middleware/index.js';
 
 export const app = express();
 
@@ -14,6 +14,9 @@ app.use(express.json());
 
 // Request ID on every request
 app.use(requestIdMiddleware);
+
+// Request logging (after requestId is set)
+app.use(requestLoggerMiddleware);
 
 // Rate limiting on API routes (agent routes use agentRateLimit separately)
 app.use('/api', apiRateLimit);

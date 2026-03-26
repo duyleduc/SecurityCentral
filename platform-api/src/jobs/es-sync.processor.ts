@@ -1,9 +1,11 @@
 import { Job } from 'bullmq';
 
 import { prisma } from '../lib/prisma.js';
+import { jobLogger } from '../lib/logger.js';
 import { upsertFinding, type FindingDocument } from '../lib/elasticsearch.js';
+import type { JobContext } from './context.js';
 
-export interface EsSyncJobData {
+export interface EsSyncJobData extends JobContext {
   findingId: string;
 }
 
@@ -11,14 +13,15 @@ export interface EsSyncJobData {
  * BullMQ processor: fetches a finding from PostgreSQL and upserts it into Elasticsearch.
  */
 export async function processFindingSync(job: Job<EsSyncJobData>): Promise<void> {
-  const { findingId } = job.data;
+  const { findingId, request_id } = job.data;
+  const log = jobLogger(job.queueName, job.id ?? 'unknown', request_id);
 
   const finding = await prisma.finding.findUnique({
     where: { id: findingId },
   });
 
   if (!finding) {
-    console.warn(`[es-sync] Finding ${findingId} not found in database, skipping`);
+    log.warn(`Finding ${findingId} not found in database, skipping`);
     return;
   }
 
@@ -43,4 +46,5 @@ export async function processFindingSync(job: Job<EsSyncJobData>): Promise<void>
   };
 
   await upsertFinding(doc);
+  log.info(`Synced finding ${findingId} to Elasticsearch`);
 }

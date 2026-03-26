@@ -3,13 +3,16 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
+
+	"github.com/security-central/security-central/internal/logging"
 )
 
 func main() {
-	fmt.Println("sc-certmon: SecurityCentral Certificate Monitor")
-	fmt.Printf("Version: %s\n", version)
+	logging.Init("sc-certmon")
+
+	slog.Info("starting", slog.String("version", version))
 	os.Exit(0)
 }
 

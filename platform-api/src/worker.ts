@@ -2,12 +2,14 @@ import { Worker } from 'bullmq';
 import express from 'express';
 
 import { env } from './lib/env.js';
+import { logger } from './lib/logger.js';
 import { getRedisConnection } from './lib/redis.js';
 import { processors } from './jobs/processors.js';
 
 const WORKER_PORT = env.PORT + 1; // worker health on a separate port
 
 const workers: Worker[] = [];
+const workerLog = logger.child({ component: 'worker' });
 
 /**
  * Create BullMQ workers for every registered queue processor.
@@ -22,15 +24,15 @@ function startWorkers(): void {
     });
 
     worker.on('failed', (job, err) => {
-      console.error(`[worker] Job ${job?.id} in ${queueName} failed: ${err.message}`);
+      workerLog.error(`Job ${job?.id} in ${queueName} failed: ${err.message}`, { queue: queueName, job_id: job?.id });
     });
 
     worker.on('completed', (job) => {
-      console.log(`[worker] Job ${job.id} in ${queueName} completed`);
+      workerLog.debug(`Job ${job.id} in ${queueName} completed`, { queue: queueName, job_id: job.id });
     });
 
     workers.push(worker);
-    console.log(`[worker] Registered processor for "${queueName}" (concurrency=${concurrency})`);
+    workerLog.info(`Registered processor for "${queueName}"`, { queue: queueName, concurrency });
   }
 }
 
@@ -38,10 +40,10 @@ function startWorkers(): void {
  * Graceful shutdown — close all workers, then exit.
  */
 async function shutdown(signal: string): Promise<void> {
-  console.log(`[worker] Received ${signal}, shutting down gracefully...`);
+  workerLog.info(`Received ${signal}, shutting down gracefully...`);
 
   await Promise.allSettled(workers.map((w) => w.close()));
-  console.log('[worker] All workers closed');
+  workerLog.info('All workers closed');
 
   process.exit(0);
 }
@@ -78,7 +80,7 @@ function startHealthServer(): void {
   });
 
   app.listen(WORKER_PORT, () => {
-    console.log(`[worker] Health check listening on port ${WORKER_PORT}`);
+    workerLog.info(`Health check listening on port ${WORKER_PORT}`);
   });
 }
 
@@ -90,6 +92,6 @@ startHealthServer();
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-console.log(`[worker] Started with ${workers.length} queue processors`);
+workerLog.info(`Started with ${workers.length} queue processors`);
 
 export { workers, startWorkers, shutdown };
