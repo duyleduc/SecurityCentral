@@ -1,2 +1,6 @@
-// Shared middleware: Auth, rate limiting, request validation
-export {};
+// Cross-cutting middleware
+export { AppError, errorHandler, successEnvelope, ERROR_CODES, type ErrorCode, type ApiEnvelope } from './errors.js';
+export { apiRateLimit, agentRateLimit } from './rate-limit.js';
+export { corsMiddleware } from './cors.js';
+export { requestIdMiddleware } from './request-id.js';
+export { validate } from './validate.js';

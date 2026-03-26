@@ -1,23 +1,24 @@
 import compression from 'compression';
-import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 
-import { env } from './lib/env.js';
+import { corsMiddleware, requestIdMiddleware, apiRateLimit, errorHandler } from './middleware/index.js';
 
 export const app = express();
 
 // Security & compression
 app.use(helmet());
 app.use(compression());
-app.use(
-  cors({
-    origin: env.CORS_ORIGINS.split(',').map((o) => o.trim()),
-  }),
-);
+app.use(corsMiddleware);
 app.use(express.json());
 
-// Health check
+// Request ID on every request
+app.use(requestIdMiddleware);
+
+// Rate limiting on API routes (agent routes use agentRateLimit separately)
+app.use('/api', apiRateLimit);
+
+// Health check (no rate limiting)
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -26,3 +27,6 @@ app.get('/health', (_req, res) => {
 app.get('/api/v1', (_req, res) => {
   res.json({ name: 'SecurityCentral API', version: '0.0.1' });
 });
+
+// Global error handler — must be registered LAST
+app.use(errorHandler);

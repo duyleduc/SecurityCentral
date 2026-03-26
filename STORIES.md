@@ -91,12 +91,12 @@ Implement shared middleware used by all API routes.
 
 **Tasks:**
 
-- [ ] **T-1.5.1** Implement standardized error handling framework — error classes for each code in spec Appendix A (`AUTH_INVALID_CREDENTIALS`, `AUTH_TOKEN_EXPIRED`, `AUTH_INSUFFICIENT_SCOPE`, `AUTH_FORBIDDEN`, `RESOURCE_NOT_FOUND`, `VALIDATION_ERROR`, `RATE_LIMIT_EXCEEDED`, `AGENT_ALREADY_REGISTERED`, `INTEGRATION_ALREADY_EXISTS`, `SCAN_ALREADY_RUNNING`, `PLAN_LIMIT_EXCEEDED`), global error handler middleware returning `{ data, meta, errors }` envelope — `size: M`
-- [ ] **T-1.5.2** Implement rate limiting middleware — per-org limits: 100 req/s for API routes, 1000 req/s for agent routes; use Redis sliding window; return `429` with `RATE_LIMIT_EXCEEDED` code — `size: M` | `depends: T-1.1.5`
-- [ ] **T-1.5.3** Implement CORS middleware — read allowed origins from `CORS_ORIGINS` env var (comma-separated), apply to all routes — `size: S`
-- [ ] **T-1.5.4** Implement request ID middleware — generate UUID `request_id` per request, attach to request context, include in all log output and response headers — `size: S`
-- [ ] **T-1.5.5** Implement Zod request validation middleware — generic wrapper that validates `body`, `query`, `params` against a Zod schema, returns `VALIDATION_ERROR` on failure — `size: S`
-- [ ] **T-1.5.6** Write tests for error handling, rate limiting, CORS, and validation middleware — `size: M`
+- [x] **T-1.5.1** Implement standardized error handling framework — error classes for each code in spec Appendix A (`AUTH_INVALID_CREDENTIALS`, `AUTH_TOKEN_EXPIRED`, `AUTH_INSUFFICIENT_SCOPE`, `AUTH_FORBIDDEN`, `RESOURCE_NOT_FOUND`, `VALIDATION_ERROR`, `RATE_LIMIT_EXCEEDED`, `AGENT_ALREADY_REGISTERED`, `INTEGRATION_ALREADY_EXISTS`, `SCAN_ALREADY_RUNNING`, `PLAN_LIMIT_EXCEEDED`), global error handler middleware returning `{ data, meta, errors }` envelope — `size: M`
+- [x] **T-1.5.2** Implement rate limiting middleware — per-org limits: 100 req/s for API routes, 1000 req/s for agent routes; use Redis sliding window; return `429` with `RATE_LIMIT_EXCEEDED` code — `size: M` | `depends: T-1.1.5`
+- [x] **T-1.5.3** Implement CORS middleware — read allowed origins from `CORS_ORIGINS` env var (comma-separated), apply to all routes — `size: S`
+- [x] **T-1.5.4** Implement request ID middleware — generate UUID `request_id` per request, attach to request context, include in all log output and response headers — `size: S`
+- [x] **T-1.5.5** Implement Zod request validation middleware — generic wrapper that validates `body`, `query`, `params` against a Zod schema, returns `VALIDATION_ERROR` on failure — `size: S`
+- [x] **T-1.5.6** Write tests for error handling, rate limiting, CORS, and validation middleware — `size: M`
 
 ### Story 1.6: Structured Logging
 
