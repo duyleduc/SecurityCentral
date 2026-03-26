@@ -687,9 +687,9 @@ Avoid re-alerting for the same certificate at the same threshold.
 
 **Tasks:**
 
-- [ ] **T-8.4.1** Before sending notification, check `cert_alerts` table for existing `(certificate_id, alert_type)` unique pair — `size: S`
-- [ ] **T-8.4.2** Only create notification job if no prior alert exists for that threshold; insert new alert record on send — `size: S`
-- [ ] **T-8.4.3** Write tests for deduplication (same threshold suppressed, new threshold allowed) — `size: S`
+- [x] **T-8.4.1** Before sending notification, check `cert_alerts` table for existing `(certificate_id, alert_type)` unique pair — `size: S`
+- [x] **T-8.4.2** Only create notification job if no prior alert exists for that threshold; insert new alert record on send — `size: S`
+- [x] **T-8.4.3** Write tests for deduplication (same threshold suppressed, new threshold allowed) — `size: S`
 
 ---
 
