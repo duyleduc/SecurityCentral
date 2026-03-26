@@ -604,9 +604,9 @@ Keep agent and vulnerability database current.
 
 **Tasks:**
 
-- [ ] **T-7.6.1** Implement vuln DB auto-update — on heartbeat response `update_vulndb` command, fetch delta from `GET /agents/vulndb/download`, apply to local BoltDB — `size: M` | `depends: T-5.2.3`
-- [ ] **T-7.6.2** Implement agent self-update — on heartbeat response `update_agent` command, download new binary from URL in command, verify ed25519 signature, replace binary, restart systemd service — `size: L`
-- [ ] **T-7.6.3** Write tests for vuln DB delta application and binary update with signature verification — `size: M`
+- [x] **T-7.6.1** Implement vuln DB auto-update — on heartbeat response `update_vulndb` command, fetch delta from `GET /agents/vulndb/download`, apply to local BoltDB — `size: M` | `depends: T-5.2.3`
+- [x] **T-7.6.2** Implement agent self-update — on heartbeat response `update_agent` command, download new binary from URL in command, verify ed25519 signature, replace binary, restart systemd service — `size: L`
+- [x] **T-7.6.3** Write tests for vuln DB delta application and binary update with signature verification — `size: M`
 
 ### Story 7.7: Resource Constraints
 
@@ -618,11 +618,11 @@ Ensure the agent is lightweight per spec requirements (<1% CPU, <10MB RAM, <5MB 
 
 **Tasks:**
 
-- [ ] **T-7.7.1** Set `GOMAXPROCS(1)` and run with `nice 19` for process priority — `size: S`
-- [ ] **T-7.7.2** Use pre-allocated buffers and streaming parsers to stay under 10MB resident memory — `size: M`
-- [ ] **T-7.7.3** Implement log rotation: 5MB × 3 files in `/var/log/securitycentral/` — `size: S`
-- [ ] **T-7.7.4** Enable gzip compression for all platform API requests — `size: S`
-- [ ] **T-7.7.5** Write benchmark tests verifying CPU (<1% avg, 5% burst) and memory (<10MB) during a full scan — `size: M`
+- [x] **T-7.7.1** Set `GOMAXPROCS(1)` and run with `nice 19` for process priority — `size: S`
+- [x] **T-7.7.2** Use pre-allocated buffers and streaming parsers to stay under 10MB resident memory — `size: M`
+- [x] **T-7.7.3** Implement log rotation: 5MB × 3 files in `/var/log/securitycentral/` — `size: S`
+- [x] **T-7.7.4** Enable gzip compression for all platform API requests — `size: S`
+- [x] **T-7.7.5** Write benchmark tests verifying CPU (<1% avg, 5% burst) and memory (<10MB) during a full scan — `size: M`
 
 ---
 
