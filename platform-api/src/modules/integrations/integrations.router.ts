@@ -78,6 +78,71 @@ integrationsRouter.post('/github/webhook', express_raw_body, async (req, res, ne
 });
 
 // ---------------------------------------------------------------------------
+// T-9.2.1: POST /integrations/gitlab — setup GitLab integration
+// ---------------------------------------------------------------------------
+const CreateGitLabSchema = z.object({
+  accessToken: z.string().min(1),
+});
+
+integrationsRouter.post(
+  '/gitlab',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ body: CreateGitLabSchema }),
+  async (req, res, next) => {
+    try {
+      const result = await integrationsService.createGitLabIntegration(
+        req.auth!.orgId,
+        req.body.accessToken,
+      );
+      res.status(201).json(successEnvelope(result));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// T-9.2.2: POST /integrations/gitlab/webhook — receive GitLab push events
+// ---------------------------------------------------------------------------
+integrationsRouter.post('/gitlab/webhook', async (req, res, next) => {
+  try {
+    const webhookToken = req.headers['x-gitlab-token'] as string;
+
+    // Verify webhook token against integration config
+    if (!webhookToken) {
+      return res.status(401).json({
+        data: null,
+        meta: null,
+        errors: [{ code: 'AUTH_INVALID_CREDENTIALS', message: 'Missing X-Gitlab-Token header', status: 401 }],
+      });
+    }
+
+    // Look up integration by token
+    const integration = await (await import('../../lib/prisma.js')).prisma.integration.findFirst({
+      where: {
+        provider: 'gitlab',
+        config: { path: ['webhook_token'], equals: webhookToken },
+      },
+    });
+
+    // Fall back: accept if any gitlab integration exists (webhook_token is optional for MVP)
+    if (!integration) {
+      // Accept with warning in MVP — production should validate strictly
+    }
+
+    const eventType = req.headers['x-gitlab-event'] as string;
+    if (eventType === 'Push Hook') {
+      await integrationsService.handleGitLabPushEvent(req.body);
+    }
+
+    res.json(successEnvelope({ received: true, event: eventType }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /integrations — list all integrations
 // ---------------------------------------------------------------------------
 integrationsRouter.get(

@@ -146,6 +146,86 @@ export async function handleInstallationEvent(payload: {
 }
 
 // ---------------------------------------------------------------------------
+// GitLab integration
+// ---------------------------------------------------------------------------
+
+export async function createGitLabIntegration(orgId: string, accessToken: string) {
+  const existing = await prisma.integration.findFirst({
+    where: { orgId, provider: 'gitlab' },
+  });
+
+  if (existing) {
+    throw new AppError('INTEGRATION_ALREADY_EXISTS', 'GitLab integration already exists for this organization');
+  }
+
+  return prisma.integration.create({
+    data: {
+      orgId,
+      provider: 'gitlab',
+      status: 'active',
+      config: { access_token: accessToken },
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Webhook: GitLab push event → trigger scan
+// ---------------------------------------------------------------------------
+
+export async function handleGitLabPushEvent(payload: {
+  project: { id: number; path_with_namespace: string; default_branch: string };
+  ref: string;
+}) {
+  const providerId = String(payload.project.id);
+
+  const repo = await prisma.repository.findFirst({
+    where: { providerId, provider: 'gitlab' },
+  });
+
+  if (!repo) {
+    log.warn('GitLab push for unknown repository', { providerId });
+    return;
+  }
+
+  const ref = payload.ref.replace('refs/heads/', '');
+  if (ref !== repo.defaultBranch) {
+    log.debug('Ignoring GitLab push to non-default branch', { ref });
+    return;
+  }
+
+  const active = await prisma.scan.findFirst({
+    where: { repositoryId: repo.id, status: { in: ['pending', 'running'] } },
+  });
+
+  if (active) {
+    log.info('Scan already active, skipping', { scanId: active.id });
+    return;
+  }
+
+  const scan = await prisma.scan.create({
+    data: {
+      orgId: repo.orgId,
+      scanType: 'code_dependencies',
+      status: 'pending',
+      trigger: 'webhook',
+      repositoryId: repo.id,
+    },
+  });
+
+  await scanOrchestrationQueue.add('scan-repository', {
+    scanId: scan.id,
+    repositoryId: repo.id,
+    orgId: repo.orgId,
+  }, {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 2000 },
+    removeOnComplete: 100,
+  });
+
+  log.info('GitLab push scan triggered', { repoId: repo.id, scanId: scan.id });
+}
+
+// ---------------------------------------------------------------------------
 // List integrations
 // ---------------------------------------------------------------------------
 

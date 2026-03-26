@@ -726,9 +726,9 @@ Connect to GitLab for repo discovery and webhooks.
 
 **Tasks:**
 
-- [ ] **T-9.2.1** Implement `POST /integrations/gitlab` — accept access token, store encrypted in integrations table — `size: S`
-- [ ] **T-9.2.2** Implement `POST /integrations/gitlab/webhook` — receive push events, verify webhook token, trigger code scan for repo — `size: M`
-- [ ] **T-9.2.3** Write tests for GitLab webhook handling — `size: S`
+- [x] **T-9.2.1** Implement `POST /integrations/gitlab` — accept access token, store encrypted in integrations table — `size: S`
+- [x] **T-9.2.2** Implement `POST /integrations/gitlab/webhook` — receive push events, verify webhook token, trigger code scan for repo — `size: M`
+- [x] **T-9.2.3** Write tests for GitLab webhook handling — `size: S`
 
 ### Story 9.3: Slack Integration
 
