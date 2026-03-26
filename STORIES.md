@@ -375,12 +375,12 @@ Fetch and store vulnerability data from public sources.
 
 **Tasks:**
 
-- [ ] **T-5.1.1** Implement NVD sync job (`src/jobs/vuln-db-sync.ts`) — fetch new/modified CVEs from NVD API 2.0 (paginated, since last sync timestamp), upsert into `vulnerabilities` table — `size: L`
-- [ ] **T-5.1.2** Implement GitHub Advisory DB sync — fetch package-specific advisories with affected version ranges via GitHub GraphQL API, merge into `vulnerability_affects` — `size: L`
-- [ ] **T-5.1.3** Implement OSV.dev sync — fetch aggregated vulnerability data via OSV API, deduplicate against existing records — `size: M`
-- [ ] **T-5.1.4** Implement deduplication logic: prefer NVD for CVSS scores and descriptions, GitHub Advisory for affected version ranges; merge rather than overwrite — `size: M`
-- [ ] **T-5.1.5** Schedule sync as BullMQ recurring job (every 1 hour); record last sync timestamp per source to enable incremental fetching — `size: S` | `depends: T-1.4.1`
-- [ ] **T-5.1.6** Write tests for each data source sync and deduplication (using recorded API response fixtures) — `size: L`
+- [x] **T-5.1.1** Implement NVD sync job (`src/jobs/vuln-db-sync.ts`) — fetch new/modified CVEs from NVD API 2.0 (paginated, since last sync timestamp), upsert into `vulnerabilities` table — `size: L`
+- [x] **T-5.1.2** Implement GitHub Advisory DB sync — fetch package-specific advisories with affected version ranges via GitHub GraphQL API, merge into `vulnerability_affects` — `size: L`
+- [x] **T-5.1.3** Implement OSV.dev sync — fetch aggregated vulnerability data via OSV API, deduplicate against existing records — `size: M`
+- [x] **T-5.1.4** Implement deduplication logic: prefer NVD for CVSS scores and descriptions, GitHub Advisory for affected version ranges; merge rather than overwrite — `size: M`
+- [x] **T-5.1.5** Schedule sync as BullMQ recurring job (every 1 hour); record last sync timestamp per source to enable incremental fetching — `size: S` | `depends: T-1.4.1`
+- [x] **T-5.1.6** Write tests for each data source sync and deduplication (using recorded API response fixtures) — `size: L`
 
 ### Story 5.2: BoltDB Snapshot for Agents
 
@@ -393,11 +393,11 @@ Compile vulnerability data into agent-consumable format.
 
 **Tasks:**
 
-- [ ] **T-5.2.1** Implement BoltDB snapshot builder (Go utility or Node script) — read from `vulnerability_affects`, group by `(ecosystem:os_version, package_name)`, write to BoltDB with bucket structure per spec — `size: L`
-- [ ] **T-5.2.2** Implement `GET /agents/vulndb/version` — return latest snapshot timestamp — `size: S`
-- [ ] **T-5.2.3** Implement `GET /agents/vulndb/download` — accept `since` param; serve delta (entries modified since) if delta <50% of total, otherwise serve full BoltDB file; gzip compressed — `size: M`
-- [ ] **T-5.2.4** Trigger snapshot rebuild after every successful vuln DB sync job — `size: S` | `depends: T-5.1.5`
-- [ ] **T-5.2.5** Write tests for snapshot generation, delta calculation, and download — `size: M`
+- [x] **T-5.2.1** Implement BoltDB snapshot builder (Go utility or Node script) — read from `vulnerability_affects`, group by `(ecosystem:os_version, package_name)`, write to BoltDB with bucket structure per spec — `size: L`
+- [x] **T-5.2.2** Implement `GET /agents/vulndb/version` — return latest snapshot timestamp — `size: S`
+- [x] **T-5.2.3** Implement `GET /agents/vulndb/download` — accept `since` param; serve delta (entries modified since) if delta <50% of total, otherwise serve full BoltDB file; gzip compressed — `size: M`
+- [x] **T-5.2.4** Trigger snapshot rebuild after every successful vuln DB sync job — `size: S` | `depends: T-5.1.5`
+- [x] **T-5.2.5** Write tests for snapshot generation, delta calculation, and download — `size: M`
 
 ---
 

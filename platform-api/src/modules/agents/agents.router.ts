@@ -7,6 +7,7 @@ import { requireMtls } from '../../middleware/mtls.js';
 import * as agentsService from './agents.service.js';
 import { RegisterAgentSchema, HeartbeatSchema, SubmitFindingsSchema } from './agents.validation.js';
 import { ingestFindings } from './findings-ingestion.service.js';
+import * as vulndbService from './vulndb.service.js';
 
 export const agentsRouter = Router();
 
@@ -87,4 +88,29 @@ agentsRouter.post(
 // ---------------------------------------------------------------------------
 agentsRouter.get('/version', (_req, res) => {
   res.json(successEnvelope(agentsService.getLatestVersion()));
+});
+
+// ---------------------------------------------------------------------------
+// GET /agents/vulndb/version — mTLS authenticated
+// ---------------------------------------------------------------------------
+agentsRouter.get('/vulndb/version', requireMtls, async (_req, res, next) => {
+  try {
+    const version = await vulndbService.getSnapshotVersion();
+    res.json(successEnvelope({ version }));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /agents/vulndb/download — mTLS authenticated
+// ---------------------------------------------------------------------------
+agentsRouter.get('/vulndb/download', requireMtls, async (req, res, next) => {
+  try {
+    const since = req.query.since as string | undefined;
+    const result = await vulndbService.downloadSnapshot(since);
+    res.json(successEnvelope(result));
+  } catch (err) {
+    next(err);
+  }
 });
