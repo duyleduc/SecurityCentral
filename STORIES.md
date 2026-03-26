@@ -638,11 +638,11 @@ Discover certificates from AWS load balancers and ACM.
 
 **Tasks:**
 
-- [ ] **T-8.1.1** Implement certmon entrypoint (`cmd/sc-certmon/main.go`) — built-in scheduler (every 1 hour) or one-shot mode, load AWS credentials from environment/instance role — `size: M`
-- [ ] **T-8.1.2** Implement ALB/NLB discovery — list all load balancers via `elbv2:DescribeLoadBalancers`, list listeners, extract certificate ARNs from HTTPS listeners — `size: M`
-- [ ] **T-8.1.3** Implement ACM certificate fetch — for each certificate ARN, call `acm:DescribeCertificate`, extract subject, SANs, expiry, issuer, key algorithm, signature algorithm — `size: M`
-- [ ] **T-8.1.4** Convert discovered certificates to platform Certificate model, submit via `POST /agents/findings` (scan_type: cert_discovery) — `size: M` | `depends: T-4.3.1`
-- [ ] **T-8.1.5** Write tests with mocked AWS SDK responses — `size: M`
+- [x] **T-8.1.1** Implement certmon entrypoint (`cmd/sc-certmon/main.go`) — built-in scheduler (every 1 hour) or one-shot mode, load AWS credentials from environment/instance role — `size: M`
+- [x] **T-8.1.2** Implement ALB/NLB discovery — list all load balancers via `elbv2:DescribeLoadBalancers`, list listeners, extract certificate ARNs from HTTPS listeners — `size: M`
+- [x] **T-8.1.3** Implement ACM certificate fetch — for each certificate ARN, call `acm:DescribeCertificate`, extract subject, SANs, expiry, issuer, key algorithm, signature algorithm — `size: M`
+- [x] **T-8.1.4** Convert discovered certificates to platform Certificate model, submit via `POST /agents/findings` (scan_type: cert_discovery) — `size: M` | `depends: T-4.3.1`
+- [x] **T-8.1.5** Write tests with mocked AWS SDK responses — `size: M`
 
 ### Story 8.2: Direct TLS Probe
 
