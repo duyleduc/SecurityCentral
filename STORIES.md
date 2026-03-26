@@ -756,9 +756,9 @@ List and remove integrations.
 
 **Tasks:**
 
-- [ ] **T-9.4.1** Implement `GET /integrations` — list configured integrations for org (provider, status, created_at) — `size: S`
-- [ ] **T-9.4.2** Implement `DELETE /integrations/:id` — remove integration, clean up webhooks if applicable — `size: S`
-- [ ] **T-9.4.3** Write tests for list and delete — `size: S`
+- [x] **T-9.4.1** Implement `GET /integrations` — list configured integrations for org (provider, status, created_at) — `size: S`
+- [x] **T-9.4.2** Implement `DELETE /integrations/:id` — remove integration, clean up webhooks if applicable — `size: S`
+- [x] **T-9.4.3** Write tests for list and delete — `size: S`
 
 ---
 
@@ -775,10 +775,10 @@ Central notification routing and preferences.
 
 **Tasks:**
 
-- [ ] **T-10.1.1** Implement `notification-dispatcher` BullMQ job — receive event (type: critical_finding | scan_complete | cert_expiry | agent_offline, payload), load org's notification preferences, route to Slack and/or email — `size: M` | `depends: T-9.3.2`
-- [ ] **T-10.1.2** Implement default notification preferences — on org creation, create default preferences (all channels enabled for critical_finding and agent_offline) — `size: S`
-- [ ] **T-10.1.3** Implement notification preferences API — `GET /notification-preferences` (list for current user), `PUT /notification-preferences` (bulk update channel+event_type toggles) — `size: M`
-- [ ] **T-10.1.4** Write tests for notification routing, preference filtering, and default creation — `size: M`
+- [x] **T-10.1.1** Implement `notification-dispatcher` BullMQ job — receive event (type: critical_finding | scan_complete | cert_expiry | agent_offline, payload), load org's notification preferences, route to Slack and/or email — `size: M` | `depends: T-9.3.2`
+- [x] **T-10.1.2** Implement default notification preferences — on org creation, create default preferences (all channels enabled for critical_finding and agent_offline) — `size: S`
+- [x] **T-10.1.3** Implement notification preferences API — `GET /notification-preferences` (list for current user), `PUT /notification-preferences` (bulk update channel+event_type toggles) — `size: M`
+- [x] **T-10.1.4** Write tests for notification routing, preference filtering, and default creation — `size: M`
 
 ### Story 10.2: Email Notifications
 
@@ -791,10 +791,10 @@ Daily digest email via AWS SES.
 
 **Tasks:**
 
-- [ ] **T-10.2.1** Implement daily digest BullMQ recurring job — aggregate new findings by severity, expiring certs, offline agents for the past 24h, per org — `size: M`
-- [ ] **T-10.2.2** Implement HTML email template for digest (responsive, includes severity color coding) — `size: M`
-- [ ] **T-10.2.3** Send via AWS SES using `SES_FROM_EMAIL` config; skip users with email notifications disabled — `size: S`
-- [ ] **T-10.2.4** Write tests for digest aggregation, template rendering, and preference filtering — `size: M`
+- [x] **T-10.2.1** Implement daily digest BullMQ recurring job — aggregate new findings by severity, expiring certs, offline agents for the past 24h, per org — `size: M`
+- [x] **T-10.2.2** Implement HTML email template for digest (responsive, includes severity color coding) — `size: M`
+- [x] **T-10.2.3** Send via AWS SES using `SES_FROM_EMAIL` config; skip users with email notifications disabled — `size: S`
+- [x] **T-10.2.4** Write tests for digest aggregation, template rendering, and preference filtering — `size: M`
 
 ---
 

@@ -12,6 +12,7 @@ import { dashboardRouter } from './modules/dashboard/index.js';
 import { auditRouter } from './modules/audit/index.js';
 import { agentsRouter } from './modules/agents/index.js';
 import { integrationsRouter } from './modules/integrations/index.js';
+import { notificationsRouter } from './modules/notifications/index.js';
 import { agentRateLimit } from './middleware/index.js';
 
 export const app = express();
@@ -51,6 +52,7 @@ app.use('/api/v1/scans', scansRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/api/v1/audit-logs', auditRouter);
 app.use('/api/v1/integrations', integrationsRouter);
+app.use('/api/v1/notification-preferences', notificationsRouter);
 
 // --- Agent routes (separate rate limit) ---
 app.use('/v1/agents', agentRateLimit, agentsRouter);
