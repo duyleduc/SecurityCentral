@@ -882,10 +882,10 @@ Filterable findings list and detail view.
 
 **Tasks:**
 
-- [ ] **T-12.4.1** Implement findings list page — table with columns: severity (color badge), title, source, asset, CVE, status, first seen. Paginated (page/per_page controls), sortable (column headers) — `size: L`
-- [ ] **T-12.4.2** Implement filter bar — dropdowns/chips for severity, status, source; text search input for CVE/title (uses `q` param); applied filters shown as removable chips — `size: M`
-- [ ] **T-12.4.3** Implement finding detail page — CVE ID, CVSS score + vector visualization, description, remediation text, affected asset (link), fix PR URL (link), scan info, timeline (first_seen, resolved_at) — `size: M`
-- [ ] **T-12.4.4** Implement status update actions — buttons to mark as in_progress/resolved/suppressed/false_positive, call `PATCH /findings/:id`, optimistic update in UI — `size: M`
+- [x] **T-12.4.1** Implement findings list page — table with columns: severity (color badge), title, source, asset, CVE, status, first seen. Paginated (page/per_page controls), sortable (column headers) — `size: L`
+- [x] **T-12.4.2** Implement filter bar — dropdowns/chips for severity, status, source; text search input for CVE/title (uses `q` param); applied filters shown as removable chips — `size: M`
+- [x] **T-12.4.3** Implement finding detail page — CVE ID, CVSS score + vector visualization, description, remediation text, affected asset (link), fix PR URL (link), scan info, timeline (first_seen, resolved_at) — `size: M`
+- [x] **T-12.4.4** Implement status update actions — buttons to mark as in_progress/resolved/suppressed/false_positive, call `PATCH /findings/:id`, optimistic update in UI — `size: M`
 
 ### Story 12.5: Assets Pages
 
