@@ -1,8 +1,10 @@
 import compression from 'compression';
+import cookieParser from 'cookie-parser';
 import express from 'express';
 import helmet from 'helmet';
 
 import { corsMiddleware, requestIdMiddleware, requestLoggerMiddleware, apiRateLimit, errorHandler } from './middleware/index.js';
+import { authRouter } from './modules/auth/index.js';
 
 export const app = express();
 
@@ -11,6 +13,7 @@ app.use(helmet());
 app.use(compression());
 app.use(corsMiddleware);
 app.use(express.json());
+app.use(cookieParser());
 
 // Request ID on every request
 app.use(requestIdMiddleware);
@@ -25,6 +28,9 @@ app.use('/api', apiRateLimit);
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// --- Auth routes ---
+app.use('/auth', authRouter);
 
 // API routes placeholder
 app.get('/api/v1', (_req, res) => {

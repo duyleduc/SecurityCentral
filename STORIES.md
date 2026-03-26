@@ -143,13 +143,13 @@ Implement email/password auth with JWT tokens.
 
 **Tasks:**
 
-- [ ] **T-2.1.1** Create `auth` module structure: `src/modules/auth/auth.router.ts`, `auth.service.ts`, `auth.validation.ts` — `size: S`
-- [ ] **T-2.1.2** Create JWT utility (`src/lib/jwt.ts`) — sign/verify access and refresh tokens using `JWT_SECRET` / `JWT_REFRESH_SECRET`, access TTL 1h, refresh TTL 30d — `size: S`
-- [ ] **T-2.1.3** Implement `POST /auth/register` — Zod validation, create org + first user (owner role), hash password with bcrypt, return JWT pair — `size: M` | `depends: T-1.2.7, T-1.5.1, T-1.5.5`
-- [ ] **T-2.1.4** Implement `POST /auth/login` — validate email/password, return access token + refresh token (HttpOnly cookie) — `size: M`
-- [ ] **T-2.1.5** Implement `POST /auth/refresh` — validate refresh token from cookie, issue new access token — `size: S`
-- [ ] **T-2.1.6** Implement auth middleware (`src/middleware/auth.ts`) — extract JWT from `Authorization: Bearer` header, attach `user` + `org` to request context; also support `X-API-Key` fallback (delegates to API key middleware) — `size: M`
-- [ ] **T-2.1.7** Write unit + integration tests for register, login, refresh, invalid credentials, expired token — `size: M`
+- [x] **T-2.1.1** Create `auth` module structure: `src/modules/auth/auth.router.ts`, `auth.service.ts`, `auth.validation.ts` — `size: S`
+- [x] **T-2.1.2** Create JWT utility (`src/lib/jwt.ts`) — sign/verify access and refresh tokens using `JWT_SECRET` / `JWT_REFRESH_SECRET`, access TTL 1h, refresh TTL 30d — `size: S`
+- [x] **T-2.1.3** Implement `POST /auth/register` — Zod validation, create org + first user (owner role), hash password with bcrypt, return JWT pair — `size: M` | `depends: T-1.2.7, T-1.5.1, T-1.5.5`
+- [x] **T-2.1.4** Implement `POST /auth/login` — validate email/password, return access token + refresh token (HttpOnly cookie) — `size: M`
+- [x] **T-2.1.5** Implement `POST /auth/refresh` — validate refresh token from cookie, issue new access token — `size: S`
+- [x] **T-2.1.6** Implement auth middleware (`src/middleware/auth.ts`) — extract JWT from `Authorization: Bearer` header, attach `user` + `org` to request context; also support `X-API-Key` fallback (delegates to API key middleware) — `size: M`
+- [x] **T-2.1.7** Write unit + integration tests for register, login, refresh, invalid credentials, expired token — `size: M`
 
 ### Story 2.2: API Key Management
 
@@ -162,11 +162,11 @@ Allow programmatic access via API keys for CLI/CI/CD.
 
 **Tasks:**
 
-- [ ] **T-2.2.1** Implement `POST /auth/api-keys` — generate random key (`sc_live_` prefix), return raw key once, store SHA-256 hash + first 8 chars as prefix; validate scopes from `scan:write`, `findings:read`, `findings:write`, `assets:read`, `assets:write` — `size: M` | `depends: T-2.1.6`
-- [ ] **T-2.2.2** Implement `GET /auth/api-keys` — list API keys for org (show prefix, name, scopes, last_used_at, expires_at; never return hash) — `size: S`
-- [ ] **T-2.2.3** Implement `DELETE /auth/api-keys/:id` — revoke API key (delete from DB) — `size: S`
-- [ ] **T-2.2.4** Implement API key auth path in auth middleware — on `X-API-Key` header: lookup candidates by prefix, verify SHA-256 hash, check scopes against route requirements, update `last_used_at` — `size: M`
-- [ ] **T-2.2.5** Write tests for API key creation, authentication, scope checking, revocation, and expired key rejection — `size: M`
+- [x] **T-2.2.1** Implement `POST /auth/api-keys` — generate random key (`sc_live_` prefix), return raw key once, store SHA-256 hash + first 8 chars as prefix; validate scopes from `scan:write`, `findings:read`, `findings:write`, `assets:read`, `assets:write` — `size: M` | `depends: T-2.1.6`
+- [x] **T-2.2.2** Implement `GET /auth/api-keys` — list API keys for org (show prefix, name, scopes, last_used_at, expires_at; never return hash) — `size: S`
+- [x] **T-2.2.3** Implement `DELETE /auth/api-keys/:id` — revoke API key (delete from DB) — `size: S`
+- [x] **T-2.2.4** Implement API key auth path in auth middleware — on `X-API-Key` header: lookup candidates by prefix, verify SHA-256 hash, check scopes against route requirements, update `last_used_at` — `size: M`
+- [x] **T-2.2.5** Write tests for API key creation, authentication, scope checking, revocation, and expired key rejection — `size: M`
 
 ### Story 2.3: RBAC Authorization
 
@@ -178,10 +178,10 @@ Enforce role-based access control per spec permission matrix.
 
 **Tasks:**
 
-- [ ] **T-2.3.1** Create RBAC middleware (`src/middleware/rbac.ts`) — read `role` from JWT, check against route-level permission requirements; return `AUTH_FORBIDDEN` error on failure — `size: M`
-- [ ] **T-2.3.2** Define permission map per spec: owner/admin (manage org, integrations, users, all else), member (view + update findings + trigger scans + manage own API keys), viewer (read-only: view findings, dashboard) — `size: S`
-- [ ] **T-2.3.3** Apply RBAC middleware to all routes with appropriate permission levels — `size: S` | `depends: all route implementations`
-- [ ] **T-2.3.4** Write tests verifying each role's access to protected endpoints (positive + negative cases for each role) — `size: M`
+- [x] **T-2.3.1** Create RBAC middleware (`src/middleware/rbac.ts`) — read `role` from JWT, check against route-level permission requirements; return `AUTH_FORBIDDEN` error on failure — `size: M`
+- [x] **T-2.3.2** Define permission map per spec: owner/admin (manage org, integrations, users, all else), member (view + update findings + trigger scans + manage own API keys), viewer (read-only: view findings, dashboard) — `size: S`
+- [x] **T-2.3.3** Apply RBAC middleware to all routes with appropriate permission levels — `size: S` | `depends: all route implementations`
+- [x] **T-2.3.4** Write tests verifying each role's access to protected endpoints (positive + negative cases for each role) — `size: M`
 
 ---
 

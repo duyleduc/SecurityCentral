@@ -11,7 +11,8 @@ const envSchema = z.object({
   ELASTICSEARCH_URL: z.string().default('http://localhost:9200'),
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
   JWT_SECRET: z.string().default('change-me-in-production'),
-  JWT_EXPIRES_IN: z.string().default('24h'),
+  JWT_REFRESH_SECRET: z.string().default('change-me-refresh-in-production'),
+  JWT_EXPIRES_IN: z.string().default('1h'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 
