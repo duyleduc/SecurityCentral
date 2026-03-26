@@ -38,6 +38,16 @@ func New(baseURL, apiKey string) *Client {
 	}
 }
 
+// HTTPClient returns the underlying http.Client (for use in agent heartbeat etc.).
+func (c *Client) HTTPClient() *http.Client {
+	return c.httpClient
+}
+
+// BaseURL returns the configured platform API base URL.
+func (c *Client) BaseURL() string {
+	return c.baseURL
+}
+
 // FindingsPayload is the request body for POST /v1/agents/findings.
 type FindingsPayload struct {
 	AgentID     string           `json:"agent_id"`

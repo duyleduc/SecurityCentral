@@ -511,11 +511,11 @@ Provide one-line install for the infrastructure agent.
 
 **Tasks:**
 
-- [ ] **T-7.1.1** Create installer script (`scripts/install-agent.sh`) — detect platform (linux/amd64 vs arm64), download binary from release URL, verify ed25519 signature — `size: M`
-- [ ] **T-7.1.2** Installer creates `/etc/securitycentral/agent.yml` config from CLI args (`--api-key`, `--api-url`, `--environment`, `--labels`) — `size: S`
-- [ ] **T-7.1.3** Installer registers with platform (`POST /agents/register`) to receive `agent_id` and mTLS cert, saves certs to `/etc/securitycentral/` — `size: M` | `depends: T-4.2.2`
-- [ ] **T-7.1.4** Installer creates systemd unit `securitycentral-agent.service`, enables and starts the service — `size: S`
-- [ ] **T-7.1.5** Write tests for installer script (using Docker containers for each target OS) — `size: M`
+- [x] **T-7.1.1** Create installer script (`scripts/install-agent.sh`) — detect platform (linux/amd64 vs arm64), download binary from release URL, verify ed25519 signature — `size: M`
+- [x] **T-7.1.2** Installer creates `/etc/securitycentral/agent.yml` config from CLI args (`--api-key`, `--api-url`, `--environment`, `--labels`) — `size: S`
+- [x] **T-7.1.3** Installer registers with platform (`POST /agents/register`) to receive `agent_id` and mTLS cert, saves certs to `/etc/securitycentral/` — `size: M` | `depends: T-4.2.2`
+- [x] **T-7.1.4** Installer creates systemd unit `securitycentral-agent.service`, enables and starts the service — `size: S`
+- [x] **T-7.1.5** Write tests for installer script (using Docker containers for each target OS) — `size: M`
 
 ### Story 7.2: Agent Lifecycle
 
@@ -529,12 +529,12 @@ Implement agent registration, heartbeat, and scan scheduling.
 
 **Tasks:**
 
-- [ ] **T-7.2.1** Implement agent entrypoint (`cmd/sc-agent/main.go`) — load config from `/etc/securitycentral/agent.yml`, validate required fields — `size: M`
-- [ ] **T-7.2.2** Implement registration flow (for manual/non-installer setup) — generate ECDSA P-256 key pair, create PKCS10 CSR, send `POST /agents/register` with API key + CSR, save signed cert + CA cert to disk — `size: M`
-- [ ] **T-7.2.3** Implement mTLS client (`internal/platform/client.go`) — use agent cert + CA cert for all subsequent platform communication — `size: M`
-- [ ] **T-7.2.4** Implement heartbeat loop — every 60 seconds, send system metadata (OS info from `/etc/os-release`, CPU/memory/disk from runtime, vulndb version, last scan time) to `POST /agents/heartbeat`; process command responses — `size: M`
-- [ ] **T-7.2.5** Implement scan scheduler — run scan on startup (if `on_startup: true`) then every `scan.interval` (default 6h); support `scan_now` command from heartbeat to trigger immediate scan — `size: M`
-- [ ] **T-7.2.6** Write tests for config loading, heartbeat, and scan scheduling — `size: M`
+- [x] **T-7.2.1** Implement agent entrypoint (`cmd/sc-agent/main.go`) — load config from `/etc/securitycentral/agent.yml`, validate required fields — `size: M`
+- [x] **T-7.2.2** Implement registration flow (for manual/non-installer setup) — generate ECDSA P-256 key pair, create PKCS10 CSR, send `POST /agents/register` with API key + CSR, save signed cert + CA cert to disk — `size: M`
+- [x] **T-7.2.3** Implement mTLS client (`internal/platform/client.go`) — use agent cert + CA cert for all subsequent platform communication — `size: M`
+- [x] **T-7.2.4** Implement heartbeat loop — every 60 seconds, send system metadata (OS info from `/etc/os-release`, CPU/memory/disk from runtime, vulndb version, last scan time) to `POST /agents/heartbeat`; process command responses — `size: M`
+- [x] **T-7.2.5** Implement scan scheduler — run scan on startup (if `on_startup: true`) then every `scan.interval` (default 6h); support `scan_now` command from heartbeat to trigger immediate scan — `size: M`
+- [x] **T-7.2.6** Write tests for config loading, heartbeat, and scan scheduling — `size: M`
 
 ### Story 7.3: OS Package Scanning
 
@@ -547,13 +547,13 @@ Detect vulnerable packages on the host system.
 
 **Tasks:**
 
-- [ ] **T-7.3.1** Implement OS detection — read `/etc/os-release`, determine `os_family` (ubuntu/debian/centos/rhel/alpine) + version — `size: S`
-- [ ] **T-7.3.2** Implement Ubuntu/Debian package enumerator — run `dpkg-query -W -f '...'`, parse tab-separated output into `(name, version, arch)` list — `size: M`
-- [ ] **T-7.3.3** Implement CentOS/RHEL package enumerator — run `rpm -qa --queryformat '...'`, parse output — `size: M`
-- [ ] **T-7.3.4** Implement Alpine package enumerator — parse `/lib/apk/db/installed` APK DB file — `size: M`
-- [ ] **T-7.3.5** Implement vulnerability matching — for each `(os_family, os_version, package_name, version)`, query local BoltDB, compare version against affected ranges — `size: L` | `depends: T-6.2.6`
-- [ ] **T-7.3.6** Generate findings and submit to platform via `POST /agents/findings` — `size: M` | `depends: T-7.2.3`
-- [ ] **T-7.3.7** Write tests for each OS enumerator (fixture data) and vulnerability matching — `size: M`
+- [x] **T-7.3.1** Implement OS detection — read `/etc/os-release`, determine `os_family` (ubuntu/debian/centos/rhel/alpine) + version — `size: S`
+- [x] **T-7.3.2** Implement Ubuntu/Debian package enumerator — run `dpkg-query -W -f '...'`, parse tab-separated output into `(name, version, arch)` list — `size: M`
+- [x] **T-7.3.3** Implement CentOS/RHEL package enumerator — run `rpm -qa --queryformat '...'`, parse output — `size: M`
+- [x] **T-7.3.4** Implement Alpine package enumerator — parse `/lib/apk/db/installed` APK DB file — `size: M`
+- [x] **T-7.3.5** Implement vulnerability matching — for each `(os_family, os_version, package_name, version)`, query local BoltDB, compare version against affected ranges — `size: L` | `depends: T-6.2.6`
+- [x] **T-7.3.6** Generate findings and submit to platform via `POST /agents/findings` — `size: M` | `depends: T-7.2.3`
+- [x] **T-7.3.7** Write tests for each OS enumerator (fixture data) and vulnerability matching — `size: M`
 
 ### Story 7.4: CIS Benchmark Scanning (Ubuntu L1)
 
@@ -566,16 +566,16 @@ Implement CIS Ubuntu 22.04 Level 1 compliance checks (~80 checks, MVP scoped to 
 
 **Tasks:**
 
-- [ ] **T-7.4.1** Define `Check` interface: `ID() string`, `Title() string`, `Level() int`, `Run(ctx) (CheckResult, error)` with `CheckResult{Pass bool, Details string, Fix string}`; implement check registry and runner — `size: M`
-- [ ] **T-7.4.2** Implement filesystem checks (8 checks): cramfs/squashfs/udf disabled, /tmp separate partition, /tmp nodev/nosuid/noexec, sticky bit on world-writable dirs — `size: M`
-- [ ] **T-7.4.3** Implement SSH server checks — PermitRootLogin (1.1), PermitEmptyPasswords (1.2), MaxAuthTries (1.3), Protocol 2 (1.4), X11Forwarding (1.5) — `size: M`
-- [ ] **T-7.4.4** Implement SSH cipher/MAC/KEX checks — approved ciphers only (2.1), approved MACs only (2.2), approved KEX algorithms only (2.3), LogLevel INFO (2.4) — `size: M`
-- [ ] **T-7.4.5** Implement SSH access checks — LoginGraceTime (3.1), ClientAliveInterval/CountMax (3.2), IgnoreRhosts (3.3), HostbasedAuth disabled (3.4), Banner set (3.5) — `size: M`
-- [ ] **T-7.4.6** Implement user/group checks (8 checks): password max days, password min days, password warn age, inactive lock, default umask, root is only UID-0, no duplicate UIDs/GIDs — `size: M`
-- [ ] **T-7.4.7** Implement network checks (6 checks): IP forwarding disabled, ICMP redirects disabled, source routed packets rejected, TCP SYN cookies enabled, IPv6 router advertisements — `size: M`
-- [ ] **T-7.4.8** Implement process hardening checks (5 checks): ASLR enabled, core dump restricted, ptrace_scope set, SUID dumpable disabled, address space randomization — `size: M`
-- [ ] **T-7.4.9** Implement check runner — execute all registered checks, convert `CheckResult` to findings (failed checks become findings with remediation=Fix), submit to platform as `scan_type: infra_compliance` — `size: M`
-- [ ] **T-7.4.10** Write tests for each check category using mock system files and command outputs — `size: L`
+- [x] **T-7.4.1** Define `Check` interface: `ID() string`, `Title() string`, `Level() int`, `Run(ctx) (CheckResult, error)` with `CheckResult{Pass bool, Details string, Fix string}`; implement check registry and runner — `size: M`
+- [x] **T-7.4.2** Implement filesystem checks (8 checks): cramfs/squashfs/udf disabled, /tmp separate partition, /tmp nodev/nosuid/noexec, sticky bit on world-writable dirs — `size: M`
+- [x] **T-7.4.3** Implement SSH server checks — PermitRootLogin (1.1), PermitEmptyPasswords (1.2), MaxAuthTries (1.3), Protocol 2 (1.4), X11Forwarding (1.5) — `size: M`
+- [x] **T-7.4.4** Implement SSH cipher/MAC/KEX checks — approved ciphers only (2.1), approved MACs only (2.2), approved KEX algorithms only (2.3), LogLevel INFO (2.4) — `size: M`
+- [x] **T-7.4.5** Implement SSH access checks — LoginGraceTime (3.1), ClientAliveInterval/CountMax (3.2), IgnoreRhosts (3.3), HostbasedAuth disabled (3.4), Banner set (3.5) — `size: M`
+- [x] **T-7.4.6** Implement user/group checks (8 checks): password max days, password min days, password warn age, inactive lock, default umask, root is only UID-0, no duplicate UIDs/GIDs — `size: M`
+- [x] **T-7.4.7** Implement network checks (6 checks): IP forwarding disabled, ICMP redirects disabled, source routed packets rejected, TCP SYN cookies enabled, IPv6 router advertisements — `size: M`
+- [x] **T-7.4.8** Implement process hardening checks (5 checks): ASLR enabled, core dump restricted, ptrace_scope set, SUID dumpable disabled, address space randomization — `size: M`
+- [x] **T-7.4.9** Implement check runner — execute all registered checks, convert `CheckResult` to findings (failed checks become findings with remediation=Fix), submit to platform as `scan_type: infra_compliance` — `size: M`
+- [x] **T-7.4.10** Write tests for each check category using mock system files and command outputs — `size: L`
 
 ### Story 7.5: Offline Queue & Retry
 
