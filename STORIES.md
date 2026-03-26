@@ -269,10 +269,10 @@ Track scan lifecycle.
 
 **Tasks:**
 
-- [ ] **T-3.5.1** Implement `GET /scans` — list scans filterable by type, status, repository_id, server_id; paginated — `size: M`
-- [ ] **T-3.5.2** Implement `GET /scans/:id` — scan detail with findings summary (total, new, resolved), error message if failed — `size: S`
-- [ ] **T-3.5.3** Implement `POST /scans/:id/cancel` — cancel a running/pending scan (update status to `cancelled`) — `size: S`
-- [ ] **T-3.5.4** Write tests for scan endpoints — `size: S`
+- [x] **T-3.5.1** Implement `GET /scans` — list scans filterable by type, status, repository_id, server_id; paginated — `size: M`
+- [x] **T-3.5.2** Implement `GET /scans/:id` — scan detail with findings summary (total, new, resolved), error message if failed — `size: S`
+- [x] **T-3.5.3** Implement `POST /scans/:id/cancel` — cancel a running/pending scan (update status to `cancelled`) — `size: S`
+- [x] **T-3.5.4** Write tests for scan endpoints — `size: S`
 
 ### Story 3.6: Dashboard Module
 
@@ -285,11 +285,11 @@ Aggregation endpoints for the web dashboard.
 
 **Tasks:**
 
-- [ ] **T-3.6.1** Implement `GET /dashboard/summary` — org-wide counts: total findings by severity, open vs resolved, total assets by type — `size: M` | `depends: T-1.3.2`
-- [ ] **T-3.6.2** Implement `GET /dashboard/top-risks` — top 10 highest-risk open findings (CVSS score × severity) — `size: M`
-- [ ] **T-3.6.3** Implement `GET /dashboard/assets-overview` — asset counts (repos, servers, certs) + health status (% with open critical/high findings) — `size: M`
-- [ ] **T-3.6.4** Add Redis caching for dashboard queries (TTL: 30s for summary, 60s for top-risks) — invalidate on new finding ingestion — `size: M` | `depends: T-1.1.5`
-- [ ] **T-3.6.5** Write tests for dashboard endpoints including cache hit/miss/invalidation — `size: M`
+- [x] **T-3.6.1** Implement `GET /dashboard/summary` — org-wide counts: total findings by severity, open vs resolved, total assets by type — `size: M` | `depends: T-1.3.2`
+- [x] **T-3.6.2** Implement `GET /dashboard/top-risks` — top 10 highest-risk open findings (CVSS score × severity) — `size: M`
+- [x] **T-3.6.3** Implement `GET /dashboard/assets-overview` — asset counts (repos, servers, certs) + health status (% with open critical/high findings) — `size: M`
+- [x] **T-3.6.4** Add Redis caching for dashboard queries (TTL: 30s for summary, 60s for top-risks) — invalidate on new finding ingestion — `size: M` | `depends: T-1.1.5`
+- [x] **T-3.6.5** Write tests for dashboard endpoints including cache hit/miss/invalidation — `size: M`
 
 ### Story 3.7: Audit Trail
 

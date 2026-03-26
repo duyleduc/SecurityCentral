@@ -7,6 +7,8 @@ import { corsMiddleware, requestIdMiddleware, requestLoggerMiddleware, apiRateLi
 import { authRouter } from './modules/auth/index.js';
 import { findingsRouter } from './modules/findings/index.js';
 import { repositoriesRouter, serversRouter, certificatesRouter } from './modules/assets/index.js';
+import { scansRouter } from './modules/scans/index.js';
+import { dashboardRouter } from './modules/dashboard/index.js';
 
 export const app = express();
 
@@ -41,6 +43,8 @@ app.use('/api/v1/findings', findingsRouter);
 app.use('/api/v1/repositories', repositoriesRouter);
 app.use('/api/v1/servers', serversRouter);
 app.use('/api/v1/certificates', certificatesRouter);
+app.use('/api/v1/scans', scansRouter);
+app.use('/api/v1/dashboard', dashboardRouter);
 
 // API routes placeholder
 app.get('/api/v1', (_req, res) => {
