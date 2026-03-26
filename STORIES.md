@@ -865,11 +865,11 @@ Main dashboard with summary widgets.
 
 **Tasks:**
 
-- [ ] **T-12.3.1** Implement severity breakdown widget — fetch `GET /dashboard/summary`, display counts for critical/high/medium/low as color-coded cards or donut chart — `size: M` | `depends: T-12.1.2`
-- [ ] **T-12.3.2** Implement top risks widget — fetch `GET /dashboard/top-risks`, display table of top 10 findings (severity badge, title, asset, CVE, link to detail) — `size: M`
-- [ ] **T-12.3.3** Implement assets overview widget — fetch `GET /dashboard/assets-overview`, display repo/server/cert counts with health indicators — `size: M`
-- [ ] **T-12.3.4** Implement trends chart — fetch `GET /findings/trends`, display line chart (new vs resolved) using a charting library (Recharts or Chart.js) — `size: M`
-- [ ] **T-12.3.5** Connect WebSocket — subscribe to org events, update summary counts on `finding:new`, refresh top risks on `scan:completed` — `size: M` | `depends: T-12.1.3`
+- [x] **T-12.3.1** Implement severity breakdown widget — fetch `GET /dashboard/summary`, display counts for critical/high/medium/low as color-coded cards or donut chart — `size: M` | `depends: T-12.1.2`
+- [x] **T-12.3.2** Implement top risks widget — fetch `GET /dashboard/top-risks`, display table of top 10 findings (severity badge, title, asset, CVE, link to detail) — `size: M`
+- [x] **T-12.3.3** Implement assets overview widget — fetch `GET /dashboard/assets-overview`, display repo/server/cert counts with health indicators — `size: M`
+- [x] **T-12.3.4** Implement trends chart — fetch `GET /findings/trends`, display line chart (new vs resolved) using a charting library (Recharts or Chart.js) — `size: M`
+- [x] **T-12.3.5** Connect WebSocket — subscribe to org events, update summary counts on `finding:new`, refresh top risks on `scan:completed` — `size: M` | `depends: T-12.1.3`
 
 ### Story 12.4: Findings Pages
 
