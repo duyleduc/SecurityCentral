@@ -1,10 +1,11 @@
-export function AssetsPage({ tab }: { tab: 'repositories' | 'servers' | 'certificates' }) {
-  const titles = { repositories: 'Repositories', servers: 'Servers', certificates: 'Certificates' };
+import { RepositoriesList } from './RepositoriesList.js';
+import { ServersList } from './ServersList.js';
+import { CertificatesList } from './CertificatesList.js';
 
-  return (
-    <div>
-      <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>{titles[tab]}</h2>
-      <p style={{ color: '#666' }}>{titles[tab]} management — coming soon.</p>
-    </div>
-  );
+export function AssetsPage({ tab }: { tab: 'repositories' | 'servers' | 'certificates' }) {
+  switch (tab) {
+    case 'repositories': return <RepositoriesList />;
+    case 'servers': return <ServersList />;
+    case 'certificates': return <CertificatesList />;
+  }
 }

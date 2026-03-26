@@ -898,12 +898,12 @@ Browse repositories, servers, and certificates.
 
 **Tasks:**
 
-- [ ] **T-12.5.1** Implement repositories list page — table with name, provider icon, language, last scan date, finding counts by severity (color-coded badges) — `size: M`
-- [ ] **T-12.5.2** Implement repository detail page — latest scan info, "Trigger Scan" button (calls `POST /repositories/:id/scan`), findings list filtered to this repo — `size: M`
-- [ ] **T-12.5.3** Implement servers list page — table with hostname, OS, environment badge, status indicator (online/offline based on heartbeat), last heartbeat relative time, finding counts — `size: M`
-- [ ] **T-12.5.4** Implement server detail page — system info card (OS, arch, cloud, agent version), resource usage, findings list, agent status — `size: M`
-- [ ] **T-12.5.5** Implement certificates list page — table with subject CN, issuer, expiry date (color-coded: green >90d, yellow 30–90d, red <30d), status, algorithm — `size: M`
-- [ ] **T-12.5.6** Implement certificate detail page — chain visualization, SANs list, algorithm strength, related findings — `size: M`
+- [x] **T-12.5.1** Implement repositories list page — table with name, provider icon, language, last scan date, finding counts by severity (color-coded badges) — `size: M`
+- [x] **T-12.5.2** Implement repository detail page — latest scan info, "Trigger Scan" button (calls `POST /repositories/:id/scan`), findings list filtered to this repo — `size: M`
+- [x] **T-12.5.3** Implement servers list page — table with hostname, OS, environment badge, status indicator (online/offline based on heartbeat), last heartbeat relative time, finding counts — `size: M`
+- [x] **T-12.5.4** Implement server detail page — system info card (OS, arch, cloud, agent version), resource usage, findings list, agent status — `size: M`
+- [x] **T-12.5.5** Implement certificates list page — table with subject CN, issuer, expiry date (color-coded: green >90d, yellow 30–90d, red <30d), status, algorithm — `size: M`
+- [x] **T-12.5.6** Implement certificate detail page — chain visualization, SANs list, algorithm strength, related findings — `size: M`
 
 ### Story 12.6: Scans Page
 
