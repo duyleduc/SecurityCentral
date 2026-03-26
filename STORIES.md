@@ -654,9 +654,9 @@ Discover certificates by connecting directly to endpoints.
 
 **Tasks:**
 
-- [ ] **T-8.2.1** Implement TLS probe (`internal/certdiscovery/probe.go`) — connect to `host:port` via `tls.DialWithDialer`, extract leaf certificate + full chain; 10s timeout — `size: M`
-- [ ] **T-8.2.2** Implement batch probe — accept list of endpoints (from LB targets or user config), probe concurrently (max 20 goroutines), collect results — `size: M`
-- [ ] **T-8.2.3** Write tests with local TLS test server (generate self-signed and chain certs for testing) — `size: M`
+- [x] **T-8.2.1** Implement TLS probe (`internal/certdiscovery/probe.go`) — connect to `host:port` via `tls.DialWithDialer`, extract leaf certificate + full chain; 10s timeout — `size: M`
+- [x] **T-8.2.2** Implement batch probe — accept list of endpoints (from LB targets or user config), probe concurrently (max 20 goroutines), collect results — `size: M`
+- [x] **T-8.2.3** Write tests with local TLS test server (generate self-signed and chain certs for testing) — `size: M`
 
 ### Story 8.3: Certificate Health Checks
 
