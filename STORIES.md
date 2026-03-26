@@ -588,11 +588,11 @@ Handle network failures gracefully.
 
 **Tasks:**
 
-- [ ] **T-7.5.1** Implement local finding queue — store findings as JSON files in `/var/lib/securitycentral/queue/` when platform POST fails — `size: M`
-- [ ] **T-7.5.2** Implement exponential backoff retry: 1s, 2s, 4s, 8s, ... up to 5 minutes — `size: S`
-- [ ] **T-7.5.3** Implement queue drain on reconnect — on next successful heartbeat, submit queued findings in FIFO order — `size: M`
-- [ ] **T-7.5.4** Enforce queue limit: 100 scan results max, drop oldest when exceeded — `size: S`
-- [ ] **T-7.5.5** Write tests for offline queueing, backoff, and reconnect drain — `size: M`
+- [x] **T-7.5.1** Implement local finding queue — store findings as JSON files in `/var/lib/securitycentral/queue/` when platform POST fails — `size: M`
+- [x] **T-7.5.2** Implement exponential backoff retry: 1s, 2s, 4s, 8s, ... up to 5 minutes — `size: S`
+- [x] **T-7.5.3** Implement queue drain on reconnect — on next successful heartbeat, submit queued findings in FIFO order — `size: M`
+- [x] **T-7.5.4** Enforce queue limit: 100 scan results max, drop oldest when exceeded — `size: S`
+- [x] **T-7.5.5** Write tests for offline queueing, backoff, and reconnect drain — `size: M`
 
 ### Story 7.6: Vuln DB Updates & Self-Update
 
