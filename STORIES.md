@@ -707,14 +707,14 @@ Connect to GitHub for repo discovery, webhooks, and PR creation.
 
 **Tasks:**
 
-- [ ] **T-9.1.1** Create integrations module: `src/modules/integrations/integrations.router.ts`, `integrations.service.ts` — `size: S`
-- [ ] **T-9.1.2** Implement `POST /integrations/github` — initiate GitHub App OAuth flow, on callback store `installation_id` + `app_id` in integrations table (config encrypted at rest) — `size: M`
-- [ ] **T-9.1.3** Implement `POST /integrations/github/webhook` — receive events, verify HMAC signature with `GITHUB_WEBHOOK_SECRET` — `size: M`
-- [ ] **T-9.1.4** Handle push event: look up repository by provider_id, enqueue `scan-orchestration` job — `size: S` | `depends: T-1.4.1`
-- [ ] **T-9.1.5** Handle installation event: auto-discover and register all repositories in the installation — `size: M`
-- [ ] **T-9.1.6** Implement GitHub API client (`src/lib/github.ts`) — authenticate as GitHub App (JWT + installation token), create branches, commit file changes, open PRs — `size: L`
-- [ ] **T-9.1.7** Implement `github-pr-creator` BullMQ job — for each auto-fixable finding: compute minimum version bump, create branch `securitycentral/fix-<cve_id>-<timestamp>`, update lockfile, open PR with title `fix(security): upgrade <package> to <version> (CVE-XXXX-YYYY)` and body with severity/CVE details/changelog link, record `fix_pr_url` on finding — `size: XL` | `depends: T-9.1.6`
-- [ ] **T-9.1.8** Write tests for webhook handling, repo discovery, and PR creation (mocked GitHub API) — `size: L`
+- [x] **T-9.1.1** Create integrations module: `src/modules/integrations/integrations.router.ts`, `integrations.service.ts` — `size: S`
+- [x] **T-9.1.2** Implement `POST /integrations/github` — initiate GitHub App OAuth flow, on callback store `installation_id` + `app_id` in integrations table (config encrypted at rest) — `size: M`
+- [x] **T-9.1.3** Implement `POST /integrations/github/webhook` — receive events, verify HMAC signature with `GITHUB_WEBHOOK_SECRET` — `size: M`
+- [x] **T-9.1.4** Handle push event: look up repository by provider_id, enqueue `scan-orchestration` job — `size: S` | `depends: T-1.4.1`
+- [x] **T-9.1.5** Handle installation event: auto-discover and register all repositories in the installation — `size: M`
+- [x] **T-9.1.6** Implement GitHub API client (`src/lib/github.ts`) — authenticate as GitHub App (JWT + installation token), create branches, commit file changes, open PRs — `size: L`
+- [x] **T-9.1.7** Implement `github-pr-creator` BullMQ job — for each auto-fixable finding: compute minimum version bump, create branch `securitycentral/fix-<cve_id>-<timestamp>`, update lockfile, open PR with title `fix(security): upgrade <package> to <version> (CVE-XXXX-YYYY)` and body with severity/CVE details/changelog link, record `fix_pr_url` on finding — `size: XL` | `depends: T-9.1.6`
+- [x] **T-9.1.8** Write tests for webhook handling, repo discovery, and PR creation (mocked GitHub API) — `size: L`
 
 ### Story 9.2: GitLab Integration
 

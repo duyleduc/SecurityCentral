@@ -3,6 +3,7 @@ import type { Job } from 'bullmq';
 import { jobLogger } from '../lib/logger.js';
 import { processFindingSync, type EsSyncJobData } from './es-sync.processor.js';
 import { processVulnDbSync } from './vuln-db-sync.js';
+import { processGitHubPr, type GitHubPrJobData } from './github-pr.processor.js';
 import type { JobContext } from './context.js';
 
 /**
@@ -23,6 +24,6 @@ export const processors: Record<string, { handler: (job: Job) => Promise<void>; 
   'finding-ingestion': { handler: placeholder, concurrency: 10 },
   'notifications': { handler: placeholder, concurrency: 10 },
   'vulndb-sync': { handler: processVulnDbSync, concurrency: 1 },
-  'github-pr': { handler: placeholder, concurrency: 3 },
+  'github-pr': { handler: (job: Job<GitHubPrJobData>) => processGitHubPr(job), concurrency: 3 },
   'es-sync': { handler: (job: Job<EsSyncJobData>) => processFindingSync(job), concurrency: 10 },
 };
