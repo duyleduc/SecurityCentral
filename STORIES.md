@@ -668,14 +668,14 @@ Evaluate certificate health and generate findings.
 
 **Tasks:**
 
-- [ ] **T-8.3.1** Implement expiry checks per spec: expired=critical, ≤7d=critical, ≤30d=high, ≤60d=medium, ≤90d=low — `size: M`
-- [ ] **T-8.3.2** Implement key strength check — RSA <2048 bits = high — `size: S`
-- [ ] **T-8.3.3** Implement signature algorithm check — SHA-1 signature = high — `size: S`
-- [ ] **T-8.3.4** Implement self-signed detection — `issuer == subject` and not in trusted roots = medium — `size: S`
-- [ ] **T-8.3.5** Implement chain validation — verify full chain from leaf to trusted root, incomplete chain = medium — `size: M`
-- [ ] **T-8.3.6** Implement wildcard advisory — `*.example.com` on public endpoint = info — `size: S`
-- [ ] **T-8.3.7** Generate findings for all failed checks, submit to platform via `POST /agents/findings` (scan_type: cert_check) — `size: M`
-- [ ] **T-8.3.8** Write tests for each check type with sample certificates (expired, weak key, self-signed, broken chain) — `size: M`
+- [x] **T-8.3.1** Implement expiry checks per spec: expired=critical, ≤7d=critical, ≤30d=high, ≤60d=medium, ≤90d=low — `size: M`
+- [x] **T-8.3.2** Implement key strength check — RSA <2048 bits = high — `size: S`
+- [x] **T-8.3.3** Implement signature algorithm check — SHA-1 signature = high — `size: S`
+- [x] **T-8.3.4** Implement self-signed detection — `issuer == subject` and not in trusted roots = medium — `size: S`
+- [x] **T-8.3.5** Implement chain validation — verify full chain from leaf to trusted root, incomplete chain = medium — `size: M`
+- [x] **T-8.3.6** Implement wildcard advisory — `*.example.com` on public endpoint = info — `size: S`
+- [x] **T-8.3.7** Generate findings for all failed checks, submit to platform via `POST /agents/findings` (scan_type: cert_check) — `size: M`
+- [x] **T-8.3.8** Write tests for each check type with sample certificates (expired, weak key, self-signed, broken chain) — `size: M`
 
 ### Story 8.4: Alert Deduplication
 
