@@ -335,3 +335,22 @@ model VulnerabilityAffects {
   @@index([ecosystem, packageName], map: "idx_vuln_affects_lookup")
   @@map("vulnerability_affects")
 }
+
+// ─── T-3.7.1: Audit Trail ────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId      String   @map("org_id") @db.Uuid
+  actorType  String   @map("actor_type")  // user | agent | system
+  actorId    String   @map("actor_id")
+  action     String                        // e.g., finding.status_changed, scan.triggered
+  entityType String   @map("entity_type")  // finding | scan | integration | api_key
+  entityId   String   @map("entity_id")
+  oldValue   Json?    @map("old_value") @db.JsonB
+  newValue   Json?    @map("new_value") @db.JsonB
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@index([orgId, entityType, entityId], map: "idx_audit_logs_entity")
+  @@index([orgId, createdAt], map: "idx_audit_logs_org_time")
+  @@map("audit_logs")
+}

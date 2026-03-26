@@ -9,6 +9,7 @@ import { findingsRouter } from './modules/findings/index.js';
 import { repositoriesRouter, serversRouter, certificatesRouter } from './modules/assets/index.js';
 import { scansRouter } from './modules/scans/index.js';
 import { dashboardRouter } from './modules/dashboard/index.js';
+import { auditRouter } from './modules/audit/index.js';
 
 export const app = express();
 
@@ -45,6 +46,7 @@ app.use('/api/v1/servers', serversRouter);
 app.use('/api/v1/certificates', certificatesRouter);
 app.use('/api/v1/scans', scansRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
+app.use('/api/v1/audit-logs', auditRouter);
 
 // API routes placeholder
 app.get('/api/v1', (_req, res) => {

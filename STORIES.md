@@ -301,10 +301,10 @@ Log all state changes for compliance.
 
 **Tasks:**
 
-- [ ] **T-3.7.1** Create `audit_logs` table: id, org_id, actor_type (user/agent/system), actor_id, action (e.g., `finding.status_changed`), entity_type, entity_id, old_value JSONB, new_value JSONB, timestamp — `size: M`
-- [ ] **T-3.7.2** Implement audit logging service — called from findings (status change), scans (trigger/cancel), integrations (create/delete), API keys (create/revoke) — `size: M`
-- [ ] **T-3.7.3** Implement `GET /audit-logs` — list audit logs for org, filterable by entity_type, entity_id, actor, date range — `size: M`
-- [ ] **T-3.7.4** Write tests for audit log creation and querying — `size: S`
+- [x] **T-3.7.1** Create `audit_logs` table: id, org_id, actor_type (user/agent/system), actor_id, action (e.g., `finding.status_changed`), entity_type, entity_id, old_value JSONB, new_value JSONB, timestamp — `size: M`
+- [x] **T-3.7.2** Implement audit logging service — called from findings (status change), scans (trigger/cancel), integrations (create/delete), API keys (create/revoke) — `size: M`
+- [x] **T-3.7.3** Implement `GET /audit-logs` — list audit logs for org, filterable by entity_type, entity_id, actor, date range — `size: M`
+- [x] **T-3.7.4** Write tests for audit log creation and querying — `size: S`
 
 ---
 
