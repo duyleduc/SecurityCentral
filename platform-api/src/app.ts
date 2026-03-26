@@ -14,6 +14,7 @@ import { agentsRouter } from './modules/agents/index.js';
 import { integrationsRouter } from './modules/integrations/index.js';
 import { notificationsRouter } from './modules/notifications/index.js';
 import { agentRateLimit } from './middleware/index.js';
+import { setupSwagger } from './swagger.js';
 
 export const app = express();
 
@@ -32,6 +33,9 @@ app.use(requestLoggerMiddleware);
 
 // Rate limiting on API routes (agent routes use agentRateLimit separately)
 app.use('/api', apiRateLimit);
+
+// Swagger UI at /docs
+setupSwagger(app);
 
 // Health check (no rate limiting)
 app.get('/health', (_req, res) => {
