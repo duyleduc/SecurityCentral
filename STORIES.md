@@ -336,12 +336,12 @@ Platform-side handling of agent lifecycle.
 
 **Tasks:**
 
-- [ ] **T-4.2.1** Create agents module: `agents.router.ts`, `agents.service.ts` — `size: S`
-- [ ] **T-4.2.2** Implement `POST /agents/register` — validate API key, accept CSR, sign cert via CA utility, create server record in DB, return `agent_id` + signed cert + CA cert — `size: L` | `depends: T-4.1.2`
-- [ ] **T-4.2.3** Implement `POST /agents/heartbeat` — update server `last_heartbeat`, `agent_version`, OS info, resource usage; build and return commands array (scan_now, update_agent, update_vulndb) based on current state — `size: M`
-- [ ] **T-4.2.4** Implement `GET /agents/version` — return latest agent binary version + download URL for each platform (linux/amd64, linux/arm64) — `size: S`
-- [ ] **T-4.2.5** Implement agent offline detection — BullMQ recurring job (every 1 minute) checks for servers with `last_heartbeat > 5 minutes ago` AND status=active, triggers notification job — `size: M` | `depends: T-1.4.1`
-- [ ] **T-4.2.6** Write tests for registration flow, heartbeat processing, command generation, and offline detection — `size: M`
+- [x] **T-4.2.1** Create agents module: `agents.router.ts`, `agents.service.ts` — `size: S`
+- [x] **T-4.2.2** Implement `POST /agents/register` — validate API key, accept CSR, sign cert via CA utility, create server record in DB, return `agent_id` + signed cert + CA cert — `size: L` | `depends: T-4.1.2`
+- [x] **T-4.2.3** Implement `POST /agents/heartbeat` — update server `last_heartbeat`, `agent_version`, OS info, resource usage; build and return commands array (scan_now, update_agent, update_vulndb) based on current state — `size: M`
+- [x] **T-4.2.4** Implement `GET /agents/version` — return latest agent binary version + download URL for each platform (linux/amd64, linux/arm64) — `size: S`
+- [x] **T-4.2.5** Implement agent offline detection — BullMQ recurring job (every 1 minute) checks for servers with `last_heartbeat > 5 minutes ago` AND status=active, triggers notification job — `size: M` | `depends: T-1.4.1`
+- [x] **T-4.2.6** Write tests for registration flow, heartbeat processing, command generation, and offline detection — `size: M`
 
 ### Story 4.3: Finding Submission (Agent API)
 
