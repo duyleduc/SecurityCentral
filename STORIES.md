@@ -199,14 +199,14 @@ CRUD + search for vulnerability findings.
 
 **Tasks:**
 
-- [ ] **T-3.1.1** Create findings module structure: `findings.router.ts`, `findings.service.ts`, `findings.validation.ts` — `size: S`
-- [ ] **T-3.1.2** Implement `GET /findings` — paginated list with filters (severity, status, source, cve_id, repository_id, server_id, certificate_id, full-text `q`), sort, order. Route simple queries to PostgreSQL, full-text/complex queries to Elasticsearch. Return standard envelope `{ data, meta: { page, per_page, total }, errors }` — `size: L` | `depends: T-1.3.2, T-1.5.5`
-- [ ] **T-3.1.3** Implement `GET /findings/:id` — single finding detail with joined asset info (repo name, server hostname, or cert subject) — `size: S`
-- [ ] **T-3.1.4** Implement `PATCH /findings/:id` — update status (open → in_progress → resolved/suppressed/false_positive), set `resolved_at` on resolution, sync updated status to ES — `size: M`
-- [ ] **T-3.1.5** Implement `GET /findings/stats` — aggregated counts by severity, source, status using Elasticsearch aggregations — `size: M`
-- [ ] **T-3.1.6** Implement `GET /findings/trends` — time-series: new/resolved findings bucketed by day/week over configurable time window — `size: M`
-- [ ] **T-3.1.7** Write Zod validation schemas for all query params and request bodies — `size: S`
-- [ ] **T-3.1.8** Write unit + integration tests for findings CRUD, filtering, pagination, search, stats, trends — `size: L`
+- [x] **T-3.1.1** Create findings module structure: `findings.router.ts`, `findings.service.ts`, `findings.validation.ts` — `size: S`
+- [x] **T-3.1.2** Implement `GET /findings` — paginated list with filters (severity, status, source, cve_id, repository_id, server_id, certificate_id, full-text `q`), sort, order. Route simple queries to PostgreSQL, full-text/complex queries to Elasticsearch. Return standard envelope `{ data, meta: { page, per_page, total }, errors }` — `size: L` | `depends: T-1.3.2, T-1.5.5`
+- [x] **T-3.1.3** Implement `GET /findings/:id` — single finding detail with joined asset info (repo name, server hostname, or cert subject) — `size: S`
+- [x] **T-3.1.4** Implement `PATCH /findings/:id` — update status (open → in_progress → resolved/suppressed/false_positive), set `resolved_at` on resolution, sync updated status to ES — `size: M`
+- [x] **T-3.1.5** Implement `GET /findings/stats` — aggregated counts by severity, source, status using Elasticsearch aggregations — `size: M`
+- [x] **T-3.1.6** Implement `GET /findings/trends` — time-series: new/resolved findings bucketed by day/week over configurable time window — `size: M`
+- [x] **T-3.1.7** Write Zod validation schemas for all query params and request bodies — `size: S`
+- [x] **T-3.1.8** Write unit + integration tests for findings CRUD, filtering, pagination, search, stats, trends — `size: L`
 
 ### Story 3.2: Assets Module — Repositories
 
