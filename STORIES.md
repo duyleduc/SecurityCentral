@@ -414,11 +414,11 @@ Build the `sc-scan` command-line tool.
 
 **Tasks:**
 
-- [ ] **T-6.1.1** Implement CLI entrypoint (`cmd/sc-scan/main.go`) using cobra — parse all flags: `--path`, `--api-key`, `--api-url`, `--scan-deps`, `--scan-secrets`, `--output`, `--output-file`, `--fail-on`, `--incremental`, `--no-upload`, `--verbose` — `size: M`
-- [ ] **T-6.1.2** Implement configuration file parser (`.securitycentral.yml`) — load from repo root, merge with CLI flags (CLI takes precedence) — `size: M`
-- [ ] **T-6.1.3** Implement output formatters: `table` (human-readable), `json`, `sarif` (GitHub Code Scanning compatible) — `size: M`
-- [ ] **T-6.1.4** Implement exit codes: 0 (clean or below threshold), 1 (findings at or above `--fail-on` severity), 2 (scan error) — `size: S`
-- [ ] **T-6.1.5** Write tests for CLI flag parsing, config file merging, output formatting, and exit code logic — `size: M`
+- [x] **T-6.1.1** Implement CLI entrypoint (`cmd/sc-scan/main.go`) using cobra — parse all flags: `--path`, `--api-key`, `--api-url`, `--scan-deps`, `--scan-secrets`, `--output`, `--output-file`, `--fail-on`, `--incremental`, `--no-upload`, `--verbose` — `size: M`
+- [x] **T-6.1.2** Implement configuration file parser (`.securitycentral.yml`) — load from repo root, merge with CLI flags (CLI takes precedence) — `size: M`
+- [x] **T-6.1.3** Implement output formatters: `table` (human-readable), `json`, `sarif` (GitHub Code Scanning compatible) — `size: M`
+- [x] **T-6.1.4** Implement exit codes: 0 (clean or below threshold), 1 (findings at or above `--fail-on` severity), 2 (scan error) — `size: S`
+- [x] **T-6.1.5** Write tests for CLI flag parsing, config file merging, output formatting, and exit code logic — `size: M`
 
 ### Story 6.2: Dependency Scanning
 
@@ -432,17 +432,17 @@ Detect vulnerable dependencies from lockfiles.
 
 **Tasks:**
 
-- [ ] **T-6.2.1** Implement lockfile discovery — walk repo, find lockfiles by filename pattern — `size: S`
-- [ ] **T-6.2.2** Implement npm lockfile parser (`internal/scanner/deps/npm.go`) — parse `package-lock.json` (JSON), extract `(ecosystem, package_name, version)` tuples with direct/transitive distinction — `size: M`
-- [ ] **T-6.2.3** Implement yarn.lock parser — parse yarn v1 format (custom text format), extract tuples — `size: M`
-- [ ] **T-6.2.4** Implement pip lockfile parser (`internal/scanner/deps/pip.go`) — parse `requirements.txt` (pinned versions `pkg==1.2.3`) — `size: S`
-- [ ] **T-6.2.5** Implement Maven parser (`internal/scanner/deps/maven.go`) — parse `pom.xml` for `groupId:artifactId:version` — `size: M`
-- [ ] **T-6.2.6** Implement BoltDB reader (`internal/vulndb/reader.go`) — load local BoltDB, query by `(ecosystem, package_name)` — `size: M`
-- [ ] **T-6.2.7** Implement vulnerability matching — for each tuple, query BoltDB, check if version falls within affected range (semver comparison for npm/pip, Maven version comparison) — `size: L`
-- [ ] **T-6.2.8** Generate `Finding` structs with: CVE ID, CVSS, severity, installed/fixed versions, lockfile path, direct vs transitive, remediation text, auto_fixable flag — `size: M`
-- [ ] **T-6.2.9** Implement `.securitycentral.yml` ignore/suppress rules — ignore specific CVEs (with optional expiry date), ignore packages below version threshold — `size: S`
-- [ ] **T-6.2.10** Write unit tests for each lockfile parser with fixture files — `size: M`
-- [ ] **T-6.2.11** Write integration test: scan a sample repo with known vulnerabilities in multiple ecosystems, verify correct findings produced — `size: M`
+- [x] **T-6.2.1** Implement lockfile discovery — walk repo, find lockfiles by filename pattern — `size: S`
+- [x] **T-6.2.2** Implement npm lockfile parser (`internal/scanner/deps/npm.go`) — parse `package-lock.json` (JSON), extract `(ecosystem, package_name, version)` tuples with direct/transitive distinction — `size: M`
+- [x] **T-6.2.3** Implement yarn.lock parser — parse yarn v1 format (custom text format), extract tuples — `size: M`
+- [x] **T-6.2.4** Implement pip lockfile parser (`internal/scanner/deps/pip.go`) — parse `requirements.txt` (pinned versions `pkg==1.2.3`) — `size: S`
+- [x] **T-6.2.5** Implement Maven parser (`internal/scanner/deps/maven.go`) — parse `pom.xml` for `groupId:artifactId:version` — `size: M`
+- [x] **T-6.2.6** Implement BoltDB reader (`internal/vulndb/reader.go`) — load local BoltDB, query by `(ecosystem, package_name)` — `size: M`
+- [x] **T-6.2.7** Implement vulnerability matching — for each tuple, query BoltDB, check if version falls within affected range (semver comparison for npm/pip, Maven version comparison) — `size: L`
+- [x] **T-6.2.8** Generate `Finding` structs with: CVE ID, CVSS, severity, installed/fixed versions, lockfile path, direct vs transitive, remediation text, auto_fixable flag — `size: M`
+- [x] **T-6.2.9** Implement `.securitycentral.yml` ignore/suppress rules — ignore specific CVEs (with optional expiry date), ignore packages below version threshold — `size: S`
+- [x] **T-6.2.10** Write unit tests for each lockfile parser with fixture files — `size: M`
+- [x] **T-6.2.11** Write integration test: scan a sample repo with known vulnerabilities in multiple ecosystems, verify correct findings produced — `size: M`
 
 ### Story 6.3: Secrets Detection
 
@@ -456,15 +456,15 @@ Scan code for hardcoded secrets.
 
 **Tasks:**
 
-- [ ] **T-6.3.1** Implement regex pattern engine (`internal/scanner/secrets/engine.go`) — load patterns from embedded config, scan file content line-by-line, return matches with file path + line number + matched pattern name — `size: M`
-- [ ] **T-6.3.2** Implement cloud provider key patterns (10 patterns): AWS access key (`AKIA...`), AWS secret key, GCP API key (`AIza...`), GCP service account JSON, Azure storage key — `size: M`
-- [ ] **T-6.3.3** Implement API token patterns (15 patterns): GitHub PAT, Slack token/webhook, Stripe keys (pk/sk), Twilio, SendGrid, Mailgun, Heroku, npm token, PyPI token — `size: M`
-- [ ] **T-6.3.4** Implement private key / credential patterns (10 patterns): PEM-encoded RSA/EC private keys, database URIs (`postgres://`, `mysql://`, `mongodb://`) with credentials, JWT tokens — `size: M`
-- [ ] **T-6.3.5** Implement generic high-entropy patterns (15 patterns): high-entropy strings near keywords (`password`, `secret`, `token`, `api_key`, `private_key`, `credential`) — `size: M`
-- [ ] **T-6.3.6** Implement Shannon entropy filter — compute entropy of candidate string, only flag if entropy > 4.5 — `size: S`
-- [ ] **T-6.3.7** Implement exclusion rules: skip files matching `.gitignore` patterns, test fixtures (`*_test.*`, `testdata/`, `fixtures/`), lockfiles, auto-generated files — `size: M`
-- [ ] **T-6.3.8** Implement allowlist from `.securitycentral.yml` (allow by path glob, pattern regex, or specific string SHA-256 hash) — `size: S`
-- [ ] **T-6.3.9** Write tests with sample files containing real pattern formats (sanitized) and verify detection, exclusion, and allowlist behavior — `size: M`
+- [x] **T-6.3.1** Implement regex pattern engine (`internal/scanner/secrets/engine.go`) — load patterns from embedded config, scan file content line-by-line, return matches with file path + line number + matched pattern name — `size: M`
+- [x] **T-6.3.2** Implement cloud provider key patterns (10 patterns): AWS access key (`AKIA...`), AWS secret key, GCP API key (`AIza...`), GCP service account JSON, Azure storage key — `size: M`
+- [x] **T-6.3.3** Implement API token patterns (15 patterns): GitHub PAT, Slack token/webhook, Stripe keys (pk/sk), Twilio, SendGrid, Mailgun, Heroku, npm token, PyPI token — `size: M`
+- [x] **T-6.3.4** Implement private key / credential patterns (10 patterns): PEM-encoded RSA/EC private keys, database URIs (`postgres://`, `mysql://`, `mongodb://`) with credentials, JWT tokens — `size: M`
+- [x] **T-6.3.5** Implement generic high-entropy patterns (15 patterns): high-entropy strings near keywords (`password`, `secret`, `token`, `api_key`, `private_key`, `credential`) — `size: M`
+- [x] **T-6.3.6** Implement Shannon entropy filter — compute entropy of candidate string, only flag if entropy > 4.5 — `size: S`
+- [x] **T-6.3.7** Implement exclusion rules: skip files matching `.gitignore` patterns, test fixtures (`*_test.*`, `testdata/`, `fixtures/`), lockfiles, auto-generated files — `size: M`
+- [x] **T-6.3.8** Implement allowlist from `.securitycentral.yml` (allow by path glob, pattern regex, or specific string SHA-256 hash) — `size: S`
+- [x] **T-6.3.9** Write tests with sample files containing real pattern formats (sanitized) and verify detection, exclusion, and allowlist behavior — `size: M`
 
 ### Story 6.4: Incremental Scanning
 
@@ -476,9 +476,9 @@ Only scan changed files for faster CI runs.
 
 **Tasks:**
 
-- [ ] **T-6.4.1** Implement git diff detection — when `--incremental`, run `git diff --name-only HEAD~1` (or against base branch) to get changed file list — `size: M`
-- [ ] **T-6.4.2** Filter lockfile discovery and secrets scanning to only changed files; still do full dependency match if any lockfile changed — `size: S`
-- [ ] **T-6.4.3** Write tests for incremental mode with mock git state — `size: S`
+- [x] **T-6.4.1** Implement git diff detection — when `--incremental`, run `git diff --name-only HEAD~1` (or against base branch) to get changed file list — `size: M`
+- [x] **T-6.4.2** Filter lockfile discovery and secrets scanning to only changed files; still do full dependency match if any lockfile changed — `size: S`
+- [x] **T-6.4.3** Write tests for incremental mode with mock git state — `size: S`
 
 ### Story 6.5: Platform Upload
 
