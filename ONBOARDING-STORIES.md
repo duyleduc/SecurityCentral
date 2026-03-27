@@ -25,11 +25,11 @@ Build a reusable GitLab API client for repo discovery and webhook management.
 
 **Tasks:**
 
-- [ ] **T-16.1.1** Implement GitLab API client (`platform-api/src/lib/gitlab.ts`) — constructor takes `accessToken` + optional `baseUrl` (default `https://gitlab.com`); methods: `listProjects(query)` with pagination, `getProject(id)`, `createWebhook(projectId, url, token)`, `deleteWebhook(projectId, hookId)` — `size: M`
-- [ ] **T-16.1.2** Add self-hosted base URL + `verifySsl` support to GitLab integration — extend `createGitLabIntegration` in `integrations.service.ts` to accept optional `baseUrl` and `verifySsl`, store in config JSONB — `size: S`
-- [ ] **T-16.1.3** Add pagination support to `GitHubClient.listRepositories` — follow GitHub `Link` header pagination to fetch all repos (orgs with >30 repos currently only see first page) — `size: S`
-- [ ] **T-16.1.4** Write unit tests for GitLab client — test `listProjects`, multi-page pagination, self-hosted base URL, error cases; mock `fetch` — `size: S`
-- [ ] **T-16.1.5** Write unit tests for GitHub pagination fix — test multi-page `Link` header following — `size: S`
+- [x] **T-16.1.1** Implement GitLab API client (`platform-api/src/lib/gitlab.ts`) — constructor takes `accessToken` + optional `baseUrl` (default `https://gitlab.com`); methods: `listProjects(query)` with pagination, `getProject(id)`, `createWebhook(projectId, url, token)`, `deleteWebhook(projectId, hookId)` — `size: M`
+- [x] **T-16.1.2** Add self-hosted base URL + `verifySsl` support to GitLab integration — extend `createGitLabIntegration` in `integrations.service.ts` to accept optional `baseUrl` and `verifySsl`, store in config JSONB — `size: S`
+- [x] **T-16.1.3** Add pagination support to `GitHubClient.listRepositories` — follow GitHub `Link` header pagination to fetch all repos (orgs with >30 repos currently only see first page) — `size: S`
+- [x] **T-16.1.4** Write unit tests for GitLab client — test `listProjects`, multi-page pagination, self-hosted base URL, error cases; mock `fetch` — `size: S`
+- [x] **T-16.1.5** Write unit tests for GitHub pagination fix — test multi-page `Link` header following — `size: S`
 
 ### Story 16.2: Repository Discovery API
 
@@ -80,8 +80,8 @@ Dashboard page for browsing and selecting repos to scan.
 
 **Tasks:**
 
-- [ ] **T-16.4.1** Write integration tests for repo discovery endpoints — test `GET /integrations/github/repos` (auth, permissions, search filtering, pagination, synced annotation), `POST .../sync` (creates records, configures webhooks), `DELETE .../unsync` (preserves data); mock GitHub/GitLab API calls — `size: M` | `depends: T-16.2.7`
-- [ ] **T-16.4.2** Write integration tests for GitLab repo discovery — same coverage as GitHub tests — `size: M` | `depends: T-16.2.7`
+- [x] **T-16.4.1** Write integration tests for repo discovery endpoints — test `GET /integrations/github/repos` (auth, permissions, search filtering, pagination, synced annotation), `POST .../sync` (creates records, configures webhooks), `DELETE .../unsync` (preserves data); mock GitHub/GitLab API calls — `size: M` | `depends: T-16.2.7`
+- [x] **T-16.4.2** Write integration tests for GitLab repo discovery — same coverage as GitHub tests — `size: M` | `depends: T-16.2.7`
 
 ---
 
