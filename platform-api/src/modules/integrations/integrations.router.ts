@@ -107,6 +107,8 @@ integrationsRouter.post(
 // ---------------------------------------------------------------------------
 const CreateGitLabSchema = z.object({
   accessToken: z.string().min(1),
+  baseUrl: z.string().url().optional(),
+  verifySsl: z.boolean().optional(),
 });
 
 integrationsRouter.post(
@@ -119,6 +121,8 @@ integrationsRouter.post(
       const result = await integrationsService.createGitLabIntegration(
         req.auth!.orgId,
         req.body.accessToken,
+        req.body.baseUrl,
+        req.body.verifySsl,
       );
       res.status(201).json(successEnvelope(result));
     } catch (err) {

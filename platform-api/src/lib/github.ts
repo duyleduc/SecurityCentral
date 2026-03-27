@@ -78,10 +78,44 @@ export class GitHubClient {
     return resp.json();
   }
 
-  /** List all repositories accessible to this installation. */
+  /**
+   * Raw request returning the full Response (for pagination header access).
+   */
+  private async rawRequest(method: string, url: string): Promise<Response> {
+    const resp = await fetch(url, {
+      method,
+      headers: {
+        Authorization: `token ${this.token}`,
+        Accept: 'application/vnd.github+json',
+      },
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`GitHub API ${method} ${url}: ${resp.status} ${text}`);
+    }
+
+    return resp;
+  }
+
+  /**
+   * List ALL repositories accessible to this installation.
+   * Follows GitHub Link header pagination to fetch every page.
+   */
   async listRepositories(): Promise<Array<{ id: number; full_name: string; name: string; owner: { login: string }; default_branch: string; language: string | null }>> {
-    const data = (await this.request('GET', '/installation/repositories')) as { repositories: any[] };
-    return data.repositories;
+    const allRepos: any[] = [];
+    let url: string | null = `${GITHUB_API}/installation/repositories?per_page=100`;
+
+    while (url) {
+      const resp = await this.rawRequest('GET', url);
+      const data = (await resp.json()) as { repositories: any[]; total_count: number };
+      allRepos.push(...data.repositories);
+
+      // Parse Link header for next page
+      url = parseLinkHeaderNext(resp.headers.get('link'));
+    }
+
+    return allRepos;
   }
 
   /** Get a reference (branch). */
@@ -126,6 +160,21 @@ export class GitHubClient {
 // ---------------------------------------------------------------------------
 // Webhook signature verification
 // ---------------------------------------------------------------------------
+
+/**
+ * Parse GitHub Link header to extract the "next" page URL.
+ * Format: `<https://api.github.com/...?page=2>; rel="next", <...>; rel="last"`
+ */
+export function parseLinkHeaderNext(header: string | null): string | null {
+  if (!header) return null;
+
+  for (const part of header.split(',')) {
+    const match = part.match(/<([^>]+)>;\s*rel="next"/);
+    if (match) return match[1];
+  }
+
+  return null;
+}
 
 export function verifyWebhookSignature(payload: string | Buffer, signature: string): boolean {
   const secret = env.GITHUB_WEBHOOK_SECRET;

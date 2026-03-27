@@ -149,7 +149,12 @@ export async function handleInstallationEvent(payload: {
 // GitLab integration
 // ---------------------------------------------------------------------------
 
-export async function createGitLabIntegration(orgId: string, accessToken: string) {
+export async function createGitLabIntegration(
+  orgId: string,
+  accessToken: string,
+  baseUrl?: string,
+  verifySsl?: boolean,
+) {
   const existing = await prisma.integration.findFirst({
     where: { orgId, provider: 'gitlab' },
   });
@@ -158,12 +163,16 @@ export async function createGitLabIntegration(orgId: string, accessToken: string
     throw new AppError('INTEGRATION_ALREADY_EXISTS', 'GitLab integration already exists for this organization');
   }
 
+  const config: Record<string, unknown> = { access_token: accessToken };
+  if (baseUrl) config.base_url = baseUrl;
+  if (verifySsl !== undefined) config.verify_ssl = verifySsl;
+
   return prisma.integration.create({
     data: {
       orgId,
       provider: 'gitlab',
       status: 'active',
-      config: { access_token: accessToken },
+      config,
     },
   });
 }

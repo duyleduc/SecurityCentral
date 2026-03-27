@@ -10,4 +10,4 @@ When given a user task, do the following:
 3. Implement the task in the requested language
 4. Provide a brief explanation of the implementation
 5. If applicable, include any assumptions made during implementation
-6. Update STORIES.md as done for the story
+6. Update the stories md file corresponding to the story
