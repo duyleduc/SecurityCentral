@@ -330,3 +330,75 @@ export function useUnsyncRepo(provider: string) {
     },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Cloud Infrastructure Discovery
+// ---------------------------------------------------------------------------
+
+export interface CloudResource {
+  id: string;
+  provider: string;
+  resourceType: string;
+  resourceId: string;
+  hostname: string | null;
+  ipAddress: string | null;
+  region: string | null;
+  status: string | null;
+  osInfo: string | null;
+  server: { id: string; hostname: string; agentVersion: string | null; lastHeartbeat: string | null; status: string } | null;
+}
+
+export interface CoverageStats {
+  total_instances: number;
+  total_monitored: number;
+  overall_coverage_pct: number;
+  breakdown: Array<{ provider: string; region: string; total: number; monitored: number; coverage_pct: number }>;
+}
+
+export function useCloudResources(provider: string, params?: { page?: number; per_page?: number; region?: string; status?: string }) {
+  return useQuery({
+    queryKey: ['cloud-resources', provider, params],
+    queryFn: () => apiGet<CloudResource[]>(`/integrations/${provider}/resources`, toStringParams(params as PaginatedParams)),
+    enabled: !!provider,
+  });
+}
+
+export function useUnmonitoredServers() {
+  return useQuery({
+    queryKey: ['unmonitored-servers'],
+    queryFn: () => apiGet<CloudResource[]>('/integrations/servers/unmonitored'),
+  });
+}
+
+export function useCoverageStats() {
+  return useQuery({
+    queryKey: ['coverage-stats'],
+    queryFn: () => apiGet<CoverageStats>('/integrations/coverage/stats'),
+    staleTime: 30_000,
+  });
+}
+
+export function useConnectCloud() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ provider, config }: { provider: string; config: Record<string, unknown> }) =>
+      apiPost(`/integrations/${provider}`, config),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['integrations'] });
+      qc.invalidateQueries({ queryKey: ['coverage-stats'] });
+    },
+  });
+}
+
+export function useTriggerDiscovery() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (provider: string) =>
+      apiPost(`/integrations/${provider}/discover`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cloud-resources'] });
+      qc.invalidateQueries({ queryKey: ['coverage-stats'] });
+      qc.invalidateQueries({ queryKey: ['unmonitored-servers'] });
+    },
+  });
+}

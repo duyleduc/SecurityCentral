@@ -152,10 +152,10 @@ Dashboard showing cloud instance coverage and agent gaps.
 
 **Tasks:**
 
-- [ ] **T-17.4.1** Add React Query hooks — `useCloudResources(provider, query)`, `useUnmonitoredServers()`, `useCoverageStats()`, `useConnectCloud(provider)`, `useTriggerDiscovery(provider)` — `size: S`
-- [ ] **T-17.4.2** Implement `InfrastructureCoveragePage` (`dashboard/src/pages/Infrastructure/CoverageDashboard.tsx`) — overall coverage bar, per-provider/region table (instances, agents, coverage %), unmonitored servers list with "Install Agent" button (copies install command), "Connect Cloud Account" link — `size: L` | `depends: T-17.4.1`
-- [ ] **T-17.4.3** Add route `/infrastructure/coverage` and sidebar nav item — `size: S` | `depends: T-17.4.2`
-- [ ] **T-17.4.4** Add cloud connection modals to IntegrationsPage — AWS (region, accessKeyId/roleArn), Azure (tenantId, clientId, clientSecret), GCP (projectId, service account key upload) — `size: M`
+- [x] **T-17.4.1** Add React Query hooks — `useCloudResources(provider, query)`, `useUnmonitoredServers()`, `useCoverageStats()`, `useConnectCloud(provider)`, `useTriggerDiscovery(provider)` — `size: S`
+- [x] **T-17.4.2** Implement `InfrastructureCoveragePage` (`dashboard/src/pages/Infrastructure/CoverageDashboard.tsx`) — overall coverage bar, per-provider/region table (instances, agents, coverage %), unmonitored servers list with "Install Agent" button (copies install command), "Connect Cloud Account" link — `size: L` | `depends: T-17.4.1`
+- [x] **T-17.4.3** Add route `/infrastructure/coverage` and sidebar nav item — `size: S` | `depends: T-17.4.2`
+- [x] **T-17.4.4** Add cloud connection modals to IntegrationsPage — AWS (region, accessKeyId/roleArn), Azure (tenantId, clientId, clientSecret), GCP (projectId, service account key upload) — `size: M`
 
 ### Story 17.5: Cloud Discovery Tests
 

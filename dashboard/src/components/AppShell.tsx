@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { path: '/assets/repositories', label: 'Repositories', icon: '📦' },
   { path: '/assets/servers', label: 'Servers', icon: '🖥️' },
   { path: '/assets/certificates', label: 'Certificates', icon: '🔒' },
+  { path: '/infrastructure/coverage', label: 'Coverage', icon: '☁️' },
   { path: '/scans', label: 'Scans', icon: '⚡' },
   { path: '/integrations', label: 'Integrations', icon: '🔗' },
   { path: '/settings', label: 'Settings', icon: '⚙️' },

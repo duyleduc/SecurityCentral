@@ -14,6 +14,9 @@ const PROVIDERS = [
   { key: 'github', label: 'GitHub', icon: '🐙', desc: 'Repository scanning, webhooks, auto-fix PRs' },
   { key: 'gitlab', label: 'GitLab', icon: '🦊', desc: 'Repository scanning and push webhooks' },
   { key: 'slack', label: 'Slack', icon: '💬', desc: 'Security alerts and notifications' },
+  { key: 'aws', label: 'AWS', icon: '🟧', desc: 'EC2 instance discovery for infrastructure coverage' },
+  { key: 'azure', label: 'Azure', icon: '🔵', desc: 'Virtual machine discovery across resource groups' },
+  { key: 'gcp', label: 'GCP', icon: '🔴', desc: 'Compute Engine instance discovery across zones' },
 ];
 
 export function IntegrationsPage() {
@@ -84,6 +87,9 @@ export function IntegrationsPage() {
       {modal === 'github' && <GitHubModal onClose={() => setModal(null)} />}
       {modal === 'gitlab' && <GitLabModal onClose={() => setModal(null)} />}
       {modal === 'slack' && <SlackModal onClose={() => setModal(null)} />}
+      {modal === 'aws' && <AwsModal onClose={() => setModal(null)} />}
+      {modal === 'azure' && <AzureModal onClose={() => setModal(null)} />}
+      {modal === 'gcp' && <GcpModal onClose={() => setModal(null)} />}
     </div>
   );
 }
@@ -185,6 +191,84 @@ function SlackModal({ onClose }: { onClose: () => void }) {
 
 const formLabel: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 };
 const formInput: React.CSSProperties = { width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13, boxSizing: 'border-box' };
+function AwsModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [region, setRegion] = useState('us-east-1');
+  const [accessKeyId, setAccessKeyId] = useState('');
+  const [secretAccessKey, setSecretAccessKey] = useState('');
+  const [roleArn, setRoleArn] = useState('');
+  const mutation = useMutation({
+    mutationFn: () => apiPost('/integrations/aws', { region, ...(accessKeyId ? { accessKeyId, secretAccessKey } : {}), ...(roleArn ? { roleArn } : {}) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['integrations'] }); qc.invalidateQueries({ queryKey: ['coverage-stats'] }); onClose(); },
+  });
+
+  return (
+    <ModalWrapper title="Connect AWS" onClose={onClose}>
+      <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Provide read-only credentials to discover EC2 instances.</p>
+      <div style={{ marginBottom: 12 }}><label style={formLabel}>Region</label><input value={region} onChange={(e) => setRegion(e.target.value)} style={formInput} /></div>
+      <div style={{ marginBottom: 12 }}><label style={formLabel}>Access Key ID (optional if using IAM role)</label><input value={accessKeyId} onChange={(e) => setAccessKeyId(e.target.value)} style={formInput} /></div>
+      <div style={{ marginBottom: 12 }}><label style={formLabel}>Secret Access Key</label><input type="password" value={secretAccessKey} onChange={(e) => setSecretAccessKey(e.target.value)} style={formInput} /></div>
+      <div style={{ marginBottom: 16 }}><label style={formLabel}>Role ARN (for cross-account)</label><input value={roleArn} onChange={(e) => setRoleArn(e.target.value)} style={formInput} placeholder="arn:aws:iam::123456:role/sc-discovery" /></div>
+      {mutation.isError && <div style={errorBox}>{(mutation.error as Error).message}</div>}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button onClick={onClose} style={cancelBtn}>Cancel</button>
+        <button onClick={() => mutation.mutate()} disabled={!region || mutation.isPending} style={submitBtn}>{mutation.isPending ? 'Connecting...' : 'Connect'}</button>
+      </div>
+    </ModalWrapper>
+  );
+}
+
+function AzureModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [tenantId, setTenantId] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const mutation = useMutation({
+    mutationFn: () => apiPost('/integrations/azure', { tenantId, clientId, clientSecret }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['integrations'] }); onClose(); },
+  });
+
+  return (
+    <ModalWrapper title="Connect Azure" onClose={onClose}>
+      <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Provide a service principal with Reader role to discover VMs.</p>
+      <div style={{ marginBottom: 12 }}><label style={formLabel}>Tenant ID</label><input value={tenantId} onChange={(e) => setTenantId(e.target.value)} style={formInput} /></div>
+      <div style={{ marginBottom: 12 }}><label style={formLabel}>Client ID</label><input value={clientId} onChange={(e) => setClientId(e.target.value)} style={formInput} /></div>
+      <div style={{ marginBottom: 16 }}><label style={formLabel}>Client Secret</label><input type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} style={formInput} /></div>
+      {mutation.isError && <div style={errorBox}>{(mutation.error as Error).message}</div>}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button onClick={onClose} style={cancelBtn}>Cancel</button>
+        <button onClick={() => mutation.mutate()} disabled={!tenantId || !clientId || !clientSecret || mutation.isPending} style={submitBtn}>{mutation.isPending ? 'Connecting...' : 'Connect'}</button>
+      </div>
+    </ModalWrapper>
+  );
+}
+
+function GcpModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [projectId, setProjectId] = useState('');
+  const [serviceAccountKey, setServiceAccountKey] = useState('');
+  const mutation = useMutation({
+    mutationFn: () => apiPost('/integrations/gcp', { projectId, ...(serviceAccountKey ? { serviceAccountKey } : {}) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['integrations'] }); onClose(); },
+  });
+
+  return (
+    <ModalWrapper title="Connect GCP" onClose={onClose}>
+      <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Provide a service account with compute.viewer role.</p>
+      <div style={{ marginBottom: 12 }}><label style={formLabel}>Project ID</label><input value={projectId} onChange={(e) => setProjectId(e.target.value)} style={formInput} /></div>
+      <div style={{ marginBottom: 16 }}>
+        <label style={formLabel}>Service Account Key (JSON, optional if on GCE)</label>
+        <textarea value={serviceAccountKey} onChange={(e) => setServiceAccountKey(e.target.value)} rows={4} style={{ ...formInput, fontFamily: 'monospace', fontSize: 11 }} placeholder='{"type":"service_account",...}' />
+      </div>
+      {mutation.isError && <div style={errorBox}>{(mutation.error as Error).message}</div>}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button onClick={onClose} style={cancelBtn}>Cancel</button>
+        <button onClick={() => mutation.mutate()} disabled={!projectId || mutation.isPending} style={submitBtn}>{mutation.isPending ? 'Connecting...' : 'Connect'}</button>
+      </div>
+    </ModalWrapper>
+  );
+}
+
 const cancelBtn: React.CSSProperties = { padding: '6px 16px', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', fontSize: 13, cursor: 'pointer' };
 const submitBtn: React.CSSProperties = { padding: '6px 16px', border: 'none', borderRadius: 4, background: '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' };
 const errorBox: React.CSSProperties = { color: '#dc2626', background: '#fef2f2', padding: 8, borderRadius: 4, fontSize: 12, marginBottom: 12 };
