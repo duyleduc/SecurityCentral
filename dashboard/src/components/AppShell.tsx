@@ -32,8 +32,8 @@ import SecurityIcon from '@mui/icons-material/Security';
 
 const NAV_ITEMS = [
   { path: '/dashboard', label: 'Dashboard', icon: <DashboardIcon /> },
+  { path: '/projects', label: 'Projects', icon: <FolderIcon /> },
   { path: '/findings', label: 'Findings', icon: <BugReportIcon /> },
-  { path: '/assets/repositories', label: 'Repositories', icon: <FolderIcon /> },
   { path: '/assets/servers', label: 'Servers', icon: <DnsIcon /> },
   { path: '/assets/certificates', label: 'Certificates', icon: <HttpsIcon /> },
   { path: '/infrastructure/coverage', label: 'Coverage', icon: <CloudIcon /> },

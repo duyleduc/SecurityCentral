@@ -71,6 +71,7 @@ model Organization {
   integrations   Integration[]
   cloudResources     CloudResource[]
   monitoredEndpoints MonitoredEndpoint[]
+  projects           Project[]
 
   @@map("organizations")
 }
@@ -115,6 +116,7 @@ model ApiKey {
 model Repository {
   id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   orgId         String    @map("org_id") @db.Uuid
+  projectId     String?   @map("project_id") @db.Uuid
   provider      String    // github | gitlab | bitbucket
   providerId    String    @map("provider_id")
   owner         String
@@ -127,6 +129,7 @@ model Repository {
   updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   organization Organization @relation(fields: [orgId], references: [id])
+  project      Project?     @relation(fields: [projectId], references: [id])
   scans        Scan[]
   findings     Finding[]
 
@@ -137,6 +140,7 @@ model Repository {
 model Server {
   id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   orgId           String    @map("org_id") @db.Uuid
+  projectId       String?   @map("project_id") @db.Uuid
   agentId         String?   @unique @map("agent_id")
   hostname        String
   osFamily        String    @map("os_family") // ubuntu | centos | alpine | rhel | debian
@@ -154,9 +158,10 @@ model Server {
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  organization Organization  @relation(fields: [orgId], references: [id])
-  scans        Scan[]
-  findings     Finding[]
+  organization   Organization  @relation(fields: [orgId], references: [id])
+  project        Project?      @relation(fields: [projectId], references: [id])
+  scans          Scan[]
+  findings       Finding[]
   certificates   Certificate[]  @relation("SourceAsset")
   cloudResources CloudResource[]
 
@@ -402,8 +407,29 @@ model MonitoredEndpoint {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz()
 
   organization Organization @relation(fields: [orgId], references: [id])
+  project      Project?     @relation(fields: [projectId], references: [id])
+  projectId    String?      @map("project_id") @db.Uuid
 
   @@unique([orgId, host, port])
   @@index([orgId, status], map: "idx_monitored_endpoints_org_status")
   @@map("monitored_endpoints")
+}
+
+// ─── Projects ────────────────────────────────────────────────
+
+model Project {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId       String   @map("org_id") @db.Uuid
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  organization       Organization       @relation(fields: [orgId], references: [id])
+  repositories       Repository[]
+  servers            Server[]
+  monitoredEndpoints MonitoredEndpoint[]
+
+  @@unique([orgId, name])
+  @@map("projects")
 }

@@ -15,6 +15,7 @@ import { integrationsRouter } from './modules/integrations/index.js';
 import { notificationsRouter } from './modules/notifications/index.js';
 import { monitoringRouter } from './modules/monitoring/index.js';
 import { organizationsRouter } from './modules/organizations/index.js';
+import { projectsRouter } from './modules/projects/index.js';
 import { agentRateLimit } from './middleware/index.js';
 import { setupSwagger } from './swagger.js';
 
@@ -60,6 +61,7 @@ app.use('/api/v1/audit-logs', auditRouter);
 app.use('/api/v1/integrations', integrationsRouter);
 app.use('/api/v1/notification-preferences', notificationsRouter);
 app.use('/api/v1/monitoring', monitoringRouter);
+app.use('/api/v1/projects', projectsRouter);
 app.use('/api/v1/organizations', organizationsRouter);
 
 // --- Agent routes (separate rate limit) ---

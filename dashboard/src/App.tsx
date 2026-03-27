@@ -20,6 +20,7 @@ import { SettingsPage } from './pages/Settings/index.js';
 import { InfrastructureCoveragePage } from './pages/Infrastructure/CoverageDashboard.js';
 import { DomainMonitoringPage } from './pages/Monitoring/DomainMonitoring.js';
 import { OnboardingWizard } from './pages/Onboarding/OnboardingWizard.js';
+import { ProjectsPage } from './pages/Projects/index.js';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,6 +51,8 @@ export function App() {
 
               {/* Protected */}
               <Route path="/dashboard" element={<ProtectedLayout><DashboardOverview /></ProtectedLayout>} />
+              <Route path="/projects" element={<ProtectedLayout><ProjectsPage /></ProtectedLayout>} />
+              <Route path="/projects/:id" element={<ProtectedLayout><ProjectsPage /></ProtectedLayout>} />
               <Route path="/findings" element={<ProtectedLayout><FindingsPage /></ProtectedLayout>} />
               <Route path="/findings/:id" element={<ProtectedLayout><FindingsPage /></ProtectedLayout>} />
               <Route path="/assets/repositories" element={<ProtectedLayout><AssetsPage tab="repositories" /></ProtectedLayout>} />

@@ -451,3 +451,72 @@ export function useTriggerEndpointCheck() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['monitored-endpoints'] }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string | null;
+  repoCount: number;
+  serverCount: number;
+  endpointCount: number;
+  openFindings: number;
+  createdAt: string;
+  repositories?: Repository[];
+  servers?: Server[];
+  monitoredEndpoints?: MonitoredEndpoint[];
+}
+
+export function useProjects() {
+  return useQuery({
+    queryKey: ['projects'],
+    queryFn: () => apiGet<Project[]>('/projects'),
+  });
+}
+
+export function useProject(id: string) {
+  return useQuery({
+    queryKey: ['projects', id],
+    queryFn: () => apiGet<Project>(`/projects/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useCreateProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; description?: string }) => apiPost<Project>('/projects', data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+  });
+}
+
+export function useUpdateProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: string; name?: string; description?: string }) => apiPatch<Project>(`/projects/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+  });
+}
+
+export function useDeleteProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/projects/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+  });
+}
+
+export function useAssignRepoToProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ repoId, projectId }: { repoId: string; projectId: string }) =>
+      apiPost(`/projects/assign-repo/${repoId}`, { projectId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      qc.invalidateQueries({ queryKey: ['repositories'] });
+    },
+  });
+}

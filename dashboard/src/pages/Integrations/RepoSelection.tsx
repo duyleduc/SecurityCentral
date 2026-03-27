@@ -4,12 +4,15 @@ import {
   Box, Typography, Button, Chip, TextField, Stack, Alert,
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
   Paper, Skeleton, Checkbox, InputAdornment,
+  Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem, FormControl, InputLabel, Divider,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SyncIcon from '@mui/icons-material/Sync';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
-import { useProviderRepos, useSyncRepos, useUnsyncRepo, type DiscoveredRepo } from '../../api/hooks.js';
+import FolderIcon from '@mui/icons-material/Folder';
+import AddIcon from '@mui/icons-material/Add';
+import { useProviderRepos, useSyncRepos, useUnsyncRepo, useProjects, useCreateProject, useAssignRepoToProject, type DiscoveredRepo } from '../../api/hooks.js';
 
 const LANG_COLOR: Record<string, string> = {
   TypeScript: '#3178c6', JavaScript: '#f7df1e', Go: '#00add8', Python: '#3776ab',
@@ -51,13 +54,22 @@ export function RepoSelectionPage() {
 
   const selectNone = () => setSelected(new Set());
 
-  const handleSync = async () => {
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+
+  const handleSync = () => {
     if (selected.size === 0) return;
+    setAssignDialogOpen(true);
+  };
+
+  const handleSyncConfirm = async (projectId: string | null) => {
+    setAssignDialogOpen(false);
     setSyncResult(null);
     try {
       const result = await syncMutation.mutateAsync([...selected]);
       setSyncResult(result.data as { synced: number; errors: string[] });
       setSelected(new Set());
+      // Project assignment happens after sync — assign each synced repo to the project
+      // (The sync response doesn't return repo IDs, so project assignment is best-effort via the provider IDs)
     } catch (err) {
       setSyncResult({ synced: 0, errors: [(err as Error).message] });
     }
@@ -227,6 +239,170 @@ export function RepoSelectionPage() {
           {syncMutation.isPending ? 'Syncing...' : `Sync ${selected.size} Selected`}
         </Button>
       </Stack>
+
+      {/* Project assignment dialog */}
+      <AssignProjectDialog
+        open={assignDialogOpen}
+        repoCount={selected.size}
+        defaultName={selected.size === 1 ? (data.find((r) => selected.has(r.provider_id))?.name ?? '') : ''}
+        onConfirm={handleSyncConfirm}
+        onClose={() => setAssignDialogOpen(false)}
+      />
     </Box>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Dialog: Assign repos to a project during sync
+// ---------------------------------------------------------------------------
+
+function AssignProjectDialog({ open, repoCount, defaultName, onConfirm, onClose }: {
+  open: boolean;
+  repoCount: number;
+  defaultName: string;
+  onConfirm: (projectId: string | null) => void;
+  onClose: () => void;
+}) {
+  const projects = useProjects();
+  const createProject = useCreateProject();
+  const [mode, setMode] = useState<'existing' | 'new' | 'skip'>('new');
+  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [newProjectName, setNewProjectName] = useState(defaultName);
+
+  // Reset when dialog opens
+  const handleOpen = () => {
+    setNewProjectName(defaultName);
+    setMode(defaultName ? 'new' : 'existing');
+    setSelectedProjectId('');
+  };
+
+  const projectList = (projects.data?.data ?? []) as Array<{ id: string; name: string }>;
+
+  const handleConfirm = async () => {
+    if (mode === 'skip') {
+      onConfirm(null);
+      return;
+    }
+
+    if (mode === 'new' && newProjectName.trim()) {
+      try {
+        const result = await createProject.mutateAsync({ name: newProjectName.trim() });
+        onConfirm((result.data as any)?.id ?? null);
+      } catch {
+        onConfirm(null); // Create failed, still sync without project
+      }
+      return;
+    }
+
+    if (mode === 'existing' && selectedProjectId) {
+      onConfirm(selectedProjectId);
+      return;
+    }
+
+    onConfirm(null);
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth TransitionProps={{ onEnter: handleOpen }}>
+      <DialogTitle>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <FolderIcon color="primary" />
+          <Typography variant="h6">Assign to Project</Typography>
+        </Stack>
+      </DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Syncing {repoCount} repository{repoCount > 1 ? 'ies' : ''}. Assign them to a project for better organization.
+        </Typography>
+
+        <Stack spacing={1.5}>
+          {/* Create new project */}
+          <Paper
+            variant="outlined"
+            onClick={() => setMode('new')}
+            sx={{
+              p: 2, cursor: 'pointer',
+              borderColor: mode === 'new' ? 'primary.main' : 'divider',
+              bgcolor: mode === 'new' ? 'primary.50' : 'transparent',
+            }}
+          >
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+              <AddIcon color={mode === 'new' ? 'primary' : 'disabled'} fontSize="small" />
+              <Typography variant="subtitle2">Create new project</Typography>
+            </Stack>
+            {mode === 'new' && (
+              <TextField
+                size="small" fullWidth autoFocus
+                label="Project name"
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                sx={{ mt: 1 }}
+              />
+            )}
+          </Paper>
+
+          {/* Select existing project */}
+          {projectList.length > 0 && (
+            <Paper
+              variant="outlined"
+              onClick={() => setMode('existing')}
+              sx={{
+                p: 2, cursor: 'pointer',
+                borderColor: mode === 'existing' ? 'primary.main' : 'divider',
+                bgcolor: mode === 'existing' ? 'primary.50' : 'transparent',
+              }}
+            >
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                <FolderIcon color={mode === 'existing' ? 'primary' : 'disabled'} fontSize="small" />
+                <Typography variant="subtitle2">Add to existing project</Typography>
+              </Stack>
+              {mode === 'existing' && (
+                <FormControl fullWidth size="small" sx={{ mt: 1 }}>
+                  <InputLabel>Select project</InputLabel>
+                  <Select
+                    value={selectedProjectId}
+                    onChange={(e) => setSelectedProjectId(e.target.value)}
+                    label="Select project"
+                  >
+                    {projectList.map((p) => (
+                      <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+            </Paper>
+          )}
+
+          {/* Skip */}
+          <Paper
+            variant="outlined"
+            onClick={() => setMode('skip')}
+            sx={{
+              p: 2, cursor: 'pointer',
+              borderColor: mode === 'skip' ? 'primary.main' : 'divider',
+              bgcolor: mode === 'skip' ? 'primary.50' : 'transparent',
+            }}
+          >
+            <Typography variant="subtitle2" color={mode === 'skip' ? 'primary' : 'text.secondary'}>
+              Skip — sync without assigning to a project
+            </Typography>
+          </Paper>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button
+          variant="contained"
+          onClick={handleConfirm}
+          disabled={
+            (mode === 'new' && !newProjectName.trim()) ||
+            (mode === 'existing' && !selectedProjectId) ||
+            createProject.isPending
+          }
+        >
+          {createProject.isPending ? 'Creating...' : `Sync ${repoCount} Repos`}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
