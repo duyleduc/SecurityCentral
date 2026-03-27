@@ -4,6 +4,7 @@ import type { Job } from 'bullmq';
 
 import { prisma } from '../lib/prisma.js';
 import { jobLogger } from '../lib/logger.js';
+import { domainMonitoringQueue } from './queues.js';
 import type { JobContext } from './context.js';
 
 const PROBE_TIMEOUT_MS = 10_000;

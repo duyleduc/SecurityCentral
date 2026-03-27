@@ -236,8 +236,8 @@ Dashboard page for managing monitored domains.
 
 **Tasks:**
 
-- [ ] **T-18.4.1** Write unit tests for TLS probe processor — test TLS connection, cert extraction, severity classification (per all levels), timeout handling, unreachable endpoints, finding creation — `size: M` | `depends: T-18.2.5`
-- [ ] **T-18.4.2** Write integration tests for monitoring endpoints — test add, list, remove, trigger check; verify finding creation for expired cert; mock TLS connection — `size: M` | `depends: T-18.2.3`
+- [x] **T-18.4.1** Write unit tests for TLS probe processor — test TLS connection, cert extraction, severity classification (per all levels), timeout handling, unreachable endpoints, finding creation — `size: M` | `depends: T-18.2.5`
+- [x] **T-18.4.2** Write integration tests for monitoring endpoints — test add, list, remove, trigger check; verify finding creation for expired cert; mock TLS connection — `size: M` | `depends: T-18.2.3`
 
 ---
 
