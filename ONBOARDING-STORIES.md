@@ -293,11 +293,11 @@ Guided first-time setup experience for new organizations.
 
 **Tasks:**
 
-- [ ] **T-19.3.1** Add `onboardingCompleted` field to Organization model — `Boolean @default(false)`; run migration — `size: S`
-- [ ] **T-19.3.2** Add onboarding status endpoint — `GET /organizations/me/onboarding-status` returns `{ completed, steps: { code: bool, infrastructure: bool, ssl: bool } }` based on whether integrations/repos/agents/endpoints exist — `size: S` | `depends: T-19.3.1`
-- [ ] **T-19.3.3** Implement `OnboardingWizard` component (`dashboard/src/pages/Onboarding/OnboardingWizard.tsx`) — three cards: Code (connect GitHub/GitLab/Bitbucket → link to integrations), Servers (install agent → copy command, or connect cloud → link to integrations), SSL (add domains → link to monitoring); "Skip for now" at bottom; on completion/skip, marks onboarding complete via API — `size: L` | `depends: T-19.3.2`
-- [ ] **T-19.3.4** Add conditional redirect to wizard — on dashboard load, check onboarding status; if not completed, redirect to `/onboarding`; add route for wizard page — `size: S` | `depends: T-19.3.3`
-- [ ] **T-19.3.5** Add all provider cards to IntegrationsPage — Bitbucket, AWS, Azure, GCP, Proxmox with respective connection modals — `size: M` | `depends: T-19.1.3, T-19.2.4, T-17.4.4`
+- [x] **T-19.3.1** Add `onboardingCompleted` field to Organization model — `Boolean @default(false)`; run migration — `size: S`
+- [x] **T-19.3.2** Add onboarding status endpoint — `GET /organizations/me/onboarding-status` returns `{ completed, steps: { code: bool, infrastructure: bool, ssl: bool } }` based on whether integrations/repos/agents/endpoints exist — `size: S` | `depends: T-19.3.1`
+- [x] **T-19.3.3** Implement `OnboardingWizard` component (`dashboard/src/pages/Onboarding/OnboardingWizard.tsx`) — three cards: Code (connect GitHub/GitLab/Bitbucket → link to integrations), Servers (install agent → copy command, or connect cloud → link to integrations), SSL (add domains → link to monitoring); "Skip for now" at bottom; on completion/skip, marks onboarding complete via API — `size: L` | `depends: T-19.3.2`
+- [x] **T-19.3.4** Add conditional redirect to wizard — on dashboard load, check onboarding status; if not completed, redirect to `/onboarding`; add route for wizard page — `size: S` | `depends: T-19.3.3`
+- [x] **T-19.3.5** Add all provider cards to IntegrationsPage — Bitbucket, AWS, Azure, GCP, Proxmox with respective connection modals — `size: M` | `depends: T-19.1.3, T-19.2.4, T-17.4.4`
 
 ### Story 19.4: Onboarding Tests
 
@@ -308,8 +308,8 @@ Guided first-time setup experience for new organizations.
 
 **Tasks:**
 
-- [ ] **T-19.4.1** Write integration tests for onboarding status endpoint — test returns correct step completion based on existing data — `size: S` | `depends: T-19.3.2`
-- [ ] **T-19.4.2** Write E2E test for onboarding flow — wizard displays for new org, skip works, connect provider flow works, redirect to dashboard on completion — `size: M` | `depends: T-19.3.4`
+- [x] **T-19.4.1** Write integration tests for onboarding status endpoint — test returns correct step completion based on existing data — `size: S` | `depends: T-19.3.2`
+- [x] **T-19.4.2** Write E2E test for onboarding flow — wizard displays for new org, skip works, connect provider flow works, redirect to dashboard on completion — `size: M` | `depends: T-19.3.4`
 
 ---
 

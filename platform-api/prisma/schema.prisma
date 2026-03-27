@@ -56,8 +56,9 @@ model Organization {
   name      String
   slug      String   @unique
   plan      String   @default("starter") // starter | growth | enterprise
-  settings  Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  settings             Json     @default("{}")
+  onboardingCompleted  Boolean  @default(false) @map("onboarding_completed")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   users          User[]

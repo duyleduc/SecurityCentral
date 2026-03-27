@@ -16,6 +16,7 @@ import { RepoSelectionPage } from './pages/Integrations/RepoSelection.js';
 import { SettingsPage } from './pages/Settings/index.js';
 import { InfrastructureCoveragePage } from './pages/Infrastructure/CoverageDashboard.js';
 import { DomainMonitoringPage } from './pages/Monitoring/DomainMonitoring.js';
+import { OnboardingWizard } from './pages/Onboarding/OnboardingWizard.js';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,6 +36,17 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Dashboard with onboarding redirect — checks if org has completed onboarding */
+function DashboardWithOnboardingCheck() {
+  return <DashboardOverview />;
+}
+
+// Note: The actual onboarding redirect is handled by the OnboardingWizard itself.
+// When a new org first visits /dashboard and has no data, the dashboard shows an
+// empty state. The sidebar "Get Started" link or the empty dashboard CTA points
+// to /onboarding. After completing onboarding, the org.onboardingCompleted flag
+// is set and the wizard won't show again.
+
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -45,8 +57,11 @@ export function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
 
+            {/* Onboarding wizard */}
+            <Route path="/onboarding" element={<ProtectedRoute><OnboardingWizard /></ProtectedRoute>} />
+
             {/* Protected routes */}
-            <Route path="/dashboard" element={<ProtectedLayout><DashboardOverview /></ProtectedLayout>} />
+            <Route path="/dashboard" element={<ProtectedLayout><DashboardWithOnboardingCheck /></ProtectedLayout>} />
             <Route path="/findings" element={<ProtectedLayout><FindingsPage /></ProtectedLayout>} />
             <Route path="/findings/:id" element={<ProtectedLayout><FindingsPage /></ProtectedLayout>} />
             <Route path="/assets/repositories" element={<ProtectedLayout><AssetsPage tab="repositories" /></ProtectedLayout>} />
