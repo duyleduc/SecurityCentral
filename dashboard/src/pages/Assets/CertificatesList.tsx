@@ -1,10 +1,16 @@
 import { useState } from 'react';
+import {
+  Box, Typography, Card, CardContent, Grid, Chip, Stack, Select, MenuItem, Divider, Button,
+  Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
+  Paper, Skeleton,
+} from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useCertificates, useCertificate, type Certificate } from '../../api/hooks.js';
 import { Pagination } from './RepositoriesList.js';
+import { SEVERITY_COLORS } from '../../theme/theme.js';
 
 function expiryColor(notAfter: string): string {
   const days = Math.floor((new Date(notAfter).getTime() - Date.now()) / 86400000);
-  if (days <= 0) return '#dc2626';
   if (days <= 30) return '#dc2626';
   if (days <= 90) return '#ca8a04';
   return '#16a34a';
@@ -15,6 +21,13 @@ function daysUntil(notAfter: string): string {
   if (days <= 0) return 'Expired';
   return `${days}d`;
 }
+
+const CERT_STATUS_COLOR: Record<string, 'success' | 'error' | 'warning' | 'default'> = {
+  active: 'success',
+  expired: 'error',
+  expiring: 'warning',
+  revoked: 'default',
+};
 
 export function CertificatesList() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -30,45 +43,72 @@ export function CertificatesList() {
   if (selectedId) return <CertificateDetail id={selectedId} onBack={() => setSelectedId(null)} />;
 
   return (
-    <div>
-      <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>Certificates</h2>
+    <Box>
+      <Typography variant="h5" sx={{ mb: 2 }}>Certificates</Typography>
 
-      <div style={{ marginBottom: 12 }}>
-        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13 }}>
-          <option value="">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="expiring">Expiring</option>
-          <option value="expired">Expired</option>
-          <option value="revoked">Revoked</option>
-        </select>
-      </div>
+      <Box sx={{ mb: 2 }}>
+        <Select
+          size="small"
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+          displayEmpty
+          sx={{ minWidth: 160 }}
+        >
+          <MenuItem value="">All Statuses</MenuItem>
+          <MenuItem value="active">Active</MenuItem>
+          <MenuItem value="expiring">Expiring</MenuItem>
+          <MenuItem value="expired">Expired</MenuItem>
+          <MenuItem value="revoked">Revoked</MenuItem>
+        </Select>
+      </Box>
 
-      <div style={card}>
-        <table style={table}>
-          <thead><tr style={theadRow}>
-            <th style={th}>Subject</th><th style={th}>Issuer</th><th style={th}>Expires</th><th style={th}>Status</th><th style={th}>Algorithm</th>
-          </tr></thead>
-          <tbody>
-            {certs.isLoading ? <tr><td colSpan={5} style={empty}>Loading...</td></tr>
-            : !data?.length ? <tr><td colSpan={5} style={empty}>No certificates</td></tr>
-            : data.map((c) => (
-              <tr key={c.id} style={row} onClick={() => setSelectedId(c.id)}>
-                <td style={{ ...td, fontWeight: 500 }}>{c.subjectCn}</td>
-                <td style={{ ...td, color: '#666' }}>{c.issuerCn}</td>
-                <td style={td}>
-                  <span style={{ color: expiryColor(c.notAfter), fontWeight: 600, fontSize: 12 }}>{daysUntil(c.notAfter)}</span>
-                  <span style={{ color: '#999', fontSize: 11, marginLeft: 6 }}>{new Date(c.notAfter).toLocaleDateString()}</span>
-                </td>
-                <td style={td}><span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: c.status === 'active' ? '#f0fdf4' : c.status === 'expired' ? '#fef2f2' : '#fefce8', color: c.status === 'active' ? '#16a34a' : c.status === 'expired' ? '#dc2626' : '#ca8a04' }}>{c.status}</span></td>
-                <td style={{ ...td, fontSize: 12, color: '#666' }}>{c.keyAlgorithm}</td>
-              </tr>
+      <TableContainer component={Paper}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Subject</TableCell>
+              <TableCell>Issuer</TableCell>
+              <TableCell>Expires</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Algorithm</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {certs.isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: 5 }).map((__, j) => (
+                    <TableCell key={j}><Skeleton variant="text" /></TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : !data?.length ? (
+              <TableRow>
+                <TableCell colSpan={5} sx={{ py: 5, textAlign: 'center', color: 'text.secondary' }}>No certificates</TableCell>
+              </TableRow>
+            ) : data.map((c) => (
+              <TableRow key={c.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelectedId(c.id)}>
+                <TableCell sx={{ fontWeight: 500 }}>{c.subjectCn}</TableCell>
+                <TableCell sx={{ color: 'text.secondary' }}>{c.issuerCn}</TableCell>
+                <TableCell>
+                  <Typography component="span" variant="body2" sx={{ color: expiryColor(c.notAfter), fontWeight: 600 }}>
+                    {daysUntil(c.notAfter)}
+                  </Typography>
+                  <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                    {new Date(c.notAfter).toLocaleDateString()}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Chip label={c.status} size="small" color={CERT_STATUS_COLOR[c.status] ?? 'default'} />
+                </TableCell>
+                <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{c.keyAlgorithm}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </TableContainer>
       {meta && <Pagination page={page} total={meta.total ?? 0} perPage={25} onPage={setPage} />}
-    </div>
+    </Box>
   );
 }
 
@@ -76,65 +116,111 @@ function CertificateDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const { data: envelope, isLoading } = useCertificate(id);
   const cert = envelope?.data as Record<string, unknown> | undefined;
 
-  if (isLoading) return <div style={empty}>Loading...</div>;
-  if (!cert) return <div style={empty}>Not found</div>;
+  if (isLoading) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Skeleton variant="text" width={200} sx={{ mb: 2 }} />
+        <Skeleton variant="rectangular" height={250} sx={{ borderRadius: 2 }} />
+      </Box>
+    );
+  }
+
+  if (!cert) {
+    return (
+      <Box sx={{ py: 5, textAlign: 'center' }}>
+        <Typography color="text.secondary">Not found</Typography>
+      </Box>
+    );
+  }
 
   const sans = (cert.sans ?? []) as string[];
   const findings = (cert.findings ?? []) as Array<Record<string, unknown>>;
 
   return (
-    <div>
-      <button onClick={onBack} style={backBtn}>← Back to Certificates</button>
-      <div style={card}>
-        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>{cert.subjectCn as string}</h3>
+    <Box>
+      <Button startIcon={<ArrowBackIcon />} size="small" onClick={onBack} sx={{ mb: 2 }}>
+        Back to Certificates
+      </Button>
+      <Card>
+        <CardContent sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>{cert.subjectCn as string}</Typography>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13, marginBottom: 20 }}>
-          <div><span style={label}>Issuer:</span> {cert.issuerCn as string}</div>
-          <div><span style={label}>Serial:</span> <code style={{ fontSize: 11 }}>{cert.serialNumber as string}</code></div>
-          <div><span style={label}>Not Before:</span> {cert.notBefore ? new Date(cert.notBefore as string).toLocaleString() : '-'}</div>
-          <div><span style={label}>Not After:</span> <span style={{ color: expiryColor(cert.notAfter as string), fontWeight: 600 }}>{new Date(cert.notAfter as string).toLocaleString()}</span></div>
-          <div><span style={label}>Key Algorithm:</span> {cert.keyAlgorithm as string}</div>
-          <div><span style={label}>Signature:</span> {(cert.signatureAlgorithm as string) ?? '-'}</div>
-          <div><span style={label}>Chain Valid:</span> {cert.chainValid != null ? (cert.chainValid ? '✅ Yes' : '❌ No') : '-'}</div>
-          <div><span style={label}>Chain Depth:</span> {cert.chainDepth != null ? String(cert.chainDepth) : '-'}</div>
-          <div><span style={label}>Fingerprint:</span> <code style={{ fontSize: 10 }}>{(cert.fingerprintSha256 as string)?.slice(0, 32)}...</code></div>
-          <div><span style={label}>Source:</span> {(cert.discoveredFrom as string) ?? '-'}</div>
-        </div>
+          <Grid container spacing={2} sx={{ mb: 2.5 }}>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>Issuer</Typography>
+              <Typography variant="body2">{cert.issuerCn as string}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>Serial</Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{cert.serialNumber as string}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>Not Before</Typography>
+              <Typography variant="body2">{cert.notBefore ? new Date(cert.notBefore as string).toLocaleString() : '-'}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>Not After</Typography>
+              <Typography variant="body2" sx={{ color: expiryColor(cert.notAfter as string), fontWeight: 600 }}>
+                {new Date(cert.notAfter as string).toLocaleString()}
+              </Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>Key Algorithm</Typography>
+              <Typography variant="body2">{cert.keyAlgorithm as string}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>Signature</Typography>
+              <Typography variant="body2">{(cert.signatureAlgorithm as string) ?? '-'}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>Chain Valid</Typography>
+              <Typography variant="body2">{cert.chainValid != null ? (cert.chainValid ? 'Yes' : 'No') : '-'}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>Chain Depth</Typography>
+              <Typography variant="body2">{cert.chainDepth != null ? String(cert.chainDepth) : '-'}</Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>Fingerprint</Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.625rem' }}>
+                {(cert.fingerprintSha256 as string)?.slice(0, 32)}...
+              </Typography>
+            </Grid>
+            <Grid item xs={6}>
+              <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>Source</Typography>
+              <Typography variant="body2">{(cert.discoveredFrom as string) ?? '-'}</Typography>
+            </Grid>
+          </Grid>
 
-        {/* SANs */}
-        {sans.length > 0 && (
-          <div style={{ marginBottom: 16 }}>
-            <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Subject Alternative Names ({sans.length})</h4>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {sans.map((san) => (
-                <span key={san} style={{ fontSize: 12, padding: '2px 8px', background: '#f3f4f6', borderRadius: 4, fontFamily: 'monospace' }}>{san}</span>
+          {/* SANs */}
+          {sans.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>Subject Alternative Names ({sans.length})</Typography>
+              <Stack direction="row" flexWrap="wrap" gap={0.75}>
+                {sans.map((san) => (
+                  <Chip key={san} label={san} size="small" variant="outlined" sx={{ fontFamily: 'monospace' }} />
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          {/* Related findings */}
+          {findings.length > 0 && (
+            <>
+              <Divider sx={{ mb: 1.5 }} />
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>Related Findings</Typography>
+              {findings.map((f) => (
+                <Box key={f.id as string} sx={{ py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>{f.title as string}</Typography>
+                  <Typography variant="body2" component="span" color="text.secondary" sx={{ ml: 1 }}>
+                    ({f.severity as string})
+                  </Typography>
+                </Box>
               ))}
-            </div>
-          </div>
-        )}
-
-        {/* Related findings */}
-        {findings.length > 0 && (
-          <>
-            <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Related Findings</h4>
-            {findings.map((f) => (
-              <div key={f.id as string} style={{ padding: '6px 0', borderBottom: '1px solid #f3f4f6', fontSize: 13 }}>
-                <span style={{ fontWeight: 500 }}>{f.title as string}</span> <span style={{ color: '#666', fontSize: 12 }}>({f.severity as string})</span>
-              </div>
-            ))}
-          </>
-        )}
-      </div>
-    </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </Box>
   );
 }
-
-const card: React.CSSProperties = { background: '#fff', borderRadius: 8, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' };
-const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: 13 };
-const theadRow: React.CSSProperties = { borderBottom: '2px solid #e5e7eb', background: '#f9fafb' };
-const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', color: '#666', fontWeight: 500, fontSize: 12, textTransform: 'uppercase' };
-const td: React.CSSProperties = { padding: '10px 12px' };
-const row: React.CSSProperties = { borderBottom: '1px solid #f3f4f6', cursor: 'pointer' };
-const empty: React.CSSProperties = { padding: 40, textAlign: 'center', color: '#999' };
-const backBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#2563eb', fontSize: 13, cursor: 'pointer', marginBottom: 16, padding: 0 };
-const label: React.CSSProperties = { color: '#999', fontSize: 11, textTransform: 'uppercase', display: 'block', marginBottom: 2 };

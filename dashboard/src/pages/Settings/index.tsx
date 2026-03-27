@@ -1,5 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Box, Typography, Card, CardContent, Grid, Button, TextField, Chip, Alert,
+  Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
+  Dialog, DialogTitle, DialogContent, DialogActions, Switch, FormControlLabel,
+  Stack, Paper, Skeleton,
+} from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { apiGet, apiPost, apiPut, apiDelete } from '../../api/client.js';
 import { useAuth } from '../../auth/AuthContext.js';
 
@@ -25,31 +33,39 @@ const EVENT_LABELS: Record<string, string> = { critical_finding: 'Critical Findi
 
 export function SettingsPage() {
   return (
-    <div>
-      <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 24 }}>Settings</h2>
+    <Box>
+      <Typography variant="h5" sx={{ mb: 3 }}>Settings</Typography>
       <OrgInfo />
       <ApiKeysSection />
       <NotificationPrefsSection />
-    </div>
+    </Box>
   );
 }
-
-// --- T-12.8.1: Org Info ---
 
 function OrgInfo() {
   const { user } = useAuth();
   return (
-    <div style={card}>
-      <h3 style={sectionTitle}>Organization</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
-        <div><span style={label}>Role:</span> {user?.role ?? '-'}</div>
-        <div><span style={label}>User ID:</span> <code style={{ fontSize: 11 }}>{user?.id ?? '-'}</code></div>
-      </div>
-    </div>
+    <Card sx={{ mb: 2.5 }}>
+      <CardContent>
+        <Typography variant="h6" sx={{ mb: 1.5 }}>Organization</Typography>
+        <Grid container spacing={2}>
+          <Grid item xs={6}>
+            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
+              Role
+            </Typography>
+            <Typography variant="body2">{user?.role ?? '-'}</Typography>
+          </Grid>
+          <Grid item xs={6}>
+            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
+              User ID
+            </Typography>
+            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{user?.id ?? '-'}</Typography>
+          </Grid>
+        </Grid>
+      </CardContent>
+    </Card>
   );
 }
-
-// --- T-12.8.2: API Keys ---
 
 function ApiKeysSection() {
   const qc = useQueryClient();
@@ -80,76 +96,128 @@ function ApiKeysSection() {
     setNewKeyScopes((prev) => prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]);
   };
 
+  const handleCloseDialog = () => {
+    setShowCreate(false);
+    setCreatedKey(null);
+    setNewKeyName('');
+    setNewKeyScopes([]);
+  };
+
   return (
-    <div style={{ ...card, marginTop: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h3 style={sectionTitle}>API Keys</h3>
-        <button onClick={() => { setShowCreate(true); setCreatedKey(null); }}
-          style={{ fontSize: 12, padding: '6px 14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}>
-          Create Key
-        </button>
-      </div>
+    <Card sx={{ mb: 2.5 }}>
+      <CardContent>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+          <Typography variant="h6">API Keys</Typography>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<AddIcon />}
+            onClick={() => { setShowCreate(true); setCreatedKey(null); }}
+          >
+            Create Key
+          </Button>
+        </Stack>
 
-      {/* Created key alert */}
-      {createdKey && (
-        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: 12, marginBottom: 16 }}>
-          <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Copy your API key — it won't be shown again:</p>
-          <code style={{ fontSize: 12, wordBreak: 'break-all', background: '#fff', padding: 8, display: 'block', borderRadius: 4, border: '1px solid #e5e7eb' }}>{createdKey}</code>
-        </div>
-      )}
+        {/* Created key alert */}
+        {createdKey && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+              Copy your API key -- it won't be shown again:
+            </Typography>
+            <Box sx={{ fontFamily: 'monospace', fontSize: '0.75rem', wordBreak: 'break-all', bgcolor: 'background.paper', p: 1, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+              {createdKey}
+            </Box>
+          </Alert>
+        )}
 
-      {/* Create form */}
-      {showCreate && !createdKey && (
-        <div style={{ background: '#f9fafb', borderRadius: 6, padding: 16, marginBottom: 16 }}>
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 13, fontWeight: 500 }}>Name</label>
-            <input value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} placeholder="e.g., CI Pipeline"
-              style={{ width: '100%', padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13, marginTop: 4, boxSizing: 'border-box' }} />
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 4 }}>Scopes</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {/* Create Dialog */}
+        <Dialog open={showCreate && !createdKey} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+          <DialogTitle>Create API Key</DialogTitle>
+          <DialogContent>
+            <TextField
+              fullWidth
+              label="Name"
+              value={newKeyName}
+              onChange={(e) => setNewKeyName(e.target.value)}
+              placeholder="e.g., CI Pipeline"
+              size="small"
+              sx={{ mt: 1, mb: 2 }}
+            />
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>Scopes</Typography>
+            <Stack direction="row" flexWrap="wrap" gap={1}>
               {SCOPES.map((s) => (
-                <label key={s} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={newKeyScopes.includes(s)} onChange={() => toggleScope(s)} /> {s}
-                </label>
+                <Chip
+                  key={s}
+                  label={s}
+                  size="small"
+                  variant={newKeyScopes.includes(s) ? 'filled' : 'outlined'}
+                  color={newKeyScopes.includes(s) ? 'primary' : 'default'}
+                  onClick={() => toggleScope(s)}
+                  sx={{ cursor: 'pointer' }}
+                />
               ))}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => createMutation.mutate()} disabled={!newKeyName || newKeyScopes.length === 0}
-              style={{ fontSize: 12, padding: '6px 14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>Create</button>
-            <button onClick={() => setShowCreate(false)} style={{ fontSize: 12, padding: '6px 14px', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', cursor: 'pointer' }}>Cancel</button>
-          </div>
-        </div>
-      )}
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDialog}>Cancel</Button>
+            <Button
+              variant="contained"
+              onClick={() => createMutation.mutate()}
+              disabled={!newKeyName || newKeyScopes.length === 0}
+            >
+              Create
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-      {/* Keys list */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead><tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-          <th style={th}>Name</th><th style={th}>Prefix</th><th style={th}>Scopes</th><th style={th}>Last Used</th><th style={th}></th>
-        </tr></thead>
-        <tbody>
-          {keys.length === 0 ? <tr><td colSpan={5} style={{ padding: 20, textAlign: 'center', color: '#999' }}>No API keys</td></tr>
-          : keys.map((k) => (
-            <tr key={k.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-              <td style={td}>{k.name}</td>
-              <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{k.keyPrefix}...</td>
-              <td style={{ ...td, fontSize: 11 }}>{k.scopes.join(', ')}</td>
-              <td style={{ ...td, fontSize: 12, color: '#666' }}>{k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleDateString() : 'Never'}</td>
-              <td style={{ ...td, textAlign: 'right' }}>
-                <button onClick={() => { if (confirm('Revoke this key?')) revokeMutation.mutate(k.id); }}
-                  style={{ fontSize: 11, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Revoke</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        {/* Keys table */}
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Name</TableCell>
+                <TableCell>Prefix</TableCell>
+                <TableCell>Scopes</TableCell>
+                <TableCell>Last Used</TableCell>
+                <TableCell align="right" />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {keys.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} sx={{ py: 3, textAlign: 'center', color: 'text.secondary' }}>No API keys</TableCell>
+                </TableRow>
+              ) : keys.map((k) => (
+                <TableRow key={k.id}>
+                  <TableCell>{k.name}</TableCell>
+                  <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{k.keyPrefix}...</TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                      {k.scopes.map((s) => <Chip key={s} label={s} size="small" variant="outlined" />)}
+                    </Stack>
+                  </TableCell>
+                  <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                    {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleDateString() : 'Never'}
+                  </TableCell>
+                  <TableCell align="right">
+                    <Button
+                      size="small"
+                      color="error"
+                      startIcon={<DeleteIcon />}
+                      onClick={() => { if (confirm('Revoke this key?')) revokeMutation.mutate(k.id); }}
+                    >
+                      Revoke
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </Card>
   );
 }
-
-// --- T-12.8.3: Notification Preferences ---
 
 function NotificationPrefsSection() {
   const qc = useQueryClient();
@@ -170,48 +238,42 @@ function NotificationPrefsSection() {
   };
 
   return (
-    <div style={{ ...card, marginTop: 20 }}>
-      <h3 style={sectionTitle}>Notification Preferences</h3>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead><tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-          <th style={{ ...th, width: '40%' }}>Event</th>
-          <th style={{ ...th, textAlign: 'center' }}>Slack</th>
-          <th style={{ ...th, textAlign: 'center' }}>Email</th>
-        </tr></thead>
-        <tbody>
-          {EVENT_TYPES.map((et) => (
-            <tr key={et} style={{ borderBottom: '1px solid #f3f4f6' }}>
-              <td style={td}>{EVENT_LABELS[et]}</td>
-              <td style={{ ...td, textAlign: 'center' }}>
-                <ToggleSwitch checked={isEnabled('slack', et)} onChange={() => toggle('slack', et)} />
-              </td>
-              <td style={{ ...td, textAlign: 'center' }}>
-                <ToggleSwitch checked={isEnabled('email', et)} onChange={() => toggle('email', et)} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Card>
+      <CardContent>
+        <Typography variant="h6" sx={{ mb: 2 }}>Notification Preferences</Typography>
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ width: '40%' }}>Event</TableCell>
+                <TableCell align="center">Slack</TableCell>
+                <TableCell align="center">Email</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {EVENT_TYPES.map((et) => (
+                <TableRow key={et}>
+                  <TableCell>{EVENT_LABELS[et]}</TableCell>
+                  <TableCell align="center">
+                    <Switch
+                      size="small"
+                      checked={isEnabled('slack', et)}
+                      onChange={() => toggle('slack', et)}
+                    />
+                  </TableCell>
+                  <TableCell align="center">
+                    <Switch
+                      size="small"
+                      checked={isEnabled('email', et)}
+                      onChange={() => toggle('email', et)}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </CardContent>
+    </Card>
   );
 }
-
-function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
-  return (
-    <button onClick={onChange} style={{
-      width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer',
-      background: checked ? '#2563eb' : '#d1d5db', position: 'relative', transition: 'background 0.2s',
-    }}>
-      <span style={{
-        position: 'absolute', top: 2, left: checked ? 18 : 2, width: 16, height: 16,
-        borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
-      }} />
-    </button>
-  );
-}
-
-const card: React.CSSProperties = { background: '#fff', borderRadius: 8, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' };
-const sectionTitle: React.CSSProperties = { fontSize: 15, fontWeight: 600, marginBottom: 12, marginTop: 0 };
-const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', color: '#666', fontWeight: 500, fontSize: 12, textTransform: 'uppercase' };
-const td: React.CSSProperties = { padding: '10px 12px' };
-const label: React.CSSProperties = { color: '#999', fontSize: 11, textTransform: 'uppercase', display: 'block', marginBottom: 2 };

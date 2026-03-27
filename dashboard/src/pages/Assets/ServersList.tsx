@@ -1,8 +1,21 @@
 import { useState } from 'react';
+import {
+  Box, Typography, Card, CardContent, Grid, Chip, Stack, Divider,
+  Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
+  Paper, Skeleton, Button,
+} from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import { useServers, useServer, type Server } from '../../api/hooks.js';
 import { Pagination } from './RepositoriesList.js';
+import { SEVERITY_COLORS } from '../../theme/theme.js';
 
-const ENV_COLOR: Record<string, string> = { production: '#dc2626', staging: '#ca8a04', development: '#2563eb' };
+const ENV_COLOR: Record<string, 'error' | 'warning' | 'primary'> = {
+  production: 'error',
+  staging: 'warning',
+  development: 'primary',
+};
+
 const STATUS_DOT: Record<string, string> = { active: '#16a34a', inactive: '#dc2626', decommissioned: '#6b7280' };
 
 function relativeTime(dateStr?: string): string {
@@ -26,31 +39,52 @@ export function ServersList() {
   if (selectedId) return <ServerDetail id={selectedId} onBack={() => setSelectedId(null)} />;
 
   return (
-    <div>
-      <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>Servers</h2>
-      <div style={card}>
-        <table style={table}>
-          <thead><tr style={theadRow}>
-            <th style={th}>Status</th><th style={th}>Hostname</th><th style={th}>OS</th><th style={th}>Environment</th><th style={th}>Last Heartbeat</th><th style={{ ...th, textAlign: 'right' }}>Findings</th>
-          </tr></thead>
-          <tbody>
-            {servers.isLoading ? <tr><td colSpan={6} style={empty}>Loading...</td></tr>
-            : !data?.length ? <tr><td colSpan={6} style={empty}>No servers</td></tr>
-            : data.map((s) => (
-              <tr key={s.id} style={row} onClick={() => setSelectedId(s.id)}>
-                <td style={td}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: STATUS_DOT[s.status] ?? '#6b7280' }} /></td>
-                <td style={{ ...td, fontWeight: 500 }}>{s.hostname}</td>
-                <td style={{ ...td, color: '#666' }}>{s.osFamily} {s.osVersion}</td>
-                <td style={td}><span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, color: '#fff', background: ENV_COLOR[s.environment] ?? '#6b7280' }}>{s.environment}</span></td>
-                <td style={{ ...td, fontSize: 12, color: '#666' }}>{relativeTime(s.lastHeartbeat)}</td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 500 }}>{s.openFindingCount ?? 0}</td>
-              </tr>
+    <Box>
+      <Typography variant="h5" sx={{ mb: 2 }}>Servers</Typography>
+      <TableContainer component={Paper}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Status</TableCell>
+              <TableCell>Hostname</TableCell>
+              <TableCell>OS</TableCell>
+              <TableCell>Environment</TableCell>
+              <TableCell>Last Heartbeat</TableCell>
+              <TableCell align="right">Findings</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {servers.isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: 6 }).map((__, j) => (
+                    <TableCell key={j}><Skeleton variant="text" /></TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : !data?.length ? (
+              <TableRow>
+                <TableCell colSpan={6} sx={{ py: 5, textAlign: 'center', color: 'text.secondary' }}>No servers</TableCell>
+              </TableRow>
+            ) : data.map((s) => (
+              <TableRow key={s.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelectedId(s.id)}>
+                <TableCell>
+                  <FiberManualRecordIcon sx={{ fontSize: 10, color: STATUS_DOT[s.status] ?? '#6b7280' }} />
+                </TableCell>
+                <TableCell sx={{ fontWeight: 500 }}>{s.hostname}</TableCell>
+                <TableCell sx={{ color: 'text.secondary' }}>{s.osFamily} {s.osVersion}</TableCell>
+                <TableCell>
+                  <Chip label={s.environment} size="small" color={ENV_COLOR[s.environment] ?? 'default'} />
+                </TableCell>
+                <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{relativeTime(s.lastHeartbeat)}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 500 }}>{s.openFindingCount ?? 0}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </TableContainer>
       {meta && <Pagination page={page} total={meta.total ?? 0} perPage={25} onPage={setPage} />}
-    </div>
+    </Box>
   );
 }
 
@@ -58,60 +92,86 @@ function ServerDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const { data: envelope, isLoading } = useServer(id);
   const server = envelope?.data as Record<string, unknown> | undefined;
 
-  if (isLoading) return <div style={empty}>Loading...</div>;
-  if (!server) return <div style={empty}>Not found</div>;
+  if (isLoading) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Skeleton variant="text" width={200} sx={{ mb: 2 }} />
+        <Skeleton variant="rectangular" height={250} sx={{ borderRadius: 2 }} />
+      </Box>
+    );
+  }
+
+  if (!server) {
+    return (
+      <Box sx={{ py: 5, textAlign: 'center' }}>
+        <Typography color="text.secondary">Not found</Typography>
+      </Box>
+    );
+  }
 
   const findings = (server.recentFindings ?? []) as Array<Record<string, unknown>>;
   const counts = (server.findingCounts ?? {}) as Record<string, number>;
 
   return (
-    <div>
-      <button onClick={onBack} style={backBtn}>← Back to Servers</button>
-      <div style={card}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: STATUS_DOT[server.status as string] ?? '#6b7280' }} />
-          <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>{server.hostname as string}</h3>
-          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, color: '#fff', background: ENV_COLOR[server.environment as string] ?? '#6b7280' }}>{server.environment as string}</span>
-        </div>
+    <Box>
+      <Button startIcon={<ArrowBackIcon />} size="small" onClick={onBack} sx={{ mb: 2 }}>
+        Back to Servers
+      </Button>
+      <Card>
+        <CardContent sx={{ p: 3 }}>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+            <FiberManualRecordIcon sx={{ fontSize: 12, color: STATUS_DOT[server.status as string] ?? '#6b7280' }} />
+            <Typography variant="h6">{server.hostname as string}</Typography>
+            <Chip label={server.environment as string} size="small" color={ENV_COLOR[server.environment as string] ?? 'default'} />
+          </Stack>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, fontSize: 13, marginBottom: 20 }}>
-          <div><span style={label}>OS:</span> {server.osFamily as string} {server.osVersion as string}</div>
-          <div><span style={label}>Arch:</span> {server.arch as string}</div>
-          <div><span style={label}>Agent:</span> {(server.agentVersion as string) ?? '-'}</div>
-          <div><span style={label}>Cloud:</span> {(server.cloudProvider as string) ?? 'On-prem'}</div>
-          <div><span style={label}>Region:</span> {(server.cloudRegion as string) ?? '-'}</div>
-          <div><span style={label}>Heartbeat:</span> {relativeTime(server.lastHeartbeat as string)}</div>
-        </div>
-
-        {Object.keys(counts).length > 0 && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-            {Object.entries(counts).map(([sev, count]) => (
-              <span key={sev} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: sev === 'critical' ? '#dc2626' : sev === 'high' ? '#ea580c' : '#ca8a04', color: '#fff' }}>{sev}: {count}</span>
+          <Grid container spacing={2} sx={{ mb: 2.5 }}>
+            {([
+              ['OS', `${server.osFamily as string} ${server.osVersion as string}`],
+              ['Arch', server.arch as string],
+              ['Agent', (server.agentVersion as string) ?? '-'],
+              ['Cloud', (server.cloudProvider as string) ?? 'On-prem'],
+              ['Region', (server.cloudRegion as string) ?? '-'],
+              ['Heartbeat', relativeTime(server.lastHeartbeat as string)],
+            ] as const).map(([label, value]) => (
+              <Grid item xs={4} key={label}>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
+                  {label}
+                </Typography>
+                <Typography variant="body2">{value}</Typography>
+              </Grid>
             ))}
-          </div>
-        )}
+          </Grid>
 
-        {findings.length > 0 && (
-          <>
-            <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Recent Findings</h4>
-            {findings.map((f) => (
-              <div key={f.id as string} style={{ padding: '6px 0', borderBottom: '1px solid #f3f4f6', fontSize: 13 }}>
-                <span style={{ fontWeight: 500 }}>{f.title as string}</span> <span style={{ color: '#666', fontSize: 12 }}>({f.severity as string})</span>
-              </div>
-            ))}
-          </>
-        )}
-      </div>
-    </div>
+          {Object.keys(counts).length > 0 && (
+            <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+              {Object.entries(counts).map(([sev, count]) => (
+                <Chip
+                  key={sev}
+                  label={`${sev}: ${count}`}
+                  size="small"
+                  sx={{ bgcolor: SEVERITY_COLORS[sev] ?? SEVERITY_COLORS.low, color: '#fff' }}
+                />
+              ))}
+            </Stack>
+          )}
+
+          {findings.length > 0 && (
+            <>
+              <Divider sx={{ mb: 1.5 }} />
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>Recent Findings</Typography>
+              {findings.map((f) => (
+                <Box key={f.id as string} sx={{ py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>{f.title as string}</Typography>
+                  <Typography variant="body2" component="span" color="text.secondary" sx={{ ml: 1 }}>
+                    ({f.severity as string})
+                  </Typography>
+                </Box>
+              ))}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </Box>
   );
 }
-
-const card: React.CSSProperties = { background: '#fff', borderRadius: 8, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' };
-const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: 13 };
-const theadRow: React.CSSProperties = { borderBottom: '2px solid #e5e7eb', background: '#f9fafb' };
-const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', color: '#666', fontWeight: 500, fontSize: 12, textTransform: 'uppercase' };
-const td: React.CSSProperties = { padding: '10px 12px' };
-const row: React.CSSProperties = { borderBottom: '1px solid #f3f4f6', cursor: 'pointer' };
-const empty: React.CSSProperties = { padding: 40, textAlign: 'center', color: '#999' };
-const backBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#2563eb', fontSize: 13, cursor: 'pointer', marginBottom: 16, padding: 0 };
-const label: React.CSSProperties = { color: '#999', fontSize: 11, textTransform: 'uppercase', display: 'block', marginBottom: 2 };

@@ -1,7 +1,12 @@
 import { Link } from 'react-router-dom';
+import {
+  Box, Typography, Card, CardContent, Grid, Chip, Button, Alert, Skeleton, Stack, Divider,
+} from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useFinding, useUpdateFinding } from '../../api/hooks.js';
+import { SEVERITY_COLORS, STATUS_COLORS } from '../../theme/theme.js';
 
-const SEVERITY_COLOR: Record<string, string> = { critical: '#dc2626', high: '#ea580c', medium: '#ca8a04', low: '#2563eb', info: '#6b7280' };
 const STATUS_TRANSITIONS: Record<string, string[]> = {
   open: ['in_progress', 'resolved', 'suppressed', 'false_positive'],
   in_progress: ['resolved', 'suppressed', 'false_positive'],
@@ -16,8 +21,22 @@ export function FindingDetail({ findingId }: { findingId: string }) {
   const updateMutation = useUpdateFinding();
   const finding = envelope?.data as Record<string, unknown> | undefined;
 
-  if (isLoading) return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Loading finding...</div>;
-  if (!finding) return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Finding not found</div>;
+  if (isLoading) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Skeleton variant="text" width={200} sx={{ mb: 2 }} />
+        <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 2 }} />
+      </Box>
+    );
+  }
+
+  if (!finding) {
+    return (
+      <Box sx={{ py: 5, textAlign: 'center' }}>
+        <Typography color="text.secondary">Finding not found</Typography>
+      </Box>
+    );
+  }
 
   const severity = finding.severity as string;
   const status = finding.status as string;
@@ -29,84 +48,135 @@ export function FindingDetail({ findingId }: { findingId: string }) {
   };
 
   return (
-    <div>
-      <Link to="/findings" style={{ color: '#2563eb', fontSize: 13, textDecoration: 'none', marginBottom: 16, display: 'inline-block' }}>← Back to Findings</Link>
+    <Box>
+      <Button
+        component={Link}
+        to="/findings"
+        startIcon={<ArrowBackIcon />}
+        size="small"
+        sx={{ mb: 2 }}
+      >
+        Back to Findings
+      </Button>
 
-      <div style={{ background: '#fff', borderRadius: 8, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={{ background: SEVERITY_COLOR[severity] ?? '#6b7280', color: '#fff', padding: '3px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600, textTransform: 'uppercase' }}>{severity}</span>
-              <span style={{ background: '#f3f4f6', padding: '3px 10px', borderRadius: 4, fontSize: 12, color: '#666' }}>{STATUS_LABEL[status]}</span>
-            </div>
-            <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{finding.title as string}</h2>
-          </div>
+      <Card>
+        <CardContent sx={{ p: 3 }}>
+          {/* Header */}
+          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 3 }}>
+            <Box>
+              <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+                <Chip
+                  label={severity}
+                  size="small"
+                  sx={{
+                    bgcolor: SEVERITY_COLORS[severity] ?? SEVERITY_COLORS.info,
+                    color: '#fff',
+                    textTransform: 'uppercase',
+                  }}
+                />
+                <Chip
+                  label={STATUS_LABEL[status]}
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    borderColor: STATUS_COLORS[status] ?? STATUS_COLORS.open,
+                    color: STATUS_COLORS[status] ?? STATUS_COLORS.open,
+                  }}
+                />
+              </Stack>
+              <Typography variant="h6">{finding.title as string}</Typography>
+            </Box>
 
-          {/* Status actions */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            {transitions.map((s) => (
-              <button key={s} onClick={() => handleStatusChange(s)} disabled={updateMutation.isPending}
-                style={{ padding: '6px 14px', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', fontSize: 12, cursor: 'pointer' }}>
-                {STATUS_LABEL[s]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Info grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
-          <InfoRow label="CVE ID" value={finding.cveId as string} mono />
-          <InfoRow label="CVSS Score" value={finding.cvssScore != null ? String(finding.cvssScore) : 'N/A'} />
-          <InfoRow label="CVSS Vector" value={(finding.cvssVector as string) ?? 'N/A'} mono />
-          <InfoRow label="Source" value={finding.source as string} />
-          <InfoRow label="First Seen" value={finding.firstSeenAt ? new Date(finding.firstSeenAt as string).toLocaleString() : 'N/A'} />
-          <InfoRow label="Resolved At" value={finding.resolvedAt ? new Date(finding.resolvedAt as string).toLocaleString() : '-'} />
-          <InfoRow label="Auto-fixable" value={(finding.autoFixable as boolean) ? 'Yes' : 'No'} />
-          {finding.fixPrUrl && <InfoRow label="Fix PR" value={finding.fixPrUrl as string} link />}
-        </div>
-
-        {/* Description */}
-        {finding.description && (
-          <div style={{ marginBottom: 20 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: '#333' }}>Description</h3>
-            <p style={{ fontSize: 13, color: '#555', lineHeight: 1.6 }}>{finding.description as string}</p>
-          </div>
-        )}
-
-        {/* Remediation */}
-        {finding.remediation && (
-          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, padding: 16, marginBottom: 20 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6, color: '#16a34a' }}>Remediation</h3>
-            <p style={{ fontSize: 13, color: '#166534', margin: 0 }}>{finding.remediation as string}</p>
-          </div>
-        )}
-
-        {/* Detail (package info etc) */}
-        {Object.keys(detail).length > 0 && (
-          <div>
-            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: '#333' }}>Details</h3>
-            <div style={{ background: '#f9fafb', borderRadius: 4, padding: 12, fontSize: 12, fontFamily: 'monospace' }}>
-              {Object.entries(detail).map(([k, v]) => (
-                <div key={k} style={{ marginBottom: 4 }}><span style={{ color: '#666' }}>{k}:</span> <span style={{ color: '#111' }}>{String(v)}</span></div>
+            {/* Status actions */}
+            <Stack direction="row" spacing={1}>
+              {transitions.map((s) => (
+                <Button
+                  key={s}
+                  variant="outlined"
+                  size="small"
+                  onClick={() => handleStatusChange(s)}
+                  disabled={updateMutation.isPending}
+                >
+                  {STATUS_LABEL[s]}
+                </Button>
               ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+            </Stack>
+          </Stack>
+
+          {/* Info grid */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <InfoItem label="CVE ID" value={finding.cveId as string} mono />
+            <InfoItem label="CVSS Score" value={finding.cvssScore != null ? String(finding.cvssScore) : 'N/A'} />
+            <InfoItem label="CVSS Vector" value={(finding.cvssVector as string) ?? 'N/A'} mono />
+            <InfoItem label="Source" value={finding.source as string} />
+            <InfoItem label="First Seen" value={finding.firstSeenAt ? new Date(finding.firstSeenAt as string).toLocaleString() : 'N/A'} />
+            <InfoItem label="Resolved At" value={finding.resolvedAt ? new Date(finding.resolvedAt as string).toLocaleString() : '-'} />
+            <InfoItem label="Auto-fixable" value={(finding.autoFixable as boolean) ? 'Yes' : 'No'} />
+            {finding.fixPrUrl && (
+              <Grid item xs={6}>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
+                  Fix PR
+                </Typography>
+                <Button
+                  href={finding.fixPrUrl as string}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  size="small"
+                  endIcon={<OpenInNewIcon />}
+                >
+                  {finding.fixPrUrl as string}
+                </Button>
+              </Grid>
+            )}
+          </Grid>
+
+          <Divider sx={{ mb: 3 }} />
+
+          {/* Description */}
+          {finding.description && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>Description</Typography>
+              <Typography variant="body2" sx={{ lineHeight: 1.6 }}>{finding.description as string}</Typography>
+            </Box>
+          )}
+
+          {/* Remediation */}
+          {finding.remediation && (
+            <Alert severity="success" sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Remediation</Typography>
+              <Typography variant="body2">{finding.remediation as string}</Typography>
+            </Alert>
+          )}
+
+          {/* Detail (package info etc) */}
+          {Object.keys(detail).length > 0 && (
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>Details</Typography>
+              <Box sx={{ bgcolor: 'background.default', borderRadius: 1, p: 2, fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                {Object.entries(detail).map(([k, v]) => (
+                  <Box key={k} sx={{ mb: 0.5 }}>
+                    <Typography component="span" variant="body2" color="text.secondary">{k}:</Typography>{' '}
+                    <Typography component="span" variant="body2">{String(v)}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+    </Box>
   );
 }
 
-function InfoRow({ label, value, mono, link }: { label: string; value?: string | null; mono?: boolean; link?: boolean }) {
+function InfoItem({ label, value, mono }: { label: string; value?: string | null; mono?: boolean }) {
   return (
-    <div>
-      <div style={{ fontSize: 11, color: '#999', textTransform: 'uppercase', marginBottom: 2 }}>{label}</div>
-      {link && value ? (
-        <a href={value} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: '#2563eb' }}>{value}</a>
-      ) : (
-        <div style={{ fontSize: 13, fontFamily: mono ? 'monospace' : 'inherit', color: '#111' }}>{value ?? '-'}</div>
-      )}
-    </div>
+    <Grid item xs={6}>
+      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
+        {label}
+      </Typography>
+      <Typography variant="body2" sx={{ fontFamily: mono ? 'monospace' : 'inherit' }}>
+        {value ?? '-'}
+      </Typography>
+    </Grid>
   );
 }

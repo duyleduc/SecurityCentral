@@ -1,11 +1,26 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  Box, Typography, Card, CardContent, Button, Chip, Stack, LinearProgress,
+  Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
+  Paper, Skeleton,
+} from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckIcon from '@mui/icons-material/Check';
+import CloudIcon from '@mui/icons-material/Cloud';
 import { useCoverageStats, useUnmonitoredServers, useTriggerDiscovery, type CloudResource, type CoverageStats } from '../../api/hooks.js';
 
-const PROVIDER_ICON: Record<string, string> = { aws: '🟧', azure: '🔵', gcp: '🔴', proxmox: '🟩' };
 const PROVIDER_LABEL: Record<string, string> = { aws: 'AWS', azure: 'Azure', gcp: 'GCP', proxmox: 'Proxmox' };
 
-function coverageColor(pct: number): string {
+function coverageColor(pct: number): 'success' | 'warning' | 'error' {
+  if (pct >= 90) return 'success';
+  if (pct >= 70) return 'warning';
+  return 'error';
+}
+
+function coverageHex(pct: number): string {
   if (pct >= 90) return '#16a34a';
   if (pct >= 70) return '#ca8a04';
   return '#dc2626';
@@ -28,130 +43,166 @@ export function InfrastructureCoveragePage() {
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Infrastructure Coverage</h2>
-        <Link to="/integrations" style={{ fontSize: 13, color: '#2563eb', textDecoration: 'none' }}>+ Connect Cloud Account</Link>
-      </div>
+    <Box>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}>
+        <Typography variant="h5">Infrastructure Coverage</Typography>
+        <Button component={Link} to="/integrations" startIcon={<AddIcon />} size="small">
+          Connect Cloud Account
+        </Button>
+      </Stack>
 
       {/* Overall coverage bar */}
       {coverageData && (
-        <div style={{ background: '#fff', borderRadius: 8, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 500 }}>Overall Coverage</span>
-            <span style={{ fontSize: 28, fontWeight: 700, color: coverageColor(coverageData.overall_coverage_pct) }}>
-              {coverageData.overall_coverage_pct}%
-            </span>
-          </div>
-          <div style={{ height: 8, background: '#e5e7eb', borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${coverageData.overall_coverage_pct}%`, background: coverageColor(coverageData.overall_coverage_pct), borderRadius: 4, transition: 'width 0.3s' }} />
-          </div>
-          <div style={{ fontSize: 12, color: '#666', marginTop: 6 }}>
-            {coverageData.total_monitored} of {coverageData.total_instances} instances have agents installed
-          </div>
-        </div>
+        <Card sx={{ mb: 2.5 }}>
+          <CardContent>
+            <Stack direction="row" justifyContent="space-between" alignItems="baseline" sx={{ mb: 1 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>Overall Coverage</Typography>
+              <Typography variant="h4" sx={{ fontWeight: 700, color: coverageHex(coverageData.overall_coverage_pct) }}>
+                {coverageData.overall_coverage_pct}%
+              </Typography>
+            </Stack>
+            <LinearProgress
+              variant="determinate"
+              value={coverageData.overall_coverage_pct}
+              color={coverageColor(coverageData.overall_coverage_pct)}
+              sx={{ height: 8, borderRadius: 4 }}
+            />
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              {coverageData.total_monitored} of {coverageData.total_instances} instances have agents installed
+            </Typography>
+          </CardContent>
+        </Card>
       )}
 
       {/* Provider/region breakdown */}
       {coverageData && coverageData.breakdown.length > 0 && (
-        <div style={{ background: '#fff', borderRadius: 8, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', marginBottom: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>By Provider & Region</h3>
-            <button onClick={() => triggerDiscovery.mutate('aws')} disabled={triggerDiscovery.isPending}
-              style={{ fontSize: 12, color: '#2563eb', background: 'none', border: '1px solid #2563eb', borderRadius: 4, padding: '4px 12px', cursor: 'pointer' }}>
-              {triggerDiscovery.isPending ? 'Refreshing...' : 'Refresh All'}
-            </button>
-          </div>
+        <Card sx={{ mb: 2.5 }}>
+          <CardContent>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+              <Typography variant="h6">By Provider & Region</Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={() => triggerDiscovery.mutate('aws')}
+                disabled={triggerDiscovery.isPending}
+              >
+                {triggerDiscovery.isPending ? 'Refreshing...' : 'Refresh All'}
+              </Button>
+            </Stack>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e5e7eb', background: '#f9fafb' }}>
-                <th style={th}>Provider</th>
-                <th style={th}>Region</th>
-                <th style={{ ...th, textAlign: 'right' }}>Instances</th>
-                <th style={{ ...th, textAlign: 'right' }}>Agents</th>
-                <th style={{ ...th, textAlign: 'right' }}>Coverage</th>
-                <th style={{ ...th, width: 120 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {coverageData.breakdown.map((row) => (
-                <tr key={`${row.provider}:${row.region}`} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={td}>{PROVIDER_ICON[row.provider] ?? '☁️'} {PROVIDER_LABEL[row.provider] ?? row.provider}</td>
-                  <td style={{ ...td, color: '#666' }}>{row.region}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>{row.total}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>{row.monitored}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>
-                    <span style={{ color: coverageColor(row.coverage_pct), fontWeight: 600 }}>{row.coverage_pct}%</span>
-                  </td>
-                  <td style={{ ...td, textAlign: 'right' }}>
-                    <div style={{ height: 6, background: '#e5e7eb', borderRadius: 3, width: 80, display: 'inline-block' }}>
-                      <div style={{ height: '100%', width: `${row.coverage_pct}%`, background: coverageColor(row.coverage_pct), borderRadius: 3 }} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Provider</TableCell>
+                    <TableCell>Region</TableCell>
+                    <TableCell align="right">Instances</TableCell>
+                    <TableCell align="right">Agents</TableCell>
+                    <TableCell align="right">Coverage</TableCell>
+                    <TableCell sx={{ width: 140 }} />
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {coverageData.breakdown.map((row) => (
+                    <TableRow key={`${row.provider}:${row.region}`}>
+                      <TableCell>{PROVIDER_LABEL[row.provider] ?? row.provider}</TableCell>
+                      <TableCell sx={{ color: 'text.secondary' }}>{row.region}</TableCell>
+                      <TableCell align="right">{row.total}</TableCell>
+                      <TableCell align="right">{row.monitored}</TableCell>
+                      <TableCell align="right">
+                        <Typography variant="body2" sx={{ color: coverageHex(row.coverage_pct), fontWeight: 600 }}>
+                          {row.coverage_pct}%
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <LinearProgress
+                          variant="determinate"
+                          value={row.coverage_pct}
+                          color={coverageColor(row.coverage_pct)}
+                          sx={{ height: 6, borderRadius: 3, width: 80 }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
       )}
 
       {/* Empty state */}
       {stats.isLoading ? (
-        <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Loading coverage data...</div>
+        <Box sx={{ p: 5 }}>
+          <Skeleton variant="rectangular" height={120} sx={{ borderRadius: 2, mb: 2 }} />
+          <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 2 }} />
+        </Box>
       ) : coverageData && coverageData.total_instances === 0 && (
-        <div style={{ background: '#fff', borderRadius: 8, padding: 40, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', textAlign: 'center', marginBottom: 20 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>☁️</div>
-          <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No cloud accounts connected</h3>
-          <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Connect AWS, Azure, or GCP to discover your infrastructure</p>
-          <Link to="/integrations" style={{ display: 'inline-block', padding: '8px 20px', background: '#2563eb', color: '#fff', borderRadius: 6, textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>
-            Connect Cloud Account
-          </Link>
-        </div>
+        <Card sx={{ mb: 2.5 }}>
+          <CardContent sx={{ py: 5, textAlign: 'center' }}>
+            <CloudIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1.5 }} />
+            <Typography variant="h6" sx={{ mb: 1 }}>No cloud accounts connected</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Connect AWS, Azure, or GCP to discover your infrastructure
+            </Typography>
+            <Button component={Link} to="/integrations" variant="contained">
+              Connect Cloud Account
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {/* Unmonitored servers */}
       {unmonitoredData.length > 0 && (
-        <div style={{ background: '#fff', borderRadius: 8, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
-          <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
-            Unmonitored Servers <span style={{ color: '#dc2626', fontWeight: 400, fontSize: 13 }}>({unmonitoredData.length})</span>
-          </h3>
-          <p style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>These instances are running but don't have the SecurityCentral agent installed.</p>
+        <Card>
+          <CardContent>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+              <Typography variant="h6">Unmonitored Servers</Typography>
+              <Chip label={unmonitoredData.length} size="small" color="error" />
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              These instances are running but don't have the SecurityCentral agent installed.
+            </Typography>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e5e7eb', background: '#f9fafb' }}>
-                <th style={th}>Instance</th>
-                <th style={th}>Hostname</th>
-                <th style={th}>Provider</th>
-                <th style={th}>Region</th>
-                <th style={th}>IP</th>
-                <th style={{ ...th, width: 120 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {unmonitoredData.map((r) => (
-                <tr key={r.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{r.resourceId}</td>
-                  <td style={{ ...td, fontWeight: 500 }}>{r.hostname ?? '—'}</td>
-                  <td style={td}>{PROVIDER_ICON[r.provider] ?? '☁️'} {r.provider.toUpperCase()}</td>
-                  <td style={{ ...td, color: '#666' }}>{r.region ?? '—'}</td>
-                  <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{r.ipAddress ?? '—'}</td>
-                  <td style={{ ...td, textAlign: 'right' }}>
-                    <button onClick={() => copyInstallCmd(r)}
-                      style={{ fontSize: 11, padding: '4px 10px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
-                      {copiedId === r.id ? '✓ Copied' : 'Install Agent'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Instance</TableCell>
+                    <TableCell>Hostname</TableCell>
+                    <TableCell>Provider</TableCell>
+                    <TableCell>Region</TableCell>
+                    <TableCell>IP</TableCell>
+                    <TableCell sx={{ width: 140 }} />
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {unmonitoredData.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{r.resourceId}</TableCell>
+                      <TableCell sx={{ fontWeight: 500 }}>{r.hostname ?? '--'}</TableCell>
+                      <TableCell>{r.provider.toUpperCase()}</TableCell>
+                      <TableCell sx={{ color: 'text.secondary' }}>{r.region ?? '--'}</TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>{r.ipAddress ?? '--'}</TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          variant="contained"
+                          startIcon={copiedId === r.id ? <CheckIcon /> : <ContentCopyIcon />}
+                          onClick={() => copyInstallCmd(r)}
+                        >
+                          {copiedId === r.id ? 'Copied' : 'Install Agent'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
       )}
-    </div>
+    </Box>
   );
 }
-
-const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', color: '#666', fontWeight: 500, fontSize: 12, textTransform: 'uppercase' };
-const td: React.CSSProperties = { padding: '10px 12px' };

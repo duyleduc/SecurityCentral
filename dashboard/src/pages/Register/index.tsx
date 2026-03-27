@@ -2,6 +2,16 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext.js';
 
+import Box from '@mui/material/Box';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import TextField from '@mui/material/TextField';
+import Button from '@mui/material/Button';
+import Typography from '@mui/material/Typography';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
+import SecurityIcon from '@mui/icons-material/Security';
+
 export function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -17,7 +27,6 @@ export function RegisterPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       await register({ orgName, name, email, password });
       navigate('/dashboard');
@@ -29,44 +38,35 @@ export function RegisterPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f5f5' }}>
-      <div style={{ width: 400, padding: 32, background: '#fff', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-        <h1 style={{ fontSize: 24, marginBottom: 8, textAlign: 'center' }}>SecurityCentral</h1>
-        <p style={{ color: '#666', textAlign: 'center', marginBottom: 24 }}>Create your organization</p>
+    <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#f1f5f9' }}>
+      <Card sx={{ width: 420, p: 1 }}>
+        <CardContent sx={{ p: 4 }}>
+          <Box sx={{ textAlign: 'center', mb: 4 }}>
+            <SecurityIcon sx={{ fontSize: 44, color: 'primary.main', mb: 1 }} />
+            <Typography variant="h5">SecurityCentral</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Create your organization
+            </Typography>
+          </Box>
 
-        {error && <div style={{ color: '#dc2626', background: '#fef2f2', padding: 12, borderRadius: 4, marginBottom: 16, fontSize: 14 }}>{error}</div>}
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Organization Name</label>
-            <input type="text" value={orgName} onChange={(e) => setOrgName(e.target.value)} required
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 14, boxSizing: 'border-box' }} />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Your Name</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} required
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 14, boxSizing: 'border-box' }} />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 14, boxSizing: 'border-box' }} />
-          </div>
-          <div style={{ marginBottom: 24 }}>
-            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8}
-              style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 14, boxSizing: 'border-box' }} />
-          </div>
-          <button type="submit" disabled={loading}
-            style={{ width: '100%', padding: '10px 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4, fontSize: 14, fontWeight: 600, cursor: loading ? 'wait' : 'pointer' }}>
-            {loading ? 'Creating...' : 'Create Account'}
-          </button>
-        </form>
+          <form onSubmit={handleSubmit}>
+            <TextField label="Organization Name" fullWidth required value={orgName} onChange={(e) => setOrgName(e.target.value)} sx={{ mb: 2 }} size="small" />
+            <TextField label="Your Name" fullWidth required value={name} onChange={(e) => setName(e.target.value)} sx={{ mb: 2 }} size="small" />
+            <TextField label="Email" type="email" fullWidth required value={email} onChange={(e) => setEmail(e.target.value)} sx={{ mb: 2 }} size="small" />
+            <TextField label="Password" type="password" fullWidth required value={password} onChange={(e) => setPassword(e.target.value)} sx={{ mb: 3 }} size="small" inputProps={{ minLength: 8 }} helperText="At least 8 characters" />
+            <Button type="submit" variant="contained" fullWidth size="large" disabled={loading}>
+              {loading ? <CircularProgress size={22} color="inherit" /> : 'Create Account'}
+            </Button>
+          </form>
 
-        <p style={{ marginTop: 16, textAlign: 'center', fontSize: 14, color: '#666' }}>
-          Already have an account? <Link to="/login" style={{ color: '#2563eb' }}>Sign in</Link>
-        </p>
-      </div>
-    </div>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
+            Already have an account?{' '}
+            <Link to="/login" style={{ color: '#2563eb', textDecoration: 'none' }}>Sign in</Link>
+          </Typography>
+        </CardContent>
+      </Card>
+    </Box>
   );
 }

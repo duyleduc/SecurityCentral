@@ -1,7 +1,17 @@
 import { useState } from 'react';
-import { useRepositories, useRepository, useTriggerScan, type Repository } from '../../api/hooks.js';
-
-const PROVIDER_ICON: Record<string, string> = { github: '🐙', gitlab: '🦊', bitbucket: '🪣' };
+import { Link } from 'react-router-dom';
+import {
+  Box, Typography, Card, CardContent, Grid, Button, Chip, Stack, Tabs, Tab,
+  Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
+  Paper, Skeleton, Alert, Divider, LinearProgress,
+} from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import BugReportIcon from '@mui/icons-material/BugReport';
+import HistoryIcon from '@mui/icons-material/History';
+import InfoIcon from '@mui/icons-material/Info';
+import { useRepositories, useRepository, useTriggerScan, useFindings, useScans, type Repository } from '../../api/hooks.js';
+import { SEVERITY_COLORS, STATUS_COLORS } from '../../theme/theme.js';
 
 export function RepositoriesList() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -13,103 +23,261 @@ export function RepositoriesList() {
   if (selectedId) return <RepositoryDetail id={selectedId} onBack={() => setSelectedId(null)} />;
 
   return (
-    <div>
-      <h2 style={h2}>Repositories</h2>
-      <div style={card}>
-        <table style={table}>
-          <thead><tr style={theadRow}>
-            <th style={th}>Repository</th><th style={th}>Provider</th><th style={th}>Language</th><th style={th}>Last Scan</th>
-          </tr></thead>
-          <tbody>
-            {repos.isLoading ? <tr><td colSpan={4} style={emptyTd}>Loading...</td></tr>
-            : !data?.length ? <tr><td colSpan={4} style={emptyTd}>No repositories</td></tr>
-            : data.map((r) => (
-              <tr key={r.id} style={row} onClick={() => setSelectedId(r.id)}>
-                <td style={td}><span style={{ fontWeight: 500 }}>{r.owner}/{r.name}</span></td>
-                <td style={td}>{PROVIDER_ICON[r.provider] ?? '📦'} {r.provider}</td>
-                <td style={{ ...td, color: '#666' }}>{r.language ?? '-'}</td>
-                <td style={{ ...td, fontSize: 12, color: '#666' }}>{r.lastScanAt ? new Date(r.lastScanAt).toLocaleString() : 'Never'}</td>
-              </tr>
+    <Box>
+      <Typography variant="h5" sx={{ mb: 2 }}>Repositories</Typography>
+      <TableContainer component={Paper}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Repository</TableCell>
+              <TableCell>Provider</TableCell>
+              <TableCell>Language</TableCell>
+              <TableCell>Last Scan</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {repos.isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: 4 }).map((__, j) => (
+                    <TableCell key={j}><Skeleton variant="text" /></TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : !data?.length ? (
+              <TableRow>
+                <TableCell colSpan={4} sx={{ py: 5, textAlign: 'center', color: 'text.secondary' }}>No repositories</TableCell>
+              </TableRow>
+            ) : data.map((r) => (
+              <TableRow key={r.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelectedId(r.id)}>
+                <TableCell sx={{ fontWeight: 500 }}>{r.owner}/{r.name}</TableCell>
+                <TableCell>{r.provider}</TableCell>
+                <TableCell sx={{ color: 'text.secondary' }}>{r.language ?? '-'}</TableCell>
+                <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                  {r.lastScanAt ? new Date(r.lastScanAt).toLocaleString() : 'Never'}
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </TableContainer>
       {meta && <Pagination page={page} total={meta.total ?? 0} perPage={25} onPage={setPage} />}
-    </div>
+    </Box>
   );
 }
 
 function RepositoryDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const { data: envelope, isLoading } = useRepository(id);
   const triggerScan = useTriggerScan();
-  const repo = envelope?.data as Record<string, unknown> | undefined;
+  const [tab, setTab] = useState(0);
 
-  if (isLoading) return <div style={emptyTd}>Loading...</div>;
-  if (!repo) return <div style={emptyTd}>Not found</div>;
+  // Fetch findings and scans for this repo
+  const findings = useFindings({ repository_id: id, page: 1, per_page: 10 });
+  const scans = useScans({ repository_id: id, page: 1, per_page: 10 });
+
+  const repo = envelope?.data as Record<string, unknown> | undefined;
+  const findingsData = (findings.data?.data ?? []) as any[];
+  const scansData = (scans.data?.data ?? []) as any[];
+
+  if (isLoading) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Skeleton variant="text" width={200} sx={{ mb: 2 }} />
+        <Skeleton variant="rectangular" height={300} sx={{ borderRadius: 2 }} />
+      </Box>
+    );
+  }
+
+  if (!repo) {
+    return <Box sx={{ py: 5, textAlign: 'center' }}><Typography color="text.secondary">Not found</Typography></Box>;
+  }
 
   const latestScan = repo.latestScan as Record<string, unknown> | null;
   const findingCounts = (repo.findingCounts ?? {}) as Record<string, number>;
+  const totalFindings = Object.values(findingCounts).reduce((a, b) => a + b, 0);
 
   return (
-    <div>
-      <button onClick={onBack} style={backBtn}>← Back to Repositories</button>
-      <div style={card}>
-        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>{repo.owner as string}/{repo.name as string}</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13, marginBottom: 16 }}>
-          <div><span style={label}>Provider:</span> {repo.provider as string}</div>
-          <div><span style={label}>Branch:</span> {repo.defaultBranch as string}</div>
-          <div><span style={label}>Language:</span> {(repo.language as string) ?? '-'}</div>
-        </div>
+    <Box>
+      <Button startIcon={<ArrowBackIcon />} size="small" onClick={onBack} sx={{ mb: 2 }}>
+        Back to Repositories
+      </Button>
 
-        {/* Finding counts */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          {Object.entries(findingCounts).map(([sev, count]) => (
-            <span key={sev} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: sevBg(sev), color: '#fff' }}>{sev}: {count}</span>
-          ))}
-        </div>
+      {/* Header card — repo info + trigger scan */}
+      <Card sx={{ mb: 2 }}>
+        <CardContent sx={{ p: 3 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+            <Box>
+              <Typography variant="h5" sx={{ mb: 1 }}>{repo.owner as string}/{repo.name as string}</Typography>
+              <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
+                <Chip label={repo.provider as string} size="small" variant="outlined" />
+                <Chip label={`branch: ${repo.defaultBranch as string}`} size="small" variant="outlined" />
+                {repo.language && <Chip label={repo.language as string} size="small" variant="outlined" />}
+              </Stack>
+            </Box>
+            <Button
+              variant="contained"
+              startIcon={<PlayArrowIcon />}
+              onClick={() => triggerScan.mutate(id)}
+              disabled={triggerScan.isPending}
+            >
+              {triggerScan.isPending ? 'Scanning...' : 'Trigger Scan'}
+            </Button>
+          </Stack>
 
-        {/* Latest scan */}
-        {latestScan && (
-          <div style={{ background: '#f9fafb', borderRadius: 4, padding: 12, fontSize: 13, marginBottom: 16 }}>
-            <strong>Latest scan:</strong> {latestScan.scanType as string} — {latestScan.status as string}
-            {latestScan.completedAt && <span style={{ color: '#666' }}> ({new Date(latestScan.completedAt as string).toLocaleString()})</span>}
-          </div>
+          {triggerScan.isError && <Alert severity="error" sx={{ mt: 1 }}>{(triggerScan.error as Error).message}</Alert>}
+          {triggerScan.isSuccess && <Alert severity="success" sx={{ mt: 1 }}>Scan triggered successfully</Alert>}
+
+          {/* Severity summary */}
+          <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
+            {['critical', 'high', 'medium', 'low'].map((sev) => (
+              <Box key={sev} sx={{ textAlign: 'center', minWidth: 70 }}>
+                <Typography variant="h5" sx={{ color: SEVERITY_COLORS[sev], fontWeight: 700 }}>
+                  {findingCounts[sev] ?? 0}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>{sev}</Typography>
+              </Box>
+            ))}
+            <Divider orientation="vertical" flexItem />
+            <Box sx={{ textAlign: 'center', minWidth: 70 }}>
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>{totalFindings}</Typography>
+              <Typography variant="caption" color="text.secondary">Total</Typography>
+            </Box>
+          </Stack>
+
+          {/* Latest scan status */}
+          {latestScan && (
+            <Box sx={{ mt: 2, bgcolor: 'background.default', borderRadius: 1, p: 1.5 }}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="body2" fontWeight={500}>Last scan:</Typography>
+                <Chip label={latestScan.status as string} size="small" color={latestScan.status === 'completed' ? 'success' : latestScan.status === 'failed' ? 'error' : 'default'} />
+                <Typography variant="body2" color="text.secondary">{latestScan.scanType as string}</Typography>
+                {latestScan.completedAt && (
+                  <Typography variant="body2" color="text.secondary">{new Date(latestScan.completedAt as string).toLocaleString()}</Typography>
+                )}
+              </Stack>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Tabs: Findings | Scan History */}
+      <Card>
+        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
+          <Tab icon={<BugReportIcon />} iconPosition="start" label={`Findings (${findings.data?.meta?.total ?? 0})`} />
+          <Tab icon={<HistoryIcon />} iconPosition="start" label={`Scan History (${scans.data?.meta?.total ?? 0})`} />
+        </Tabs>
+
+        {/* Findings Tab */}
+        {tab === 0 && (
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Severity</TableCell>
+                  <TableCell>Title</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>CVE</TableCell>
+                  <TableCell align="right">CVSS</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {findings.isLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <TableRow key={i}>{Array.from({ length: 5 }).map((__, j) => <TableCell key={j}><Skeleton /></TableCell>)}</TableRow>
+                  ))
+                ) : findingsData.length === 0 ? (
+                  <TableRow><TableCell colSpan={5} sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>No findings — looking good!</TableCell></TableRow>
+                ) : findingsData.map((f: any) => (
+                  <TableRow key={f.id} hover>
+                    <TableCell>
+                      <Chip label={f.severity} size="small" sx={{ bgcolor: SEVERITY_COLORS[f.severity] ?? '#64748b', color: '#fff', fontWeight: 600, fontSize: '0.7rem' }} />
+                    </TableCell>
+                    <TableCell>
+                      <Link to={`/findings/${f.id}`} style={{ color: '#0f172a', textDecoration: 'none' }}>
+                        {f.title?.length > 60 ? f.title.slice(0, 57) + '...' : f.title}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={f.status?.replace('_', ' ')} size="small" variant="outlined" sx={{ borderColor: STATUS_COLORS[f.status], color: STATUS_COLORS[f.status], fontSize: '0.7rem' }} />
+                    </TableCell>
+                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{f.cveId ?? '—'}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>{f.cvssScore ?? '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {findingsData.length > 0 && (
+              <Box sx={{ p: 1.5, textAlign: 'center' }}>
+                <Button component={Link} to={`/findings?repository_id=${id}`} size="small">View all findings</Button>
+              </Box>
+            )}
+          </TableContainer>
         )}
 
-        <button onClick={() => triggerScan.mutate(id)} disabled={triggerScan.isPending}
-          style={{ padding: '8px 20px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-          {triggerScan.isPending ? 'Triggering...' : 'Trigger Scan'}
-        </button>
-        {triggerScan.isError && <span style={{ color: '#dc2626', fontSize: 12, marginLeft: 8 }}>{(triggerScan.error as Error).message}</span>}
-      </div>
-    </div>
+        {/* Scan History Tab */}
+        {tab === 1 && (
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Trigger</TableCell>
+                  <TableCell>Started</TableCell>
+                  <TableCell align="right">Findings</TableCell>
+                  <TableCell align="right">Duration</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {scans.isLoading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <TableRow key={i}>{Array.from({ length: 6 }).map((__, j) => <TableCell key={j}><Skeleton /></TableCell>)}</TableRow>
+                  ))
+                ) : scansData.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>No scans yet</TableCell></TableRow>
+                ) : scansData.map((s: any) => (
+                  <TableRow key={s.id} hover>
+                    <TableCell>
+                      <Chip
+                        label={s.status}
+                        size="small"
+                        color={s.status === 'completed' ? 'success' : s.status === 'failed' ? 'error' : s.status === 'running' ? 'info' : 'default'}
+                      />
+                    </TableCell>
+                    <TableCell>{s.scanType}</TableCell>
+                    <TableCell sx={{ color: 'text.secondary' }}>{s.trigger}</TableCell>
+                    <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{s.startedAt ? new Date(s.startedAt).toLocaleString() : '—'}</TableCell>
+                    <TableCell align="right">
+                      {s.findingsTotal > 0 ? (
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                          <Typography variant="body2" fontWeight={500}>{s.findingsTotal}</Typography>
+                          {s.findingsNew > 0 && <Chip label={`+${s.findingsNew}`} size="small" color="error" sx={{ height: 20, fontSize: '0.65rem' }} />}
+                        </Stack>
+                      ) : '0'}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                      {s.durationMs ? `${(s.durationMs / 1000).toFixed(1)}s` : '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Card>
+    </Box>
   );
 }
 
-// Shared styles/helpers
-const h2: React.CSSProperties = { fontSize: 20, fontWeight: 600, marginBottom: 16 };
-const card: React.CSSProperties = { background: '#fff', borderRadius: 8, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' };
-const table: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: 13 };
-const theadRow: React.CSSProperties = { borderBottom: '2px solid #e5e7eb', background: '#f9fafb' };
-const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', color: '#666', fontWeight: 500, fontSize: 12, textTransform: 'uppercase' };
-const td: React.CSSProperties = { padding: '10px 12px' };
-const row: React.CSSProperties = { borderBottom: '1px solid #f3f4f6', cursor: 'pointer' };
-const emptyTd: React.CSSProperties = { padding: 40, textAlign: 'center', color: '#999' };
-const backBtn: React.CSSProperties = { background: 'none', border: 'none', color: '#2563eb', fontSize: 13, cursor: 'pointer', marginBottom: 16, padding: 0 };
-const label: React.CSSProperties = { color: '#999', fontSize: 11, textTransform: 'uppercase' };
-function sevBg(s: string) { return s === 'critical' ? '#dc2626' : s === 'high' ? '#ea580c' : s === 'medium' ? '#ca8a04' : '#2563eb'; }
-
-function Pagination({ page, total, perPage, onPage }: { page: number; total: number; perPage: number; onPage: (p: number) => void }) {
+export function Pagination({ page, total, perPage, onPage }: { page: number; total: number; perPage: number; onPage: (p: number) => void }) {
   const totalPages = Math.ceil(total / perPage);
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, fontSize: 13, color: '#666' }}>
-      <span>Page {page} of {totalPages}</span>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button disabled={page <= 1} onClick={() => onPage(page - 1)} style={{ padding: '4px 12px', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', cursor: page <= 1 ? 'default' : 'pointer', opacity: page <= 1 ? 0.5 : 1 }}>Previous</button>
-        <button disabled={page >= totalPages} onClick={() => onPage(page + 1)} style={{ padding: '4px 12px', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', cursor: 'pointer' }}>Next</button>
-      </div>
-    </div>
+    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1.5 }}>
+      <Typography variant="body2" color="text.secondary">Page {page} of {totalPages}</Typography>
+      <Stack direction="row" spacing={1}>
+        <Button size="small" variant="outlined" disabled={page <= 1} onClick={() => onPage(page - 1)}>Previous</Button>
+        <Button size="small" variant="outlined" disabled={page >= totalPages} onClick={() => onPage(page + 1)}>Next</Button>
+      </Stack>
+    </Stack>
   );
 }
-
-export { Pagination };

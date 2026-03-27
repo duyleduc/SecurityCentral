@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Box, Typography, Card, CardContent, Grid, Button, Chip, Stack,
+  Dialog, DialogTitle, DialogContent, DialogActions, TextField, Alert,
+  Switch, FormControlLabel, Skeleton,
+} from '@mui/material';
+import LinkIcon from '@mui/icons-material/Link';
+import LinkOffIcon from '@mui/icons-material/LinkOff';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { apiGet, apiPost, apiDelete } from '../../api/client.js';
 
 interface Integration {
@@ -11,14 +19,14 @@ interface Integration {
 }
 
 const PROVIDERS = [
-  { key: 'github', label: 'GitHub', icon: '🐙', desc: 'Repository scanning, webhooks, auto-fix PRs' },
-  { key: 'gitlab', label: 'GitLab', icon: '🦊', desc: 'Repository scanning and push webhooks' },
-  { key: 'slack', label: 'Slack', icon: '💬', desc: 'Security alerts and notifications' },
-  { key: 'aws', label: 'AWS', icon: '🟧', desc: 'EC2 instance discovery for infrastructure coverage' },
-  { key: 'azure', label: 'Azure', icon: '🔵', desc: 'Virtual machine discovery across resource groups' },
-  { key: 'gcp', label: 'GCP', icon: '🔴', desc: 'Compute Engine instance discovery across zones' },
-  { key: 'proxmox', label: 'Proxmox', icon: '🟩', desc: 'VM and container discovery across cluster nodes' },
-  { key: 'bitbucket', label: 'Bitbucket', icon: '🪣', desc: 'Repository scanning and push webhooks' },
+  { key: 'github', label: 'GitHub', desc: 'Repository scanning, webhooks, auto-fix PRs' },
+  { key: 'gitlab', label: 'GitLab', desc: 'Repository scanning and push webhooks' },
+  { key: 'slack', label: 'Slack', desc: 'Security alerts and notifications' },
+  { key: 'aws', label: 'AWS', desc: 'EC2 instance discovery for infrastructure coverage' },
+  { key: 'azure', label: 'Azure', desc: 'Virtual machine discovery across resource groups' },
+  { key: 'gcp', label: 'GCP', desc: 'Compute Engine instance discovery across zones' },
+  { key: 'proxmox', label: 'Proxmox', desc: 'VM and container discovery across cluster nodes' },
+  { key: 'bitbucket', label: 'Bitbucket', desc: 'Repository scanning and push webhooks' },
 ];
 
 export function IntegrationsPage() {
@@ -40,50 +48,69 @@ export function IntegrationsPage() {
   const getIntegration = (provider: string) => integrations.find((i) => i.provider === provider);
 
   return (
-    <div>
-      <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>Integrations</h2>
+    <Box>
+      <Typography variant="h5" sx={{ mb: 2 }}>Integrations</Typography>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+      <Grid container spacing={2}>
         {PROVIDERS.map((p) => {
           const existing = getIntegration(p.key);
           const connected = !!existing;
 
           return (
-            <div key={p.key} style={{ background: '#fff', borderRadius: 8, padding: 20, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: connected ? '2px solid #16a34a' : '2px solid transparent' }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>{p.icon}</div>
-              <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{p.label}</h3>
-              <p style={{ fontSize: 12, color: '#666', marginBottom: 16, minHeight: 32 }}>{p.desc}</p>
+            <Grid item xs={12} sm={6} md={4} key={p.key}>
+              <Card sx={{ height: '100%', border: connected ? '2px solid' : '2px solid transparent', borderColor: connected ? 'success.main' : 'transparent' }}>
+                <CardContent sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                  <Typography variant="h6" sx={{ mb: 0.5 }}>{p.label}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, minHeight: 40 }}>{p.desc}</Typography>
 
-              {connected ? (
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
-                    <span style={{ fontSize: 12, color: '#16a34a', fontWeight: 500 }}>Connected</span>
-                    <span style={{ fontSize: 11, color: '#999', marginLeft: 'auto' }}>
-                      {new Date(existing!.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  {(p.key === 'github' || p.key === 'gitlab' || p.key === 'bitbucket') && (
-                    <button onClick={() => navigate(`/integrations/${p.key}/repos`)}
-                      style={{ fontSize: 12, color: '#fff', background: '#2563eb', border: 'none', borderRadius: 4, padding: '6px 12px', cursor: 'pointer', width: '100%', fontWeight: 600, marginBottom: 8 }}>
-                      Manage Repositories
-                    </button>
-                  )}
-                  <button onClick={() => { if (confirm(`Disconnect ${p.label}?`)) deleteMutation.mutate(existing!.id); }}
-                    style={{ fontSize: 12, color: '#dc2626', background: 'none', border: '1px solid #dc2626', borderRadius: 4, padding: '4px 12px', cursor: 'pointer', width: '100%' }}>
-                    Disconnect
-                  </button>
-                </div>
-              ) : (
-                <button onClick={() => setModal(p.key)}
-                  style={{ fontSize: 12, color: '#fff', background: '#2563eb', border: 'none', borderRadius: 4, padding: '8px 16px', cursor: 'pointer', width: '100%', fontWeight: 600 }}>
-                  Connect {p.label}
-                </button>
-              )}
-            </div>
+                  <Box sx={{ mt: 'auto' }}>
+                    {connected ? (
+                      <Stack spacing={1}>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          <Chip label="Connected" size="small" color="success" />
+                          <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
+                            {new Date(existing!.createdAt).toLocaleDateString()}
+                          </Typography>
+                        </Stack>
+                        {(p.key === 'github' || p.key === 'gitlab' || p.key === 'bitbucket') && (
+                          <Button
+                            variant="contained"
+                            size="small"
+                            fullWidth
+                            startIcon={<SettingsIcon />}
+                            onClick={() => navigate(`/integrations/${p.key}/repos`)}
+                          >
+                            Manage Repositories
+                          </Button>
+                        )}
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          size="small"
+                          fullWidth
+                          startIcon={<LinkOffIcon />}
+                          onClick={() => { if (confirm(`Disconnect ${p.label}?`)) deleteMutation.mutate(existing!.id); }}
+                        >
+                          Disconnect
+                        </Button>
+                      </Stack>
+                    ) : (
+                      <Button
+                        variant="contained"
+                        fullWidth
+                        startIcon={<LinkIcon />}
+                        onClick={() => setModal(p.key)}
+                      >
+                        Connect {p.label}
+                      </Button>
+                    )}
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
           );
         })}
-      </div>
+      </Grid>
 
       {/* Connection modals */}
       {modal === 'github' && <GitHubModal onClose={() => setModal(null)} />}
@@ -94,19 +121,7 @@ export function IntegrationsPage() {
       {modal === 'gcp' && <GcpModal onClose={() => setModal(null)} />}
       {modal === 'proxmox' && <ProxmoxModal onClose={() => setModal(null)} />}
       {modal === 'bitbucket' && <BitbucketModal onClose={() => setModal(null)} />}
-    </div>
-  );
-}
-
-function ModalWrapper({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: '#fff', borderRadius: 8, padding: 24, width: 400, maxHeight: '80vh', overflow: 'auto' }}>
-        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>{title}</h3>
-        {children}
-      </div>
-    </div>
+    </Box>
   );
 }
 
@@ -120,24 +135,23 @@ function GitHubModal({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <ModalWrapper title="Connect GitHub" onClose={onClose}>
-      <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Install the SecurityCentral GitHub App, then enter the installation details below.</p>
-      <div style={{ marginBottom: 12 }}>
-        <label style={formLabel}>Installation ID</label>
-        <input value={installationId} onChange={(e) => setInstallationId(e.target.value)} style={formInput} placeholder="12345678" />
-      </div>
-      <div style={{ marginBottom: 16 }}>
-        <label style={formLabel}>App ID</label>
-        <input value={appId} onChange={(e) => setAppId(e.target.value)} style={formInput} placeholder="67890" />
-      </div>
-      {mutation.isError && <div style={errorBox}>{(mutation.error as Error).message}</div>}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button onClick={onClose} style={cancelBtn}>Cancel</button>
-        <button onClick={() => mutation.mutate()} disabled={!installationId || !appId || mutation.isPending} style={submitBtn}>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Connect GitHub</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Install the SecurityCentral GitHub App, then enter the installation details below.
+        </Typography>
+        <TextField fullWidth label="Installation ID" value={installationId} onChange={(e) => setInstallationId(e.target.value)} placeholder="12345678" size="small" sx={{ mb: 2 }} />
+        <TextField fullWidth label="App ID" value={appId} onChange={(e) => setAppId(e.target.value)} placeholder="67890" size="small" />
+        {mutation.isError && <Alert severity="error" sx={{ mt: 2 }}>{(mutation.error as Error).message}</Alert>}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={() => mutation.mutate()} disabled={!installationId || !appId || mutation.isPending}>
           {mutation.isPending ? 'Connecting...' : 'Connect'}
-        </button>
-      </div>
-    </ModalWrapper>
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -157,48 +171,44 @@ function GitLabModal({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <ModalWrapper title="Connect GitLab" onClose={onClose}>
-      <div style={{ marginBottom: 16 }}>
-        <label style={formLabel}>Access Token</label>
-        <input type="password" value={token} onChange={(e) => setToken(e.target.value)} style={formInput} placeholder="glpat-xxxx" />
-        <p style={{ fontSize: 11, color: '#999', marginTop: 4 }}>Create a token with <code>api</code> scope in GitLab Settings → Access Tokens</p>
-      </div>
-
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-          <input type="checkbox" checked={isSelfHosted} onChange={(e) => setIsSelfHosted(e.target.checked)} />
-          Self-hosted GitLab instance
-        </label>
-      </div>
-
-      {isSelfHosted && (
-        <>
-          <div style={{ marginBottom: 12 }}>
-            <label style={formLabel}>Instance URL</label>
-            <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} style={formInput} placeholder="https://gitlab.your-company.com" />
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-              <input type="checkbox" checked={verifySsl} onChange={(e) => setVerifySsl(e.target.checked)} />
-              Verify SSL certificate
-            </label>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Connect GitLab</DialogTitle>
+      <DialogContent>
+        <TextField
+          fullWidth type="password" label="Access Token" value={token}
+          onChange={(e) => setToken(e.target.value)} placeholder="glpat-xxxx" size="small"
+          helperText="Create a token with api scope in GitLab Settings -> Access Tokens"
+          sx={{ mt: 1, mb: 2 }}
+        />
+        <FormControlLabel
+          control={<Switch checked={isSelfHosted} onChange={(e) => setIsSelfHosted(e.target.checked)} />}
+          label="Self-hosted GitLab instance"
+          sx={{ mb: 2 }}
+        />
+        {isSelfHosted && (
+          <>
+            <TextField fullWidth label="Instance URL" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://gitlab.your-company.com" size="small" sx={{ mb: 2 }} />
+            <FormControlLabel
+              control={<Switch checked={verifySsl} onChange={(e) => setVerifySsl(e.target.checked)} />}
+              label="Verify SSL certificate"
+              sx={{ mb: 1 }}
+            />
             {!verifySsl && (
-              <p style={{ fontSize: 11, color: '#ca8a04', marginTop: 4, background: '#fffbeb', padding: '6px 10px', borderRadius: 4 }}>
+              <Alert severity="warning" sx={{ mb: 2 }}>
                 SSL verification is disabled. Only use this for trusted internal instances with self-signed certificates.
-              </p>
+              </Alert>
             )}
-          </div>
-        </>
-      )}
-
-      {mutation.isError && <div style={errorBox}>{(mutation.error as Error).message}</div>}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button onClick={onClose} style={cancelBtn}>Cancel</button>
-        <button onClick={() => mutation.mutate()} disabled={!token || (isSelfHosted && !baseUrl) || mutation.isPending} style={submitBtn}>
+          </>
+        )}
+        {mutation.isError && <Alert severity="error" sx={{ mt: 1 }}>{(mutation.error as Error).message}</Alert>}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={() => mutation.mutate()} disabled={!token || (isSelfHosted && !baseUrl) || mutation.isPending}>
           {mutation.isPending ? 'Testing connection...' : 'Connect'}
-        </button>
-      </div>
-    </ModalWrapper>
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -211,25 +221,28 @@ function SlackModal({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <ModalWrapper title="Connect Slack" onClose={onClose}>
-      <div style={{ marginBottom: 16 }}>
-        <label style={formLabel}>Webhook URL</label>
-        <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} style={formInput} placeholder="https://hooks.slack.com/services/T00/B00/xxxx" />
-        <p style={{ fontSize: 11, color: '#999', marginTop: 4 }}>Create an incoming webhook in Slack App settings</p>
-      </div>
-      {mutation.isError && <div style={errorBox}>{(mutation.error as Error).message}</div>}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button onClick={onClose} style={cancelBtn}>Cancel</button>
-        <button onClick={() => mutation.mutate()} disabled={!url || mutation.isPending} style={submitBtn}>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Connect Slack</DialogTitle>
+      <DialogContent>
+        <TextField
+          fullWidth type="url" label="Webhook URL" value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://hooks.slack.com/services/T00/B00/xxxx"
+          helperText="Create an incoming webhook in Slack App settings"
+          size="small" sx={{ mt: 1 }}
+        />
+        {mutation.isError && <Alert severity="error" sx={{ mt: 2 }}>{(mutation.error as Error).message}</Alert>}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={() => mutation.mutate()} disabled={!url || mutation.isPending}>
           {mutation.isPending ? 'Connecting...' : 'Connect'}
-        </button>
-      </div>
-    </ModalWrapper>
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
-const formLabel: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 };
-const formInput: React.CSSProperties = { width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13, boxSizing: 'border-box' };
 function AwsModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const [region, setRegion] = useState('us-east-1');
@@ -242,18 +255,25 @@ function AwsModal({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <ModalWrapper title="Connect AWS" onClose={onClose}>
-      <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Provide read-only credentials to discover EC2 instances.</p>
-      <div style={{ marginBottom: 12 }}><label style={formLabel}>Region</label><input value={region} onChange={(e) => setRegion(e.target.value)} style={formInput} /></div>
-      <div style={{ marginBottom: 12 }}><label style={formLabel}>Access Key ID (optional if using IAM role)</label><input value={accessKeyId} onChange={(e) => setAccessKeyId(e.target.value)} style={formInput} /></div>
-      <div style={{ marginBottom: 12 }}><label style={formLabel}>Secret Access Key</label><input type="password" value={secretAccessKey} onChange={(e) => setSecretAccessKey(e.target.value)} style={formInput} /></div>
-      <div style={{ marginBottom: 16 }}><label style={formLabel}>Role ARN (for cross-account)</label><input value={roleArn} onChange={(e) => setRoleArn(e.target.value)} style={formInput} placeholder="arn:aws:iam::123456:role/sc-discovery" /></div>
-      {mutation.isError && <div style={errorBox}>{(mutation.error as Error).message}</div>}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button onClick={onClose} style={cancelBtn}>Cancel</button>
-        <button onClick={() => mutation.mutate()} disabled={!region || mutation.isPending} style={submitBtn}>{mutation.isPending ? 'Connecting...' : 'Connect'}</button>
-      </div>
-    </ModalWrapper>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Connect AWS</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Provide read-only credentials to discover EC2 instances.
+        </Typography>
+        <TextField fullWidth label="Region" value={region} onChange={(e) => setRegion(e.target.value)} size="small" sx={{ mb: 2 }} />
+        <TextField fullWidth label="Access Key ID (optional if using IAM role)" value={accessKeyId} onChange={(e) => setAccessKeyId(e.target.value)} size="small" sx={{ mb: 2 }} />
+        <TextField fullWidth label="Secret Access Key" type="password" value={secretAccessKey} onChange={(e) => setSecretAccessKey(e.target.value)} size="small" sx={{ mb: 2 }} />
+        <TextField fullWidth label="Role ARN (for cross-account)" value={roleArn} onChange={(e) => setRoleArn(e.target.value)} placeholder="arn:aws:iam::123456:role/sc-discovery" size="small" />
+        {mutation.isError && <Alert severity="error" sx={{ mt: 2 }}>{(mutation.error as Error).message}</Alert>}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={() => mutation.mutate()} disabled={!region || mutation.isPending}>
+          {mutation.isPending ? 'Connecting...' : 'Connect'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -268,17 +288,24 @@ function AzureModal({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <ModalWrapper title="Connect Azure" onClose={onClose}>
-      <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Provide a service principal with Reader role to discover VMs.</p>
-      <div style={{ marginBottom: 12 }}><label style={formLabel}>Tenant ID</label><input value={tenantId} onChange={(e) => setTenantId(e.target.value)} style={formInput} /></div>
-      <div style={{ marginBottom: 12 }}><label style={formLabel}>Client ID</label><input value={clientId} onChange={(e) => setClientId(e.target.value)} style={formInput} /></div>
-      <div style={{ marginBottom: 16 }}><label style={formLabel}>Client Secret</label><input type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} style={formInput} /></div>
-      {mutation.isError && <div style={errorBox}>{(mutation.error as Error).message}</div>}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button onClick={onClose} style={cancelBtn}>Cancel</button>
-        <button onClick={() => mutation.mutate()} disabled={!tenantId || !clientId || !clientSecret || mutation.isPending} style={submitBtn}>{mutation.isPending ? 'Connecting...' : 'Connect'}</button>
-      </div>
-    </ModalWrapper>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Connect Azure</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Provide a service principal with Reader role to discover VMs.
+        </Typography>
+        <TextField fullWidth label="Tenant ID" value={tenantId} onChange={(e) => setTenantId(e.target.value)} size="small" sx={{ mb: 2 }} />
+        <TextField fullWidth label="Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} size="small" sx={{ mb: 2 }} />
+        <TextField fullWidth label="Client Secret" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} size="small" />
+        {mutation.isError && <Alert severity="error" sx={{ mt: 2 }}>{(mutation.error as Error).message}</Alert>}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={() => mutation.mutate()} disabled={!tenantId || !clientId || !clientSecret || mutation.isPending}>
+          {mutation.isPending ? 'Connecting...' : 'Connect'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -292,19 +319,28 @@ function GcpModal({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <ModalWrapper title="Connect GCP" onClose={onClose}>
-      <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Provide a service account with compute.viewer role.</p>
-      <div style={{ marginBottom: 12 }}><label style={formLabel}>Project ID</label><input value={projectId} onChange={(e) => setProjectId(e.target.value)} style={formInput} /></div>
-      <div style={{ marginBottom: 16 }}>
-        <label style={formLabel}>Service Account Key (JSON, optional if on GCE)</label>
-        <textarea value={serviceAccountKey} onChange={(e) => setServiceAccountKey(e.target.value)} rows={4} style={{ ...formInput, fontFamily: 'monospace', fontSize: 11 }} placeholder='{"type":"service_account",...}' />
-      </div>
-      {mutation.isError && <div style={errorBox}>{(mutation.error as Error).message}</div>}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button onClick={onClose} style={cancelBtn}>Cancel</button>
-        <button onClick={() => mutation.mutate()} disabled={!projectId || mutation.isPending} style={submitBtn}>{mutation.isPending ? 'Connecting...' : 'Connect'}</button>
-      </div>
-    </ModalWrapper>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Connect GCP</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Provide a service account with compute.viewer role.
+        </Typography>
+        <TextField fullWidth label="Project ID" value={projectId} onChange={(e) => setProjectId(e.target.value)} size="small" sx={{ mb: 2 }} />
+        <TextField
+          fullWidth label="Service Account Key (JSON, optional if on GCE)" value={serviceAccountKey}
+          onChange={(e) => setServiceAccountKey(e.target.value)} multiline rows={4}
+          placeholder='{"type":"service_account",...}' size="small"
+          sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}
+        />
+        {mutation.isError && <Alert severity="error" sx={{ mt: 2 }}>{(mutation.error as Error).message}</Alert>}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={() => mutation.mutate()} disabled={!projectId || mutation.isPending}>
+          {mutation.isPending ? 'Connecting...' : 'Connect'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -320,23 +356,34 @@ function ProxmoxModal({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <ModalWrapper title="Connect Proxmox" onClose={onClose}>
-      <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Provide API token credentials to discover VMs and containers.</p>
-      <div style={{ marginBottom: 12 }}><label style={formLabel}>Base URL</label><input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} style={formInput} placeholder="https://proxmox.internal:8006" /></div>
-      <div style={{ marginBottom: 12 }}><label style={formLabel}>Token ID</label><input value={tokenId} onChange={(e) => setTokenId(e.target.value)} style={formInput} placeholder="user@pam!sc-discovery" /></div>
-      <div style={{ marginBottom: 12 }}><label style={formLabel}>Token Secret</label><input type="password" value={tokenSecret} onChange={(e) => setTokenSecret(e.target.value)} style={formInput} /></div>
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-          <input type="checkbox" checked={verifySsl} onChange={(e) => setVerifySsl(e.target.checked)} /> Verify SSL certificate
-        </label>
-        {!verifySsl && <p style={{ fontSize: 11, color: '#ca8a04', marginTop: 4 }}>Warning: SSL verification is disabled. Only use for trusted internal instances.</p>}
-      </div>
-      {mutation.isError && <div style={errorBox}>{(mutation.error as Error).message}</div>}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button onClick={onClose} style={cancelBtn}>Cancel</button>
-        <button onClick={() => mutation.mutate()} disabled={!baseUrl || !tokenId || !tokenSecret || mutation.isPending} style={submitBtn}>{mutation.isPending ? 'Connecting...' : 'Connect'}</button>
-      </div>
-    </ModalWrapper>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Connect Proxmox</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Provide API token credentials to discover VMs and containers.
+        </Typography>
+        <TextField fullWidth label="Base URL" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://proxmox.internal:8006" size="small" sx={{ mb: 2 }} />
+        <TextField fullWidth label="Token ID" value={tokenId} onChange={(e) => setTokenId(e.target.value)} placeholder="user@pam!sc-discovery" size="small" sx={{ mb: 2 }} />
+        <TextField fullWidth label="Token Secret" type="password" value={tokenSecret} onChange={(e) => setTokenSecret(e.target.value)} size="small" sx={{ mb: 2 }} />
+        <FormControlLabel
+          control={<Switch checked={verifySsl} onChange={(e) => setVerifySsl(e.target.checked)} />}
+          label="Verify SSL certificate"
+          sx={{ mb: 1 }}
+        />
+        {!verifySsl && (
+          <Alert severity="warning" sx={{ mb: 1 }}>
+            Warning: SSL verification is disabled. Only use for trusted internal instances.
+          </Alert>
+        )}
+        {mutation.isError && <Alert severity="error" sx={{ mt: 1 }}>{(mutation.error as Error).message}</Alert>}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={() => mutation.mutate()} disabled={!baseUrl || !tokenId || !tokenSecret || mutation.isPending}>
+          {mutation.isPending ? 'Connecting...' : 'Connect'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -352,21 +399,24 @@ function BitbucketModal({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <ModalWrapper title="Connect Bitbucket" onClose={onClose}>
-      <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Provide credentials to discover repositories.</p>
-      <div style={{ marginBottom: 12 }}><label style={formLabel}>Workspace</label><input value={workspace} onChange={(e) => setWorkspace(e.target.value)} style={formInput} placeholder="my-team" /></div>
-      <div style={{ marginBottom: 12 }}><label style={formLabel}>Username</label><input value={username} onChange={(e) => setUsername(e.target.value)} style={formInput} /></div>
-      <div style={{ marginBottom: 12 }}><label style={formLabel}>App Password</label><input type="password" value={appPassword} onChange={(e) => setAppPassword(e.target.value)} style={formInput} /></div>
-      <div style={{ marginBottom: 16 }}><label style={formLabel}>Base URL (for Bitbucket Server, leave empty for Cloud)</label><input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} style={formInput} placeholder="https://bitbucket.internal.corp.com" /></div>
-      {mutation.isError && <div style={errorBox}>{(mutation.error as Error).message}</div>}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button onClick={onClose} style={cancelBtn}>Cancel</button>
-        <button onClick={() => mutation.mutate()} disabled={!workspace || !username || !appPassword || mutation.isPending} style={submitBtn}>{mutation.isPending ? 'Connecting...' : 'Connect'}</button>
-      </div>
-    </ModalWrapper>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Connect Bitbucket</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Provide credentials to discover repositories.
+        </Typography>
+        <TextField fullWidth label="Workspace" value={workspace} onChange={(e) => setWorkspace(e.target.value)} placeholder="my-team" size="small" sx={{ mb: 2 }} />
+        <TextField fullWidth label="Username" value={username} onChange={(e) => setUsername(e.target.value)} size="small" sx={{ mb: 2 }} />
+        <TextField fullWidth label="App Password" type="password" value={appPassword} onChange={(e) => setAppPassword(e.target.value)} size="small" sx={{ mb: 2 }} />
+        <TextField fullWidth label="Base URL (for Bitbucket Server, leave empty for Cloud)" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://bitbucket.internal.corp.com" size="small" />
+        {mutation.isError && <Alert severity="error" sx={{ mt: 2 }}>{(mutation.error as Error).message}</Alert>}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={() => mutation.mutate()} disabled={!workspace || !username || !appPassword || mutation.isPending}>
+          {mutation.isPending ? 'Connecting...' : 'Connect'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
-
-const cancelBtn: React.CSSProperties = { padding: '6px 16px', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', fontSize: 13, cursor: 'pointer' };
-const submitBtn: React.CSSProperties = { padding: '6px 16px', border: 'none', borderRadius: 4, background: '#2563eb', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' };
-const errorBox: React.CSSProperties = { color: '#dc2626', background: '#fef2f2', padding: 8, borderRadius: 4, fontSize: 12, marginBottom: 12 };

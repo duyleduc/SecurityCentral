@@ -1,19 +1,21 @@
 import { useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import {
+  Box, Typography, TextField, Select, MenuItem, Button, Chip,
+  Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
+  Paper, Skeleton, Stack, InputAdornment,
+} from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import ClearIcon from '@mui/icons-material/Clear';
 import { useFindings, type Finding } from '../../api/hooks.js';
 import { FindingDetail } from '../FindingDetail/index.js';
+import { SEVERITY_COLORS, SEVERITY_BG, STATUS_COLORS } from '../../theme/theme.js';
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'] as const;
 const STATUSES = ['open', 'in_progress', 'resolved', 'suppressed', 'false_positive'] as const;
 const SOURCES = ['code_scanner', 'infra_agent', 'cert_monitor'] as const;
-
-const SEVERITY_BADGE: Record<string, { bg: string; color: string }> = {
-  critical: { bg: '#dc2626', color: '#fff' },
-  high: { bg: '#ea580c', color: '#fff' },
-  medium: { bg: '#ca8a04', color: '#fff' },
-  low: { bg: '#2563eb', color: '#fff' },
-  info: { bg: '#6b7280', color: '#fff' },
-};
 
 const STATUS_LABEL: Record<string, string> = {
   open: 'Open',
@@ -52,95 +54,176 @@ export function FindingsPage() {
 
   if (id) return <FindingDetail findingId={id} />;
 
+  const totalPages = Math.ceil((meta?.total ?? 0) / (meta?.per_page ?? 25));
+
   return (
-    <div>
-      <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>Findings</h2>
+    <Box>
+      <Typography variant="h5" sx={{ mb: 2 }}>Findings</Typography>
 
       {/* Filter Bar */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input type="text" placeholder="Search CVE or title..." value={q}
+      <Stack direction="row" spacing={1.5} sx={{ mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+        <TextField
+          size="small"
+          placeholder="Search CVE or title..."
+          value={q}
           onChange={(e) => { setQ(e.target.value); setPage(1); }}
-          style={{ padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13, width: 220 }} />
-        <select value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(1); }}
-          style={selectStyle}><option value="">All Severities</option>
-          {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-          style={selectStyle}><option value="">All Statuses</option>
-          {STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-        </select>
-        <select value={source} onChange={(e) => { setSource(e.target.value); setPage(1); }}
-          style={selectStyle}><option value="">All Sources</option>
-          {SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+          sx={{ width: 260 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
+            ),
+          }}
+        />
+        <Select
+          size="small"
+          value={severity}
+          onChange={(e) => { setSeverity(e.target.value); setPage(1); }}
+          displayEmpty
+          sx={{ minWidth: 150 }}
+        >
+          <MenuItem value="">All Severities</MenuItem>
+          {SEVERITIES.map((s) => <MenuItem key={s} value={s} sx={{ textTransform: 'capitalize' }}>{s}</MenuItem>)}
+        </Select>
+        <Select
+          size="small"
+          value={status}
+          onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+          displayEmpty
+          sx={{ minWidth: 150 }}
+        >
+          <MenuItem value="">All Statuses</MenuItem>
+          {STATUSES.map((s) => <MenuItem key={s} value={s}>{STATUS_LABEL[s]}</MenuItem>)}
+        </Select>
+        <Select
+          size="small"
+          value={source}
+          onChange={(e) => { setSource(e.target.value); setPage(1); }}
+          displayEmpty
+          sx={{ minWidth: 150 }}
+        >
+          <MenuItem value="">All Sources</MenuItem>
+          {SOURCES.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+        </Select>
         {(severity || status || source || q) && (
-          <button onClick={() => { setSeverity(''); setStatus(''); setSource(''); setQ(''); setPage(1); }}
-            style={{ fontSize: 12, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer' }}>Clear filters</button>
+          <Button
+            size="small"
+            startIcon={<ClearIcon />}
+            onClick={() => { setSeverity(''); setStatus(''); setSource(''); setQ(''); setPage(1); }}
+          >
+            Clear filters
+          </Button>
         )}
-      </div>
+      </Stack>
 
       {/* Table */}
-      <div style={{ background: '#fff', borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid #e5e7eb', background: '#f9fafb' }}>
-              <SortTh label="Severity" col="severity" cur={sort} ord={order} onSort={toggleSort} />
-              <th style={thStyle}>Title</th>
-              <th style={thStyle}>Source</th>
-              <th style={thStyle}>CVE</th>
-              <th style={thStyle}>Status</th>
-              <SortTh label="First Seen" col="first_seen_at" cur={sort} ord={order} onSort={toggleSort} />
-              <SortTh label="CVSS" col="cvss_score" cur={sort} ord={order} onSort={toggleSort} />
-            </tr>
-          </thead>
-          <tbody>
+      <TableContainer component={Paper}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <SortableCell label="Severity" col="severity" cur={sort} ord={order} onSort={toggleSort} />
+              <TableCell>Title</TableCell>
+              <TableCell>Source</TableCell>
+              <TableCell>CVE</TableCell>
+              <TableCell>Status</TableCell>
+              <SortableCell label="First Seen" col="first_seen_at" cur={sort} ord={order} onSort={toggleSort} />
+              <SortableCell label="CVSS" col="cvss_score" cur={sort} ord={order} onSort={toggleSort} align="right" />
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {findings.isLoading ? (
-              <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#999' }}>Loading...</td></tr>
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: 7 }).map((__, j) => (
+                    <TableCell key={j}><Skeleton variant="text" /></TableCell>
+                  ))}
+                </TableRow>
+              ))
             ) : !data?.length ? (
-              <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#999' }}>No findings match your filters</td></tr>
-            ) : data.map((f) => {
-              const badge = SEVERITY_BADGE[f.severity] ?? SEVERITY_BADGE.info;
-              return (
-                <tr key={f.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={tdStyle}><span style={{ background: badge.bg, color: badge.color, padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, textTransform: 'uppercase' }}>{f.severity}</span></td>
-                  <td style={tdStyle}><Link to={`/findings/${f.id}`} style={{ color: '#111', textDecoration: 'none' }}>{f.title.length > 55 ? f.title.slice(0, 52) + '...' : f.title}</Link></td>
-                  <td style={{ ...tdStyle, color: '#666' }}>{f.source}</td>
-                  <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 12 }}>{f.cveId ?? '-'}</td>
-                  <td style={tdStyle}><StatusBadge status={f.status} /></td>
-                  <td style={{ ...tdStyle, color: '#666', fontSize: 12 }}>{new Date(f.firstSeenAt).toLocaleDateString()}</td>
-                  <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{f.cvssScore ?? '-'}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              <TableRow>
+                <TableCell colSpan={7} sx={{ py: 5, textAlign: 'center', color: 'text.secondary' }}>
+                  No findings match your filters
+                </TableCell>
+              </TableRow>
+            ) : data.map((f) => (
+              <TableRow key={f.id} hover>
+                <TableCell>
+                  <Chip
+                    label={f.severity}
+                    size="small"
+                    sx={{
+                      bgcolor: SEVERITY_COLORS[f.severity] ?? SEVERITY_COLORS.info,
+                      color: '#fff',
+                      textTransform: 'uppercase',
+                    }}
+                  />
+                </TableCell>
+                <TableCell>
+                  <Box
+                    component={Link}
+                    to={`/findings/${f.id}`}
+                    sx={{ color: 'text.primary', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+                  >
+                    {f.title.length > 55 ? f.title.slice(0, 52) + '...' : f.title}
+                  </Box>
+                </TableCell>
+                <TableCell sx={{ color: 'text.secondary' }}>{f.source}</TableCell>
+                <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{f.cveId ?? '-'}</TableCell>
+                <TableCell>
+                  <Chip
+                    label={STATUS_LABEL[f.status] ?? f.status}
+                    size="small"
+                    variant="outlined"
+                    sx={{
+                      borderColor: STATUS_COLORS[f.status] ?? STATUS_COLORS.open,
+                      color: STATUS_COLORS[f.status] ?? STATUS_COLORS.open,
+                    }}
+                  />
+                </TableCell>
+                <TableCell sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
+                  {new Date(f.firstSeenAt).toLocaleDateString()}
+                </TableCell>
+                <TableCell sx={{ textAlign: 'right', fontWeight: 600 }}>{f.cvssScore ?? '-'}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
       {/* Pagination */}
       {meta && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, fontSize: 13, color: '#666' }}>
-          <span>Page {meta.page} of {Math.ceil((meta.total ?? 0) / (meta.per_page ?? 25))}</span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} style={btnStyle(page <= 1)}>Previous</button>
-            <button disabled={page * perPage >= (meta.total ?? 0)} onClick={() => setPage((p) => p + 1)} style={btnStyle(false)}>Next</button>
-          </div>
-        </div>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1.5 }}>
+          <Typography variant="body2" color="text.secondary">
+            Page {meta.page} of {totalPages}
+          </Typography>
+          <Stack direction="row" spacing={1}>
+            <Button size="small" variant="outlined" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              Previous
+            </Button>
+            <Button size="small" variant="outlined" disabled={page * perPage >= (meta.total ?? 0)} onClick={() => setPage((p) => p + 1)}>
+              Next
+            </Button>
+          </Stack>
+        </Stack>
       )}
-    </div>
+    </Box>
   );
 }
 
-const selectStyle: React.CSSProperties = { padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 4, fontSize: 13 };
-const thStyle: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', color: '#666', fontWeight: 500, fontSize: 12, textTransform: 'uppercase' };
-const tdStyle: React.CSSProperties = { padding: '10px 12px' };
-const btnStyle = (disabled: boolean): React.CSSProperties => ({ padding: '4px 12px', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1 });
-
-function SortTh({ label, col, cur, ord, onSort }: { label: string; col: string; cur: string; ord: string; onSort: (c: string) => void }) {
-  return <th style={{ ...thStyle, cursor: 'pointer', userSelect: 'none' }} onClick={() => onSort(col)}>{label} {cur === col ? (ord === 'asc' ? '↑' : '↓') : ''}</th>;
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const c: Record<string, { bg: string; color: string }> = { open: { bg: '#fef2f2', color: '#dc2626' }, in_progress: { bg: '#fffbeb', color: '#ca8a04' }, resolved: { bg: '#f0fdf4', color: '#16a34a' }, suppressed: { bg: '#f5f5f5', color: '#6b7280' }, false_positive: { bg: '#f5f5f5', color: '#6b7280' } };
-  const s = c[status] ?? c.open;
-  return <span style={{ background: s.bg, color: s.color, padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500 }}>{STATUS_LABEL[status] ?? status}</span>;
+function SortableCell({
+  label, col, cur, ord, onSort, align,
+}: {
+  label: string; col: string; cur: string; ord: string; onSort: (c: string) => void; align?: 'right';
+}) {
+  const active = cur === col;
+  return (
+    <TableCell
+      sx={{ cursor: 'pointer', userSelect: 'none', textAlign: align }}
+      onClick={() => onSort(col)}
+    >
+      <Stack direction="row" spacing={0.5} alignItems="center" justifyContent={align === 'right' ? 'flex-end' : 'flex-start'}>
+        <span>{label}</span>
+        {active && (ord === 'asc' ? <ArrowUpwardIcon sx={{ fontSize: 14 }} /> : <ArrowDownwardIcon sx={{ fontSize: 14 }} />)}
+      </Stack>
+    </TableCell>
+  );
 }

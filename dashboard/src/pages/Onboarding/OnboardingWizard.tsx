@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import {
+  Box, Typography, Card, CardContent, Grid, Button, Stack, Chip,
+} from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckIcon from '@mui/icons-material/Check';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import CodeIcon from '@mui/icons-material/Code';
+import DnsIcon from '@mui/icons-material/Dns';
+import HttpsIcon from '@mui/icons-material/Https';
 import { apiGet, apiPost } from '../../api/client.js';
 
 interface OnboardingStatus {
@@ -11,7 +21,7 @@ interface OnboardingStatus {
 const STEPS = [
   {
     key: 'code' as const,
-    icon: '📦',
+    icon: <CodeIcon sx={{ fontSize: 40, color: 'primary.main' }} />,
     title: 'Connect Source Code',
     desc: 'Connect GitHub, GitLab, or Bitbucket to scan your repositories for vulnerabilities and secrets.',
     action: 'Connect Provider',
@@ -19,7 +29,7 @@ const STEPS = [
   },
   {
     key: 'infrastructure' as const,
-    icon: '🖥️',
+    icon: <DnsIcon sx={{ fontSize: 40, color: 'primary.main' }} />,
     title: 'Monitor Servers',
     desc: 'Install the agent on your servers or connect a cloud account (AWS, Azure, GCP, Proxmox) to discover infrastructure.',
     action: 'Set Up',
@@ -28,7 +38,7 @@ const STEPS = [
   },
   {
     key: 'ssl' as const,
-    icon: '🔒',
+    icon: <HttpsIcon sx={{ fontSize: 40, color: 'primary.main' }} />,
     title: 'Monitor Domains',
     desc: 'Add domains to monitor TLS certificates for expiration, weak keys, and chain issues.',
     action: 'Add Domains',
@@ -64,66 +74,92 @@ export function OnboardingWizard() {
   const allDone = status?.steps.code && status?.steps.infrastructure && status?.steps.ssl;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ maxWidth: 800, width: '100%' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 3 }}>
+      <Box sx={{ maxWidth: 800, width: '100%' }}>
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>Welcome to SecurityCentral</h1>
-          <p style={{ fontSize: 15, color: '#666' }}>Let's set up your security monitoring in a few steps.</p>
-        </div>
+        <Box sx={{ textAlign: 'center', mb: 4 }}>
+          <Typography variant="h4" sx={{ mb: 1 }}>Welcome to SecurityCentral</Typography>
+          <Typography variant="body1" color="text.secondary">
+            Let's set up your security monitoring in a few steps.
+          </Typography>
+        </Box>
 
         {/* Step Cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 32 }}>
+        <Grid container spacing={2.5} sx={{ mb: 4 }}>
           {STEPS.map((step) => {
             const done = status?.steps[step.key] ?? false;
             return (
-              <div key={step.key} style={{
-                background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                border: done ? '2px solid #16a34a' : '2px solid transparent',
-                display: 'flex', flexDirection: 'column',
-              }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>{step.icon}</div>
-                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>{step.title}</h3>
-                <p style={{ fontSize: 13, color: '#666', lineHeight: 1.5, flex: 1, marginBottom: 16 }}>{step.desc}</p>
+              <Grid item xs={12} md={4} key={step.key}>
+                <Card sx={{
+                  height: '100%',
+                  border: done ? '2px solid' : '2px solid transparent',
+                  borderColor: done ? 'success.main' : 'transparent',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}>
+                  <CardContent sx={{ display: 'flex', flexDirection: 'column', flex: 1, p: 3 }}>
+                    <Box sx={{ mb: 1.5 }}>{step.icon}</Box>
+                    <Typography variant="h6" sx={{ mb: 1 }}>{step.title}</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5, flex: 1, mb: 2 }}>
+                      {step.desc}
+                    </Typography>
 
-                {done ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#16a34a', fontSize: 13, fontWeight: 500 }}>
-                    <span>✓</span> Complete
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <button onClick={() => navigate(step.link)}
-                      style={{ padding: '10px 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%' }}>
-                      {step.action}
-                    </button>
-                    {step.key === 'infrastructure' && (
-                      <button onClick={handleCopyInstall}
-                        style={{ padding: '8px 16px', background: '#fff', color: '#2563eb', border: '1px solid #2563eb', borderRadius: 6, fontSize: 12, cursor: 'pointer', width: '100%' }}>
-                        {copiedCmd ? '✓ Copied!' : 'Copy Install Command'}
-                      </button>
+                    {done ? (
+                      <Stack direction="row" spacing={0.5} alignItems="center">
+                        <CheckCircleIcon color="success" fontSize="small" />
+                        <Typography variant="body2" color="success.main" sx={{ fontWeight: 500 }}>
+                          Complete
+                        </Typography>
+                      </Stack>
+                    ) : (
+                      <Stack spacing={1}>
+                        <Button variant="contained" fullWidth onClick={() => navigate(step.link)}>
+                          {step.action}
+                        </Button>
+                        {step.key === 'infrastructure' && (
+                          <Button
+                            variant="outlined"
+                            fullWidth
+                            startIcon={copiedCmd ? <CheckIcon /> : <ContentCopyIcon />}
+                            onClick={handleCopyInstall}
+                          >
+                            {copiedCmd ? 'Copied!' : 'Copy Install Command'}
+                          </Button>
+                        )}
+                      </Stack>
                     )}
-                  </div>
-                )}
-              </div>
+                  </CardContent>
+                </Card>
+              </Grid>
             );
           })}
-        </div>
+        </Grid>
 
         {/* Footer */}
-        <div style={{ textAlign: 'center' }}>
+        <Box sx={{ textAlign: 'center' }}>
           {allDone ? (
-            <button onClick={() => completeMutation.mutate()}
-              style={{ padding: '12px 32px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: 'pointer' }}>
-              Go to Dashboard →
-            </button>
+            <Button
+              variant="contained"
+              color="success"
+              size="large"
+              endIcon={<ArrowForwardIcon />}
+              onClick={() => completeMutation.mutate()}
+            >
+              Go to Dashboard
+            </Button>
           ) : (
-            <button onClick={handleSkip} disabled={completeMutation.isPending}
-              style={{ background: 'none', border: 'none', color: '#999', fontSize: 13, cursor: 'pointer', padding: 8 }}>
-              {completeMutation.isPending ? 'Redirecting...' : 'Skip for now — go to dashboard'}
-            </button>
+            <Button
+              variant="text"
+              color="inherit"
+              onClick={handleSkip}
+              disabled={completeMutation.isPending}
+              sx={{ color: 'text.secondary' }}
+            >
+              {completeMutation.isPending ? 'Redirecting...' : 'Skip for now -- go to dashboard'}
+            </Button>
           )}
-        </div>
-      </div>
-    </div>
+        </Box>
+      </Box>
+    </Box>
   );
 }
