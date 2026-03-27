@@ -223,9 +223,9 @@ Dashboard page for managing monitored domains.
 
 **Tasks:**
 
-- [ ] **T-18.3.1** Add React Query hooks — `useMonitoredEndpoints(query)`, `useAddEndpoints()`, `useRemoveEndpoint()`, `useTriggerCheck()` — `size: S`
-- [ ] **T-18.3.2** Implement `DomainMonitoringPage` (`dashboard/src/pages/Monitoring/DomainMonitoring.tsx`) — "Add Domain" form (host + port, bulk add textarea), endpoint list with status indicators (green=healthy, yellow=expiring, red=unhealthy/unreachable), last checked, response time, cert expiry, "Check Now" and "Remove" buttons — `size: M` | `depends: T-18.3.1`
-- [ ] **T-18.3.3** Add route `/monitoring/domains` and sidebar nav item "Monitoring" — `size: S` | `depends: T-18.3.2`
+- [x] **T-18.3.1** Add React Query hooks — `useMonitoredEndpoints(query)`, `useAddEndpoints()`, `useRemoveEndpoint()`, `useTriggerCheck()` — `size: S`
+- [x] **T-18.3.2** Implement `DomainMonitoringPage` (`dashboard/src/pages/Monitoring/DomainMonitoring.tsx`) — "Add Domain" form (host + port, bulk add textarea), endpoint list with status indicators (green=healthy, yellow=expiring, red=unhealthy/unreachable), last checked, response time, cert expiry, "Check Now" and "Remove" buttons — `size: M` | `depends: T-18.3.1`
+- [x] **T-18.3.3** Add route `/monitoring/domains` and sidebar nav item "Monitoring" — `size: S` | `depends: T-18.3.2`
 
 ### Story 18.4: Domain Monitoring Tests
 

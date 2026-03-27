@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { path: '/assets/servers', label: 'Servers', icon: '🖥️' },
   { path: '/assets/certificates', label: 'Certificates', icon: '🔒' },
   { path: '/infrastructure/coverage', label: 'Coverage', icon: '☁️' },
+  { path: '/monitoring/domains', label: 'Monitoring', icon: '📡' },
   { path: '/scans', label: 'Scans', icon: '⚡' },
   { path: '/integrations', label: 'Integrations', icon: '🔗' },
   { path: '/settings', label: 'Settings', icon: '⚙️' },

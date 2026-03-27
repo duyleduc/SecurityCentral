@@ -15,6 +15,7 @@ import { IntegrationsPage } from './pages/Integrations/index.js';
 import { RepoSelectionPage } from './pages/Integrations/RepoSelection.js';
 import { SettingsPage } from './pages/Settings/index.js';
 import { InfrastructureCoveragePage } from './pages/Infrastructure/CoverageDashboard.js';
+import { DomainMonitoringPage } from './pages/Monitoring/DomainMonitoring.js';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,6 +54,7 @@ export function App() {
             <Route path="/assets/certificates" element={<ProtectedLayout><AssetsPage tab="certificates" /></ProtectedLayout>} />
             <Route path="/scans" element={<ProtectedLayout><ScansPage /></ProtectedLayout>} />
             <Route path="/infrastructure/coverage" element={<ProtectedLayout><InfrastructureCoveragePage /></ProtectedLayout>} />
+            <Route path="/monitoring/domains" element={<ProtectedLayout><DomainMonitoringPage /></ProtectedLayout>} />
             <Route path="/integrations" element={<ProtectedLayout><IntegrationsPage /></ProtectedLayout>} />
             <Route path="/integrations/:provider/repos" element={<ProtectedLayout><RepoSelectionPage /></ProtectedLayout>} />
             <Route path="/settings" element={<ProtectedLayout><SettingsPage /></ProtectedLayout>} />

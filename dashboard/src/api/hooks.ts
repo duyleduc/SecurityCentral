@@ -402,3 +402,52 @@ export function useTriggerDiscovery() {
     },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Domain Monitoring
+// ---------------------------------------------------------------------------
+
+export interface MonitoredEndpoint {
+  id: string;
+  host: string;
+  port: number;
+  label: string | null;
+  checkInterval: string;
+  status: string;
+  lastCheckedAt: string | null;
+  lastStatus: string | null;
+  lastResponseMs: number | null;
+  createdAt: string;
+}
+
+export function useMonitoredEndpoints(params?: { page?: number; per_page?: number; status?: string }) {
+  return useQuery({
+    queryKey: ['monitored-endpoints', params],
+    queryFn: () => apiGet<MonitoredEndpoint[]>('/monitoring/domains', toStringParams(params as PaginatedParams)),
+  });
+}
+
+export function useAddEndpoints() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { endpoints: Array<{ host: string; port?: number; label?: string }>; checkInterval?: string }) =>
+      apiPost<{ created: number; errors: string[] }>('/monitoring/domains', data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['monitored-endpoints'] }),
+  });
+}
+
+export function useRemoveEndpoint() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/monitoring/domains/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['monitored-endpoints'] }),
+  });
+}
+
+export function useTriggerEndpointCheck() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiPost(`/monitoring/domains/${id}/check`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['monitored-endpoints'] }),
+  });
+}
