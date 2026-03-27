@@ -68,6 +68,7 @@ model Organization {
   scans          Scan[]
   findings       Finding[]
   integrations   Integration[]
+  cloudResources CloudResource[]
 
   @@map("organizations")
 }
@@ -154,7 +155,8 @@ model Server {
   organization Organization  @relation(fields: [orgId], references: [id])
   scans        Scan[]
   findings     Finding[]
-  certificates Certificate[] @relation("SourceAsset")
+  certificates   Certificate[]  @relation("SourceAsset")
+  cloudResources CloudResource[]
 
   @@map("servers")
 }
@@ -266,7 +268,8 @@ model Integration {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  organization Organization @relation(fields: [orgId], references: [id])
+  organization   Organization    @relation(fields: [orgId], references: [id])
+  cloudResources CloudResource[]
 
   @@unique([orgId, provider])
   @@map("integrations")
@@ -353,4 +356,30 @@ model AuditLog {
   @@index([orgId, entityType, entityId], map: "idx_audit_logs_entity")
   @@index([orgId, createdAt], map: "idx_audit_logs_org_time")
   @@map("audit_logs")
+}
+
+// ─── T-17.1.1: Cloud Resource Discovery Cache ────────────────
+
+model CloudResource {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId         String    @map("org_id") @db.Uuid
+  integrationId String    @map("integration_id") @db.Uuid
+  provider      String    // aws | azure | gcp | proxmox
+  resourceType  String    @map("resource_type") // ec2 | vm | container
+  resourceId    String    @map("resource_id") // provider-specific instance ID
+  hostname      String?
+  ipAddress     String?   @map("ip_address")
+  region        String?
+  status        String?   // running | stopped | terminated
+  osInfo        String?   @map("os_info")
+  serverId      String?   @map("server_id") @db.Uuid
+  lastSyncedAt  DateTime  @default(now()) @map("last_synced_at") @db.Timestamptz()
+
+  organization  Organization @relation(fields: [orgId], references: [id])
+  integration   Integration  @relation(fields: [integrationId], references: [id])
+  server        Server?      @relation(fields: [serverId], references: [id])
+
+  @@unique([orgId, provider, resourceId])
+  @@index([serverId], map: "idx_cloud_resources_server")
+  @@map("cloud_resources")
 }
