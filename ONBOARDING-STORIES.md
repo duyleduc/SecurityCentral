@@ -44,14 +44,14 @@ Endpoints to discover repos from connected providers and sync selected ones.
 
 **Tasks:**
 
-- [ ] **T-16.2.1** Implement GitHub repo discovery — add `listGitHubRepos(orgId, { search?, page, per_page })` to integrations service; fetch from GitHub API via `GitHubClient.forInstallation()`, cross-reference with `repositories` table to annotate `synced: boolean` per repo — `size: M` | `depends: T-16.1.3`
-- [ ] **T-16.2.2** Implement GitLab repo discovery — add `listGitLabRepos(orgId, { search?, page, per_page })` to integrations service; use `GitLabClient` with stored token and base URL — `size: M` | `depends: T-16.1.1`
-- [ ] **T-16.2.3** Implement GitHub repo sync — add `syncGitHubRepos(orgId, repoIds[])`: for each repo, fetch details from GitHub API, upsert into `repositories` table, configure webhook; return created/updated repos — `size: M` | `depends: T-16.2.1`
-- [ ] **T-16.2.4** Implement GitHub repo unsync — add `unsyncGitHubRepo(orgId, repoProviderId)`: remove webhook, mark repo as archived (do NOT delete — preserve historical findings for compliance) — `size: S` | `depends: T-16.2.3`
-- [ ] **T-16.2.5** Implement GitLab repo sync + unsync — mirror GitHub pattern using `GitLabClient.createWebhook()` / `deleteWebhook()` — `size: M` | `depends: T-16.2.2`
-- [ ] **T-16.2.6** Create Zod validation schemas (`integrations.validation.ts`) — `ListProviderReposQuery` (search, page, per_page), `SyncReposBody` (repo_ids string[]), `UnsyncRepoParams` (id string) — `size: S`
-- [ ] **T-16.2.7** Add router endpoints — `GET /integrations/github/repos`, `POST /integrations/github/repos/sync`, `DELETE /integrations/github/repos/:id/sync`; same three for GitLab; all require auth + `manage_integrations` permission — `size: M` | `depends: T-16.2.3, T-16.2.5, T-16.2.6`
-- [ ] **T-16.2.8** Update Swagger spec — add all 6 new endpoints to `swagger.ts` with schemas and examples — `size: S` | `depends: T-16.2.7`
+- [x] **T-16.2.1** Implement GitHub repo discovery — add `listGitHubRepos(orgId, { search?, page, per_page })` to integrations service; fetch from GitHub API via `GitHubClient.forInstallation()`, cross-reference with `repositories` table to annotate `synced: boolean` per repo — `size: M` | `depends: T-16.1.3`
+- [x] **T-16.2.2** Implement GitLab repo discovery — add `listGitLabRepos(orgId, { search?, page, per_page })` to integrations service; use `GitLabClient` with stored token and base URL — `size: M` | `depends: T-16.1.1`
+- [x] **T-16.2.3** Implement GitHub repo sync — add `syncGitHubRepos(orgId, repoIds[])`: for each repo, fetch details from GitHub API, upsert into `repositories` table, configure webhook; return created/updated repos — `size: M` | `depends: T-16.2.1`
+- [x] **T-16.2.4** Implement GitHub repo unsync — add `unsyncGitHubRepo(orgId, repoProviderId)`: remove webhook, mark repo as archived (do NOT delete — preserve historical findings for compliance) — `size: S` | `depends: T-16.2.3`
+- [x] **T-16.2.5** Implement GitLab repo sync + unsync — mirror GitHub pattern using `GitLabClient.createWebhook()` / `deleteWebhook()` — `size: M` | `depends: T-16.2.2`
+- [x] **T-16.2.6** Create Zod validation schemas (`integrations.validation.ts`) — `ListProviderReposQuery` (search, page, per_page), `SyncReposBody` (repo_ids string[]), `UnsyncRepoParams` (id string) — `size: S`
+- [x] **T-16.2.7** Add router endpoints — `GET /integrations/github/repos`, `POST /integrations/github/repos/sync`, `DELETE /integrations/github/repos/:id/sync`; same three for GitLab; all require auth + `manage_integrations` permission — `size: M` | `depends: T-16.2.3, T-16.2.5, T-16.2.6`
+- [x] **T-16.2.8** Update Swagger spec — add all 6 new endpoints to `swagger.ts` with schemas and examples — `size: S` | `depends: T-16.2.7`
 
 ### Story 16.3: Repository Selection UI
 

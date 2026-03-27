@@ -275,8 +275,26 @@ const spec = {
     '/api/v1/integrations/github': {
       post: { tags: ['Integrations'], summary: 'Connect GitHub App', operationId: 'createGitHubIntegration', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['installationId', 'appId'], properties: { installationId: { type: 'string' }, appId: { type: 'string' } } } } } }, responses: { 201: r('Integration'), 409: errRef() } },
     },
+    '/api/v1/integrations/github/repos': {
+      get: { tags: ['Integrations'], summary: 'List discoverable GitHub repos', operationId: 'listGitHubRepos', security: [{ BearerAuth: [] }], parameters: [q('search', 'Filter by name'), qInt('page', 1), qInt('per_page', 50)], responses: { 200: { description: 'OK' } } },
+    },
+    '/api/v1/integrations/github/repos/sync': {
+      post: { tags: ['Integrations'], summary: 'Sync selected GitHub repos', operationId: 'syncGitHubRepos', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['repo_ids'], properties: { repo_ids: { type: 'array', items: { type: 'string' } } } } } } }, responses: { 201: { description: 'Sync result' }, 404: errRef() } },
+    },
+    '/api/v1/integrations/github/repos/{id}/sync': {
+      delete: { tags: ['Integrations'], summary: 'Unsync a GitHub repo', operationId: 'unsyncGitHubRepo', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' }, description: 'GitHub provider ID' }], responses: { 204: { description: 'Unsynced' }, 404: errRef() } },
+    },
     '/api/v1/integrations/github/webhook': {
       post: { tags: ['Integrations'], summary: 'GitHub webhook receiver', operationId: 'githubWebhook', description: 'Receives push and installation events. Verified via X-Hub-Signature-256.', responses: { 200: { description: 'OK' }, 401: errRef() } },
+    },
+    '/api/v1/integrations/gitlab/repos': {
+      get: { tags: ['Integrations'], summary: 'List discoverable GitLab repos', operationId: 'listGitLabRepos', security: [{ BearerAuth: [] }], parameters: [q('search', 'Filter by name'), qInt('page', 1), qInt('per_page', 50)], responses: { 200: { description: 'OK' } } },
+    },
+    '/api/v1/integrations/gitlab/repos/sync': {
+      post: { tags: ['Integrations'], summary: 'Sync selected GitLab repos', operationId: 'syncGitLabRepos', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['repo_ids'], properties: { repo_ids: { type: 'array', items: { type: 'string' } } } } } } }, responses: { 201: { description: 'Sync result' }, 404: errRef() } },
+    },
+    '/api/v1/integrations/gitlab/repos/{id}/sync': {
+      delete: { tags: ['Integrations'], summary: 'Unsync a GitLab repo', operationId: 'unsyncGitLabRepo', security: [{ BearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' }, description: 'GitLab project ID' }], responses: { 204: { description: 'Unsynced' }, 404: errRef() } },
     },
     '/api/v1/integrations/gitlab': {
       post: { tags: ['Integrations'], summary: 'Connect GitLab', operationId: 'createGitLabIntegration', security: [{ BearerAuth: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['accessToken'], properties: { accessToken: { type: 'string' } } } } } }, responses: { 201: r('Integration'), 409: errRef() } },

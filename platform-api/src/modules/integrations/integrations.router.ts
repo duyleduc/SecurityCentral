@@ -8,6 +8,7 @@ import { requirePermission } from '../../middleware/rbac.js';
 import { env } from '../../lib/env.js';
 import { verifyWebhookSignature } from '../../lib/github.js';
 import * as integrationsService from './integrations.service.js';
+import { ListProviderReposQuery, SyncReposBody } from './integrations.validation.js';
 import { z } from 'zod';
 
 export const integrationsRouter = Router();
@@ -185,6 +186,90 @@ integrationsRouter.get(
     } catch (err) {
       next(err);
     }
+  },
+);
+
+// ===========================================================================
+// REPO DISCOVERY — GitHub
+// ===========================================================================
+
+integrationsRouter.get(
+  '/github/repos',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ query: ListProviderReposQuery }),
+  async (req, res, next) => {
+    try {
+      const result = await integrationsService.listGitHubRepos(req.auth!.orgId, req.query as any);
+      res.json({ data: result.repos, meta: { total: result.total, page: (req.query as any).page ?? 1, per_page: (req.query as any).per_page ?? 50 }, errors: [] });
+    } catch (err) { next(err); }
+  },
+);
+
+integrationsRouter.post(
+  '/github/repos/sync',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ body: SyncReposBody }),
+  async (req, res, next) => {
+    try {
+      const result = await integrationsService.syncGitHubRepos(req.auth!.orgId, req.body.repo_ids);
+      res.status(201).json(successEnvelope(result));
+    } catch (err) { next(err); }
+  },
+);
+
+integrationsRouter.delete(
+  '/github/repos/:id/sync',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  async (req, res, next) => {
+    try {
+      await integrationsService.unsyncGitHubRepo(req.auth!.orgId, req.params.id);
+      res.status(204).send();
+    } catch (err) { next(err); }
+  },
+);
+
+// ===========================================================================
+// REPO DISCOVERY — GitLab
+// ===========================================================================
+
+integrationsRouter.get(
+  '/gitlab/repos',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ query: ListProviderReposQuery }),
+  async (req, res, next) => {
+    try {
+      const result = await integrationsService.listGitLabRepos(req.auth!.orgId, req.query as any);
+      res.json({ data: result.repos, meta: { total: result.total, page: (req.query as any).page ?? 1, per_page: (req.query as any).per_page ?? 50 }, errors: [] });
+    } catch (err) { next(err); }
+  },
+);
+
+integrationsRouter.post(
+  '/gitlab/repos/sync',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ body: SyncReposBody }),
+  async (req, res, next) => {
+    try {
+      const result = await integrationsService.syncGitLabRepos(req.auth!.orgId, req.body.repo_ids);
+      res.status(201).json(successEnvelope(result));
+    } catch (err) { next(err); }
+  },
+);
+
+integrationsRouter.delete(
+  '/gitlab/repos/:id/sync',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  async (req, res, next) => {
+    try {
+      await integrationsService.unsyncGitLabRepo(req.auth!.orgId, req.params.id);
+      res.status(204).send();
+    } catch (err) { next(err); }
   },
 );
 
