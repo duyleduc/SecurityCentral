@@ -10,10 +10,11 @@ describe('BullMQ Queues', () => {
     'vulndb-sync',
     'github-pr',
     'es-sync',
+    'cloud-discovery',
   ];
 
-  it('should define all 6 required queues', () => {
-    expect(allQueues).toHaveLength(6);
+  it('should define all required queues', () => {
+    expect(allQueues).toHaveLength(7);
   });
 
   it.each(expectedNames)('should include the "%s" queue', (name) => {

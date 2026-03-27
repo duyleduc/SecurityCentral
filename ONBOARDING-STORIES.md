@@ -115,12 +115,12 @@ API clients for discovering instances from AWS, Azure, and GCP.
 
 **Tasks:**
 
-- [ ] **T-17.2.1** Define shared `CloudDiscoveryClient` interface + `DiscoveredResource` type (`platform-api/src/lib/cloud/types.ts`) — interface: `discoverInstances(): Promise<DiscoveredResource[]>`; type: `{ resourceId, hostname, ipAddress, region, status, osInfo, resourceType }` — `size: S`
-- [ ] **T-17.2.2** Implement AWS discovery client (`src/lib/cloud/aws.ts`) — uses `@aws-sdk/client-ec2` `DescribeInstances`; supports access key or IAM role assumption via `@aws-sdk/client-sts`; returns normalized resources — `size: M`
-- [ ] **T-17.2.3** Implement Azure discovery client (`src/lib/cloud/azure.ts`) — uses `@azure/arm-compute` + `@azure/identity`; lists VMs across all resource groups; service principal auth — `size: M`
-- [ ] **T-17.2.4** Implement GCP discovery client (`src/lib/cloud/gcp.ts`) — uses `@google-cloud/compute`; lists instances across all zones; service account auth — `size: M`
-- [ ] **T-17.2.5** Implement factory function `createCloudClient(provider, config)` in `types.ts` — routes to correct client implementation — `size: S` | `depends: T-17.2.2, T-17.2.3, T-17.2.4`
-- [ ] **T-17.2.6** Install npm dependencies — `@aws-sdk/client-ec2`, `@aws-sdk/client-sts`, `@azure/arm-compute`, `@azure/identity`, `@google-cloud/compute` — `size: S`
+- [x] **T-17.2.1** Define shared `CloudDiscoveryClient` interface + `DiscoveredResource` type (`platform-api/src/lib/cloud/types.ts`) — interface: `discoverInstances(): Promise<DiscoveredResource[]>`; type: `{ resourceId, hostname, ipAddress, region, status, osInfo, resourceType }` — `size: S`
+- [x] **T-17.2.2** Implement AWS discovery client (`src/lib/cloud/aws.ts`) — uses `@aws-sdk/client-ec2` `DescribeInstances`; supports access key or IAM role assumption via `@aws-sdk/client-sts`; returns normalized resources — `size: M`
+- [x] **T-17.2.3** Implement Azure discovery client (`src/lib/cloud/azure.ts`) — uses `@azure/arm-compute` + `@azure/identity`; lists VMs across all resource groups; service principal auth — `size: M`
+- [x] **T-17.2.4** Implement GCP discovery client (`src/lib/cloud/gcp.ts`) — uses `@google-cloud/compute`; lists instances across all zones; service account auth — `size: M`
+- [x] **T-17.2.5** Implement factory function `createCloudClient(provider, config)` in `types.ts` — routes to correct client implementation — `size: S` | `depends: T-17.2.2, T-17.2.3, T-17.2.4`
+- [x] **T-17.2.6** Install npm dependencies — `@aws-sdk/client-ec2`, `@aws-sdk/client-sts`, `@azure/arm-compute`, `@azure/identity`, `@google-cloud/compute` — `size: S`
 
 ### Story 17.3: Cloud Discovery API
 
@@ -135,10 +135,10 @@ Service and endpoints for connecting cloud accounts and discovering resources.
 
 **Tasks:**
 
-- [ ] **T-17.3.1** Implement cloud discovery service (`platform-api/src/modules/integrations/cloud-discovery.service.ts`) — `connectCloudProvider(orgId, provider, config)`: validate credentials via test discovery, create integration; `discoverResources(orgId, provider)`: fetch instances, upsert `cloud_resources`, match agents (by cloudInstanceId → hostname → IP); `listDiscoveredResources(orgId, provider, query)`: paginated with joined server data; `getUnmonitoredServers(orgId)`: `WHERE serverId IS NULL`; `getCoverageStats(orgId)`: aggregate by provider+region — `size: L` | `depends: T-17.1.3, T-17.2.5`
-- [ ] **T-17.3.2** Add cloud discovery router endpoints — `POST /integrations/aws` (connect AWS), `POST /integrations/azure`, `POST /integrations/gcp`, `GET /integrations/:provider/resources` (paginated, filterable by region/status), `GET /servers/unmonitored`, `POST /integrations/:provider/discover` (trigger manual re-discovery); Zod validation for all — `size: M` | `depends: T-17.3.1`
-- [ ] **T-17.3.3** Add BullMQ `cloud-discovery` queue + processor — repeatable job every 6h; iterates all active cloud integrations, runs `discoverResources` for each; stagger per-integration to respect rate limits — `size: M` | `depends: T-17.3.1`
-- [ ] **T-17.3.4** Update Swagger spec — add all cloud discovery endpoints with schemas — `size: S` | `depends: T-17.3.2`
+- [x] **T-17.3.1** Implement cloud discovery service (`platform-api/src/modules/integrations/cloud-discovery.service.ts`) — `connectCloudProvider(orgId, provider, config)`: validate credentials via test discovery, create integration; `discoverResources(orgId, provider)`: fetch instances, upsert `cloud_resources`, match agents (by cloudInstanceId → hostname → IP); `listDiscoveredResources(orgId, provider, query)`: paginated with joined server data; `getUnmonitoredServers(orgId)`: `WHERE serverId IS NULL`; `getCoverageStats(orgId)`: aggregate by provider+region — `size: L` | `depends: T-17.1.3, T-17.2.5`
+- [x] **T-17.3.2** Add cloud discovery router endpoints — `POST /integrations/aws` (connect AWS), `POST /integrations/azure`, `POST /integrations/gcp`, `GET /integrations/:provider/resources` (paginated, filterable by region/status), `GET /servers/unmonitored`, `POST /integrations/:provider/discover` (trigger manual re-discovery); Zod validation for all — `size: M` | `depends: T-17.3.1`
+- [x] **T-17.3.3** Add BullMQ `cloud-discovery` queue + processor — repeatable job every 6h; iterates all active cloud integrations, runs `discoverResources` for each; stagger per-integration to respect rate limits — `size: M` | `depends: T-17.3.1`
+- [x] **T-17.3.4** Update Swagger spec — add all cloud discovery endpoints with schemas — `size: S` | `depends: T-17.3.2`
 
 ### Story 17.4: Infrastructure Coverage UI
 

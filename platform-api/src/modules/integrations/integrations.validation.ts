@@ -28,3 +28,37 @@ export const UnsyncRepoParams = z.object({
   provider: z.enum(['github', 'gitlab']),
   id: z.string().min(1),
 });
+
+// ---------------------------------------------------------------------------
+// Cloud discovery
+// ---------------------------------------------------------------------------
+
+export const ConnectAwsBody = z.object({
+  region: z.string().min(1),
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
+  roleArn: z.string().optional(),
+});
+
+export const ConnectAzureBody = z.object({
+  tenantId: z.string().min(1),
+  clientId: z.string().min(1),
+  clientSecret: z.string().min(1),
+  subscriptionId: z.string().optional(),
+});
+
+export const ConnectGcpBody = z.object({
+  projectId: z.string().min(1),
+  serviceAccountKey: z.string().optional(),
+});
+
+export const CloudProviderParam = z.object({
+  provider: z.enum(['aws', 'azure', 'gcp', 'proxmox']),
+});
+
+export const ListCloudResourcesQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  per_page: z.coerce.number().int().min(1).max(200).default(50),
+  region: z.string().optional(),
+  status: z.string().optional(),
+});

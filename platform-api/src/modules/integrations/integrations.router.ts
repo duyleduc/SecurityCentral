@@ -8,7 +8,8 @@ import { requirePermission } from '../../middleware/rbac.js';
 import { env } from '../../lib/env.js';
 import { verifyWebhookSignature } from '../../lib/github.js';
 import * as integrationsService from './integrations.service.js';
-import { ListProviderReposQuery, SyncReposBody } from './integrations.validation.js';
+import * as cloudDiscovery from './cloud-discovery.service.js';
+import { ListProviderReposQuery, SyncReposBody, ConnectAwsBody, ConnectAzureBody, ConnectGcpBody, CloudProviderParam, ListCloudResourcesQuery } from './integrations.validation.js';
 import { z } from 'zod';
 
 export const integrationsRouter = Router();
@@ -269,6 +270,106 @@ integrationsRouter.delete(
     try {
       await integrationsService.unsyncGitLabRepo(req.auth!.orgId, req.params.id);
       res.status(204).send();
+    } catch (err) { next(err); }
+  },
+);
+
+// ===========================================================================
+// CLOUD DISCOVERY
+// ===========================================================================
+
+// POST /integrations/aws — connect AWS
+integrationsRouter.post(
+  '/aws',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ body: ConnectAwsBody }),
+  async (req, res, next) => {
+    try {
+      const result = await cloudDiscovery.connectCloudProvider(req.auth!.orgId, 'aws', req.body);
+      res.status(201).json(successEnvelope(result));
+    } catch (err) { next(err); }
+  },
+);
+
+// POST /integrations/azure — connect Azure
+integrationsRouter.post(
+  '/azure',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ body: ConnectAzureBody }),
+  async (req, res, next) => {
+    try {
+      const result = await cloudDiscovery.connectCloudProvider(req.auth!.orgId, 'azure', req.body);
+      res.status(201).json(successEnvelope(result));
+    } catch (err) { next(err); }
+  },
+);
+
+// POST /integrations/gcp — connect GCP
+integrationsRouter.post(
+  '/gcp',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ body: ConnectGcpBody }),
+  async (req, res, next) => {
+    try {
+      const result = await cloudDiscovery.connectCloudProvider(req.auth!.orgId, 'gcp', req.body);
+      res.status(201).json(successEnvelope(result));
+    } catch (err) { next(err); }
+  },
+);
+
+// GET /integrations/:provider/resources — list discovered resources
+integrationsRouter.get(
+  '/:provider/resources',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ params: CloudProviderParam, query: ListCloudResourcesQuery }),
+  async (req, res, next) => {
+    try {
+      const result = await cloudDiscovery.listDiscoveredResources(req.auth!.orgId, req.params.provider, req.query as any);
+      res.json({ data: result.data, meta: result.meta, errors: [] });
+    } catch (err) { next(err); }
+  },
+);
+
+// POST /integrations/:provider/discover — trigger manual re-discovery
+integrationsRouter.post(
+  '/:provider/discover',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ params: CloudProviderParam }),
+  async (req, res, next) => {
+    try {
+      const count = await cloudDiscovery.discoverResources(req.auth!.orgId, req.params.provider);
+      res.json(successEnvelope({ discovered: count }));
+    } catch (err) { next(err); }
+  },
+);
+
+// GET /servers/unmonitored — cloud instances without agents
+integrationsRouter.get(
+  '/servers/unmonitored',
+  requireAuth,
+  requirePermission('view_findings'),
+  async (req, res, next) => {
+    try {
+      const resources = await cloudDiscovery.getUnmonitoredServers(req.auth!.orgId);
+      res.json(successEnvelope(resources));
+    } catch (err) { next(err); }
+  },
+);
+
+// GET /coverage/stats — coverage overview
+integrationsRouter.get(
+  '/coverage/stats',
+  requireAuth,
+  requirePermission('view_findings'),
+  async (req, res, next) => {
+    try {
+      const stats = await cloudDiscovery.getCoverageStats(req.auth!.orgId);
+      res.json(successEnvelope(stats));
     } catch (err) { next(err); }
   },
 );
