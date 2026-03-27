@@ -201,17 +201,21 @@ async function runGoBinary(bin: string, workDir: string, scanType: string, log: 
 async function runBuiltinScanner(workDir: string, scanType: string, log: ReturnType<typeof jobLogger>): Promise<ScanFinding[]> {
   const findings: ScanFinding[] = [];
 
-  // Dependency scan
+  // 1. Dependency scan (SCA) — npm audit, pip-audit, composer audit, bundle-audit
   if (scanType !== 'code_secrets') {
     const depFindings = await scanDependencies(workDir, log);
     findings.push(...depFindings);
   }
 
-  // Secret scan
-  if (scanType !== 'code_dependencies' || scanType === 'code_secrets') {
-    const secretFindings = await scanSecrets(workDir, log);
-    findings.push(...secretFindings);
+  // 2. SAST scan — Semgrep for code-level vulnerabilities (SQL injection, XSS, etc.)
+  if (scanType !== 'code_secrets') {
+    const sastFindings = await runSemgrep(workDir, log);
+    findings.push(...sastFindings);
   }
+
+  // 3. Secret scan — regex patterns for hardcoded credentials
+  const secretFindings = await scanSecrets(workDir, log);
+  findings.push(...secretFindings);
 
   return findings;
 }
@@ -499,6 +503,212 @@ function mapBundleSeverity(s: string): ScanFinding['severity'] {
     case 'low': return 'low';
     default: return 'high';
   }
+}
+
+// ===========================================================================
+// SAST — Semgrep (static application security testing)
+// ===========================================================================
+
+/**
+ * Runs Semgrep with security-focused rulesets.
+ * Falls back gracefully if semgrep is not installed.
+ *
+ * Rulesets used:
+ *   p/owasp-top-ten     — OWASP Top 10 (SQL injection, XSS, SSRF, etc.)
+ *   p/security-audit    — General security patterns
+ *   p/secrets           — Hardcoded secrets (overlaps with our regex scanner)
+ *   p/default           — Semgrep recommended rules
+ */
+async function runSemgrep(workDir: string, log: ReturnType<typeof jobLogger>): Promise<ScanFinding[]> {
+  // Check if semgrep is installed
+  try {
+    await execAsync('semgrep --version', { timeout: 5000 });
+  } catch {
+    log.info('Semgrep not installed, skipping SAST scan. Install with: pip install semgrep');
+    return [];
+  }
+
+  log.info('Running Semgrep SAST scan');
+
+  try {
+    // Run semgrep with security rulesets, JSON output, no git tracking
+    const { stdout } = await execAsync(
+      [
+        'semgrep scan',
+        '--config auto',           // auto-detect best rules for the codebase
+        '--json',                  // structured JSON output
+        '--quiet',                 // suppress progress bars
+        '--no-git',                // don't require git
+        '--timeout 60',            // per-rule timeout
+        '--max-target-bytes 1000000', // skip files >1MB
+        `'${workDir}'`,
+      ].join(' '),
+      {
+        timeout: 300_000,  // 5 min total timeout
+        maxBuffer: 50 * 1024 * 1024,
+        env: { ...process.env, SEMGREP_SEND_METRICS: 'off' },
+      },
+    );
+
+    if (!stdout.trim()) {
+      log.info('Semgrep returned no results');
+      return [];
+    }
+
+    const output = JSON.parse(stdout) as SemgrepOutput;
+    const findings = parseSemgrepResults(output, workDir);
+
+    log.info('Semgrep SAST complete', {
+      rulesRun: output.results?.length ?? 0,
+      findings: findings.length,
+      errors: output.errors?.length ?? 0,
+    });
+
+    return findings;
+  } catch (err) {
+    // Semgrep exits non-zero when findings exist — try to parse stdout from error
+    const execErr = err as { stdout?: string; stderr?: string; message: string };
+    if (execErr.stdout) {
+      try {
+        const output = JSON.parse(execErr.stdout) as SemgrepOutput;
+        const findings = parseSemgrepResults(output, workDir);
+        log.info('Semgrep SAST complete (with findings)', { findings: findings.length });
+        return findings;
+      } catch {
+        // JSON parse failed
+      }
+    }
+    log.warn('Semgrep scan failed', { error: (err as Error).message.slice(0, 200) });
+    return [];
+  }
+}
+
+// Semgrep JSON output types
+interface SemgrepOutput {
+  results?: SemgrepResult[];
+  errors?: Array<{ message: string }>;
+  version?: string;
+}
+
+interface SemgrepResult {
+  check_id: string;       // e.g., "javascript.express.security.audit.xss.mustache-escape"
+  path: string;           // file path
+  start: { line: number; col: number };
+  end: { line: number; col: number };
+  extra: {
+    message: string;
+    severity: string;     // ERROR | WARNING | INFO
+    metadata?: {
+      cwe?: string[];               // e.g., ["CWE-79: XSS"]
+      owasp?: string[];             // e.g., ["A7:2017 - Cross-Site Scripting"]
+      confidence?: string;          // HIGH | MEDIUM | LOW
+      impact?: string;              // HIGH | MEDIUM | LOW
+      category?: string;            // security | correctness | performance
+      technology?: string[];        // e.g., ["express", "react"]
+      references?: string[];
+      cve?: string;
+      vulnerability_class?: string[];
+      subcategory?: string[];
+    };
+    lines?: string;       // matched source code
+    fix?: string;         // suggested fix
+  };
+}
+
+function parseSemgrepResults(output: SemgrepOutput, workDir: string): ScanFinding[] {
+  const results = output.results ?? [];
+
+  return results
+    .filter((r) => {
+      // Only include security-relevant findings
+      const cat = r.extra.metadata?.category;
+      const sev = r.extra.severity;
+      return cat === 'security' || sev === 'ERROR' || sev === 'WARNING';
+    })
+    .map((r) => {
+      const relPath = r.path.replace(workDir + '/', '').replace(workDir, '');
+      const meta = r.extra.metadata ?? {};
+      const cweList = meta.cwe ?? [];
+      const owaspList = meta.owasp ?? [];
+
+      return {
+        type: 'sast',
+        severity: mapSemgrepSeverity(r.extra.severity, meta.impact),
+        title: buildSastTitle(r),
+        description: r.extra.message,
+        cve_id: meta.cve || cweList[0]?.match(/CWE-\d+/)?.[0] || undefined,
+        detail: {
+          file: relPath,
+          line: r.start.line,
+          end_line: r.end.line,
+          col: r.start.col,
+          rule_id: r.check_id,
+          cwe: cweList,
+          owasp: owaspList,
+          confidence: meta.confidence,
+          category: meta.category,
+          technology: meta.technology,
+          references: meta.references,
+          matched_code: r.extra.lines?.slice(0, 200),
+          suggested_fix: r.extra.fix,
+          vulnerability_class: meta.vulnerability_class,
+        },
+        remediation: buildSastRemediation(r),
+        auto_fixable: !!r.extra.fix,
+      } satisfies ScanFinding;
+    });
+}
+
+function mapSemgrepSeverity(sev: string, impact?: string): ScanFinding['severity'] {
+  // Use impact if available (more accurate than severity)
+  if (impact) {
+    switch (impact.toUpperCase()) {
+      case 'HIGH': return 'high';
+      case 'MEDIUM': return 'medium';
+      case 'LOW': return 'low';
+    }
+  }
+
+  switch (sev) {
+    case 'ERROR': return 'high';
+    case 'WARNING': return 'medium';
+    case 'INFO': return 'low';
+    default: return 'medium';
+  }
+}
+
+function buildSastTitle(r: SemgrepResult): string {
+  const meta = r.extra.metadata ?? {};
+  const vulnClass = meta.vulnerability_class?.[0];
+  const relPath = r.path.split('/').slice(-2).join('/');
+
+  if (vulnClass) {
+    return `${vulnClass} in ${relPath}:${r.start.line}`;
+  }
+
+  // Extract meaningful name from check_id: "javascript.express.security.audit.xss.foo" → "XSS"
+  const parts = r.check_id.split('.');
+  const ruleName = parts[parts.length - 1].replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return `${ruleName} in ${relPath}:${r.start.line}`;
+}
+
+function buildSastRemediation(r: SemgrepResult): string {
+  const parts: string[] = [];
+
+  if (r.extra.fix) {
+    parts.push(`Suggested fix: ${r.extra.fix}`);
+  }
+
+  if (r.extra.message) {
+    parts.push(r.extra.message);
+  }
+
+  const refs = r.extra.metadata?.references;
+  if (refs?.length) {
+    parts.push(`References: ${refs.slice(0, 3).join(', ')}`);
+  }
+
+  return parts.join('\n') || 'Review the code and apply secure coding practices.';
 }
 
 // --- Secret scanning ---
