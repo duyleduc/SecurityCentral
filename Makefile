@@ -1,4 +1,4 @@
-.PHONY: dev start stop restart status test lint build docker-up docker-down migrate clean
+.PHONY: dev start stop restart status logs logs-api logs-worker logs-dashboard test lint build docker-up docker-down migrate clean
 
 ROOT_DIR := $(shell pwd)
 PID_DIR := $(ROOT_DIR)/.pids
@@ -55,29 +55,26 @@ stop: stop-dashboard stop-worker stop-api
 stop-api:
 	@if [ -f $(API_PID) ]; then \
 		echo "→ Stopping API (PID $$(cat $(API_PID)))..."; \
-		kill $$(cat $(API_PID)) 2>/dev/null || true; \
+		kill -- -$$(cat $(API_PID)) 2>/dev/null || kill $$(cat $(API_PID)) 2>/dev/null || true; \
 		rm -f $(API_PID); \
-	else \
-		echo "→ API not running"; \
 	fi
+	@lsof -ti:3000 | xargs kill -9 2>/dev/null || true
 
 stop-worker:
 	@if [ -f $(WORKER_PID) ]; then \
 		echo "→ Stopping Worker (PID $$(cat $(WORKER_PID)))..."; \
-		kill $$(cat $(WORKER_PID)) 2>/dev/null || true; \
+		kill -- -$$(cat $(WORKER_PID)) 2>/dev/null || kill $$(cat $(WORKER_PID)) 2>/dev/null || true; \
 		rm -f $(WORKER_PID); \
-	else \
-		echo "→ Worker not running"; \
 	fi
+	@lsof -ti:3001 | xargs kill -9 2>/dev/null || true
 
 stop-dashboard:
 	@if [ -f $(DASHBOARD_PID) ]; then \
 		echo "→ Stopping Dashboard (PID $$(cat $(DASHBOARD_PID)))..."; \
-		kill $$(cat $(DASHBOARD_PID)) 2>/dev/null || true; \
+		kill -- -$$(cat $(DASHBOARD_PID)) 2>/dev/null || kill $$(cat $(DASHBOARD_PID)) 2>/dev/null || true; \
 		rm -f $(DASHBOARD_PID); \
-	else \
-		echo "→ Dashboard not running"; \
 	fi
+	@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
 
 restart: stop start
 
@@ -102,16 +99,16 @@ status:
 	@printf "  %-12s " "OpenSearch:"; docker compose ps --format '{{.Status}}' opensearch 2>/dev/null | head -1 || echo "not running"
 
 logs-api:
-	@tail -f logs/api.log
+	@tail -100f $(LOG_DIR)/api.log
 
 logs-worker:
-	@tail -f logs/worker.log
+	@tail -100f $(LOG_DIR)/worker.log
 
 logs-dashboard:
-	@tail -f logs/dashboard.log
+	@tail -100f $(LOG_DIR)/dashboard.log
 
 logs:
-	@tail -f logs/api.log logs/worker.log logs/dashboard.log
+	@tail -100f $(LOG_DIR)/api.log $(LOG_DIR)/worker.log $(LOG_DIR)/dashboard.log
 
 # ── Dev (foreground — old behavior) ─────────────────────────
 

@@ -1,5 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Mock GitLab client so testConnection doesn't make real HTTP calls
+vi.mock('../../../src/lib/gitlab.js', () => ({
+  GitLabClient: vi.fn().mockImplementation(() => ({
+    testConnection: vi.fn().mockResolvedValue({ version: '16.9.0', revision: 'abc' }),
+    listProjects: vi.fn().mockResolvedValue({ projects: [{ id: 201, path_with_namespace: 'acme/frontend', name: 'frontend', namespace: { full_path: 'acme' }, default_branch: 'main', visibility: 'private', last_activity_at: '2024-06-01T00:00:00Z', topics: [], web_url: '' }], total: 1 }),
+    getProject: vi.fn().mockResolvedValue({ id: 201, path_with_namespace: 'acme/frontend', name: 'frontend', namespace: { full_path: 'acme' }, default_branch: 'main' }),
+    createWebhook: vi.fn().mockResolvedValue({ id: 1, url: 'https://api.sc.io/webhook' }),
+    listWebhooks: vi.fn().mockResolvedValue([]),
+    deleteWebhook: vi.fn(),
+  })),
+}));
+
 vi.mock('../../../src/lib/prisma.js', () => ({
   prisma: {
     integration: {
@@ -56,7 +68,7 @@ describe('GitLab Integration Service', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             provider: 'gitlab',
-            config: { access_token: 'glpat-xxxx' },
+            config: expect.objectContaining({ access_token: 'glpat-xxxx', webhook_secret: expect.any(String) }),
           }),
         }),
       );

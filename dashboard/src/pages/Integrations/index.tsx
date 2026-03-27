@@ -144,8 +144,15 @@ function GitHubModal({ onClose }: { onClose: () => void }) {
 function GitLabModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const [token, setToken] = useState('');
+  const [isSelfHosted, setIsSelfHosted] = useState(false);
+  const [baseUrl, setBaseUrl] = useState('');
+  const [verifySsl, setVerifySsl] = useState(true);
   const mutation = useMutation({
-    mutationFn: () => apiPost('/integrations/gitlab', { accessToken: token }),
+    mutationFn: () => apiPost('/integrations/gitlab', {
+      accessToken: token,
+      ...(isSelfHosted && baseUrl ? { baseUrl } : {}),
+      ...(isSelfHosted ? { verifySsl } : {}),
+    }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['integrations'] }); onClose(); },
   });
 
@@ -156,11 +163,39 @@ function GitLabModal({ onClose }: { onClose: () => void }) {
         <input type="password" value={token} onChange={(e) => setToken(e.target.value)} style={formInput} placeholder="glpat-xxxx" />
         <p style={{ fontSize: 11, color: '#999', marginTop: 4 }}>Create a token with <code>api</code> scope in GitLab Settings → Access Tokens</p>
       </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+          <input type="checkbox" checked={isSelfHosted} onChange={(e) => setIsSelfHosted(e.target.checked)} />
+          Self-hosted GitLab instance
+        </label>
+      </div>
+
+      {isSelfHosted && (
+        <>
+          <div style={{ marginBottom: 12 }}>
+            <label style={formLabel}>Instance URL</label>
+            <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} style={formInput} placeholder="https://gitlab.your-company.com" />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+              <input type="checkbox" checked={verifySsl} onChange={(e) => setVerifySsl(e.target.checked)} />
+              Verify SSL certificate
+            </label>
+            {!verifySsl && (
+              <p style={{ fontSize: 11, color: '#ca8a04', marginTop: 4, background: '#fffbeb', padding: '6px 10px', borderRadius: 4 }}>
+                SSL verification is disabled. Only use this for trusted internal instances with self-signed certificates.
+              </p>
+            )}
+          </div>
+        </>
+      )}
+
       {mutation.isError && <div style={errorBox}>{(mutation.error as Error).message}</div>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button onClick={onClose} style={cancelBtn}>Cancel</button>
-        <button onClick={() => mutation.mutate()} disabled={!token || mutation.isPending} style={submitBtn}>
-          {mutation.isPending ? 'Connecting...' : 'Connect'}
+        <button onClick={() => mutation.mutate()} disabled={!token || (isSelfHosted && !baseUrl) || mutation.isPending} style={submitBtn}>
+          {mutation.isPending ? 'Testing connection...' : 'Connect'}
         </button>
       </div>
     </ModalWrapper>

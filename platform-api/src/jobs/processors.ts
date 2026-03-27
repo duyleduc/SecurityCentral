@@ -7,6 +7,7 @@ import { processGitHubPr, type GitHubPrJobData } from './github-pr.processor.js'
 import { processNotification, type NotificationJobData } from './notification-dispatcher.js';
 import { processCloudDiscovery } from './cloud-discovery.processor.js';
 import { processDomainCheck, type DomainCheckJobData } from './domain-monitoring.processor.js';
+import { processScanOrchestration, type ScanOrchestrationJobData } from './scan-orchestration.processor.js';
 import type { JobContext } from './context.js';
 
 /**
@@ -23,7 +24,7 @@ async function placeholder(job: Job<JobContext>): Promise<void> {
  * Each key matches a queue name from queues.ts.
  */
 export const processors: Record<string, { handler: (job: Job) => Promise<void>; concurrency: number }> = {
-  'scan-orchestration': { handler: placeholder, concurrency: 5 },
+  'scan-orchestration': { handler: (job: Job<ScanOrchestrationJobData>) => processScanOrchestration(job), concurrency: 5 },
   'finding-ingestion': { handler: placeholder, concurrency: 10 },
   'notifications': { handler: (job: Job<NotificationJobData>) => processNotification(job), concurrency: 10 },
   'vulndb-sync': { handler: processVulnDbSync, concurrency: 1 },

@@ -140,26 +140,24 @@ integrationsRouter.post('/gitlab/webhook', async (req, res, next) => {
   try {
     const webhookToken = req.headers['x-gitlab-token'] as string;
 
-    // Verify webhook token against integration config
     if (!webhookToken) {
       return res.status(401).json({
-        data: null,
-        meta: null,
+        data: null, meta: null,
         errors: [{ code: 'AUTH_INVALID_CREDENTIALS', message: 'Missing X-Gitlab-Token header', status: 401 }],
       });
     }
 
-    // Look up integration by token
-    const integration = await (await import('../../lib/prisma.js')).prisma.integration.findFirst({
-      where: {
-        provider: 'gitlab',
-        config: { path: ['webhook_token'], equals: webhookToken },
-      },
+    // Verify webhook secret matches a stored integration
+    const { prisma: db } = await import('../../lib/prisma.js');
+    const integration = await db.integration.findFirst({
+      where: { provider: 'gitlab', config: { path: ['webhook_secret'], equals: webhookToken } },
     });
 
-    // Fall back: accept if any gitlab integration exists (webhook_token is optional for MVP)
     if (!integration) {
-      // Accept with warning in MVP — production should validate strictly
+      return res.status(401).json({
+        data: null, meta: null,
+        errors: [{ code: 'AUTH_INVALID_CREDENTIALS', message: 'Invalid webhook token', status: 401 }],
+      });
     }
 
     const eventType = req.headers['x-gitlab-event'] as string;

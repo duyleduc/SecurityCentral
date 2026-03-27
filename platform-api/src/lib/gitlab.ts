@@ -1,4 +1,6 @@
 import https from 'node:https';
+import http from 'node:http';
+import { URL } from 'node:url';
 
 import { logger } from './logger.js';
 
@@ -7,7 +9,7 @@ const log = logger.child({ component: 'gitlab' });
 const DEFAULT_BASE_URL = 'https://gitlab.com';
 
 // ---------------------------------------------------------------------------
-// GitLab API Client
+// Types
 // ---------------------------------------------------------------------------
 
 export interface GitLabProject {
@@ -25,93 +27,122 @@ export interface GitLabProject {
 export interface GitLabClientOptions {
   readonly accessToken: string;
   readonly baseUrl?: string;
+  /** Set to false for self-hosted instances with self-signed certificates. Default: true. */
   readonly verifySsl?: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Client
+// ---------------------------------------------------------------------------
 
 export class GitLabClient {
   private readonly baseUrl: string;
   private readonly token: string;
-  private readonly agent: https.Agent | undefined;
+  private readonly rejectUnauthorized: boolean;
 
   constructor(options: GitLabClientOptions) {
     this.token = options.accessToken;
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.rejectUnauthorized = options.verifySsl !== false;
 
-    if (options.verifySsl === false) {
-      this.agent = new https.Agent({ rejectUnauthorized: false });
+    if (!this.rejectUnauthorized) {
+      log.warn('SSL verification disabled for GitLab connection', { baseUrl: this.baseUrl });
     }
   }
 
   // -------------------------------------------------------------------------
-  // Core request with pagination support
+  // HTTP layer — uses node:https for proper self-signed cert support
   // -------------------------------------------------------------------------
+
+  private httpRequest<T>(method: string, fullUrl: string, body?: unknown): Promise<{ data: T; headers: Record<string, string | undefined> }> {
+    return new Promise((resolve, reject) => {
+      const parsed = new URL(fullUrl);
+      const isHttps = parsed.protocol === 'https:';
+
+      const options: https.RequestOptions = {
+        hostname: parsed.hostname,
+        port: parsed.port || (isHttps ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method,
+        headers: {
+          'PRIVATE-TOKEN': this.token,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        rejectUnauthorized: this.rejectUnauthorized,
+      };
+
+      const transport = isHttps ? https : http;
+      const req = transport.request(options, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => {
+          const raw = Buffer.concat(chunks).toString('utf-8');
+          if (!res.statusCode || res.statusCode >= 400) {
+            reject(new Error(`GitLab API ${method} ${parsed.pathname}: ${res.statusCode} ${raw.slice(0, 200)}`));
+            return;
+          }
+          try {
+            const data = JSON.parse(raw) as T;
+            const headers: Record<string, string | undefined> = {
+              'x-next-page': res.headers['x-next-page'] as string | undefined,
+              'x-total': res.headers['x-total'] as string | undefined,
+            };
+            resolve({ data, headers });
+          } catch {
+            reject(new Error(`GitLab API: invalid JSON response from ${parsed.pathname}`));
+          }
+        });
+      });
+
+      req.on('error', (err) => {
+        if ((err as NodeJS.ErrnoException).code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE') {
+          reject(new Error(`SSL verification failed for ${this.baseUrl}. Set verifySsl: false for self-signed certificates.`));
+        } else {
+          reject(err);
+        }
+      });
+
+      req.setTimeout(15000, () => {
+        req.destroy();
+        reject(new Error(`GitLab API timeout: ${method} ${parsed.pathname}`));
+      });
+
+      if (body) req.write(JSON.stringify(body));
+      req.end();
+    });
+  }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const url = `${this.baseUrl}/api/v4${path}`;
-
-    const init: RequestInit = {
-      method,
-      headers: {
-        'PRIVATE-TOKEN': this.token,
-        'Content-Type': 'application/json',
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    };
-
-    // Pass custom agent for self-signed certs (Node 18+ fetch supports dispatcher)
-    if (this.agent) {
-      (init as any).dispatcher = this.agent;
-    }
-
-    const resp = await fetch(url, init);
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(`GitLab API ${method} ${path}: ${resp.status} ${text}`);
-    }
-
-    return resp.json() as Promise<T>;
+    const { data } = await this.httpRequest<T>(method, url, body);
+    return data;
   }
 
-  /**
-   * Fetch a single page and return data + pagination info from headers.
-   */
   private async requestPage<T>(path: string): Promise<{ data: T; nextPage: string | null; total: number }> {
     const url = `${this.baseUrl}/api/v4${path}`;
-
-    const init: RequestInit = {
-      method: 'GET',
-      headers: {
-        'PRIVATE-TOKEN': this.token,
-      },
-    };
-
-    if (this.agent) {
-      (init as any).dispatcher = this.agent;
-    }
-
-    const resp = await fetch(url, init);
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(`GitLab API GET ${path}: ${resp.status} ${text}`);
-    }
-
-    const nextPage = resp.headers.get('x-next-page');
-    const total = parseInt(resp.headers.get('x-total') ?? '0', 10);
-    const data = (await resp.json()) as T;
-
+    const { data, headers } = await this.httpRequest<T>('GET', url);
+    const nextPage = headers['x-next-page'];
+    const total = parseInt(headers['x-total'] ?? '0', 10);
     return { data, nextPage: nextPage && nextPage !== '' ? nextPage : null, total };
+  }
+
+  // -------------------------------------------------------------------------
+  // Connection test
+  // -------------------------------------------------------------------------
+
+  /**
+   * Test the connection by calling GET /api/v4/version.
+   * Throws if the token is invalid or the server is unreachable.
+   */
+  async testConnection(): Promise<{ version: string; revision: string }> {
+    return this.request<{ version: string; revision: string }>('GET', '/version');
   }
 
   // -------------------------------------------------------------------------
   // Projects
   // -------------------------------------------------------------------------
 
-  /**
-   * List all accessible projects with pagination.
-   * Follows `X-Next-Page` headers to fetch all pages.
-   */
   async listProjects(query?: {
     search?: string;
     page?: number;
@@ -127,17 +158,10 @@ export class GitLabClient {
     if (query?.search) params.set('search', query.search);
     if (query?.page) params.set('page', String(query.page));
 
-    const { data, nextPage, total } = await this.requestPage<GitLabProject[]>(
-      `/projects?${params}`,
-    );
-
+    const { data, total } = await this.requestPage<GitLabProject[]>(`/projects?${params}`);
     return { projects: data, total };
   }
 
-  /**
-   * Fetch ALL projects across all pages (for full sync).
-   * Use with caution for large instances.
-   */
   async listAllProjects(): Promise<GitLabProject[]> {
     const allProjects: GitLabProject[] = [];
     let page = 1;
@@ -152,10 +176,7 @@ export class GitLabClient {
         sort: 'desc',
       });
 
-      const { data, nextPage } = await this.requestPage<GitLabProject[]>(
-        `/projects?${params}`,
-      );
-
+      const { data, nextPage } = await this.requestPage<GitLabProject[]>(`/projects?${params}`);
       allProjects.push(...data);
 
       if (!nextPage || data.length < perPage) break;
@@ -165,9 +186,6 @@ export class GitLabClient {
     return allProjects;
   }
 
-  /**
-   * Get a single project by ID.
-   */
   async getProject(projectId: number): Promise<GitLabProject> {
     return this.request<GitLabProject>('GET', `/projects/${projectId}`);
   }
@@ -176,9 +194,6 @@ export class GitLabClient {
   // Webhooks
   // -------------------------------------------------------------------------
 
-  /**
-   * Create a webhook on a project.
-   */
   async createWebhook(
     projectId: number,
     url: string,
@@ -190,20 +205,15 @@ export class GitLabClient {
       token,
       push_events: events?.push ?? true,
       merge_requests_events: events?.merge_requests ?? false,
-      enable_ssl_verification: true,
+      // For self-hosted with self-signed certs, disable SSL verification on webhook too
+      enable_ssl_verification: this.rejectUnauthorized,
     });
   }
 
-  /**
-   * Delete a webhook from a project.
-   */
   async deleteWebhook(projectId: number, hookId: number): Promise<void> {
     await this.request('DELETE', `/projects/${projectId}/hooks/${hookId}`);
   }
 
-  /**
-   * List webhooks for a project.
-   */
   async listWebhooks(projectId: number): Promise<Array<{ id: number; url: string }>> {
     return this.request('GET', `/projects/${projectId}/hooks`);
   }

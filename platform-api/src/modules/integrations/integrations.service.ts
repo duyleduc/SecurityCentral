@@ -166,7 +166,30 @@ export async function createGitLabIntegration(
     throw new AppError('INTEGRATION_ALREADY_EXISTS', 'GitLab integration already exists for this organization');
   }
 
-  const config: Record<string, unknown> = { access_token: accessToken };
+  // Test connection before saving — catches bad tokens, unreachable hosts, SSL issues
+  const testClient = new GitLabClient({ accessToken, baseUrl, verifySsl });
+  try {
+    const version = await testClient.testConnection();
+    log.info('GitLab connection verified', { baseUrl: baseUrl ?? 'gitlab.com', version: version.version });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg.includes('SSL verification failed')) {
+      throw new AppError('VALIDATION_ERROR', `SSL verification failed for ${baseUrl}. Enable "Skip SSL verification" for self-signed certificates.`);
+    }
+    if (msg.includes('401')) {
+      throw new AppError('AUTH_INVALID_CREDENTIALS', 'GitLab access token is invalid or expired');
+    }
+    throw new AppError('VALIDATION_ERROR', `Cannot connect to GitLab: ${msg}`);
+  }
+
+  // Generate a webhook secret for this integration
+  const crypto = await import('node:crypto');
+  const webhookSecret = crypto.randomBytes(32).toString('hex');
+
+  const config: Record<string, unknown> = {
+    access_token: accessToken,
+    webhook_secret: webhookSecret,
+  };
   if (baseUrl) config.base_url = baseUrl;
   if (verifySsl !== undefined) config.verify_ssl = verifySsl;
 
@@ -413,11 +436,23 @@ export async function listGitLabRepos(
     verifySsl: config.verify_ssl !== 'false',
   });
 
-  const result = await gl.listProjects({
-    search: query.search,
-    page: query.page,
-    per_page: query.per_page,
-  });
+  let result;
+  try {
+    result = await gl.listProjects({
+      search: query.search,
+      page: query.page,
+      per_page: query.per_page,
+    });
+  } catch (err) {
+    const msg = (err as Error).message;
+    if (msg.includes('401')) {
+      throw new AppError('AUTH_INVALID_CREDENTIALS', 'GitLab access token is invalid or expired. Reconnect the integration.');
+    }
+    if (msg.includes('SSL') || msg.includes('UNABLE_TO_VERIFY')) {
+      throw new AppError('VALIDATION_ERROR', 'SSL connection failed. Enable "Skip SSL verification" in integration settings.');
+    }
+    throw new AppError('VALIDATION_ERROR', `Cannot connect to GitLab: ${msg}`);
+  }
 
   // Cross-reference with synced repos
   const providerIds = result.projects.map((p) => String(p.id));
