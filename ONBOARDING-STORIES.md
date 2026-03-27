@@ -255,10 +255,10 @@ Connect Proxmox clusters to discover VMs and containers.
 
 **Tasks:**
 
-- [ ] **T-19.1.1** Implement Proxmox API client (`platform-api/src/lib/cloud/proxmox.ts`) — implements `CloudDiscoveryClient` interface; Proxmox REST API: `GET /api2/json/nodes` → per-node `GET /qemu` + `/lxc`; `PVEAPIToken` header auth; supports `verifySsl: false` — `size: M` | `depends: T-17.2.1`
-- [ ] **T-19.1.2** Add Proxmox integration endpoint — `POST /integrations/proxmox` with body `{ baseUrl, tokenId, tokenSecret, verifySsl }`; register in cloud discovery factory — `size: S` | `depends: T-19.1.1, T-17.3.2`
-- [ ] **T-19.1.3** Add Proxmox modal to IntegrationsPage — base URL, token ID, token secret inputs, verify SSL toggle with warning — `size: S`
-- [ ] **T-19.1.4** Write unit tests for Proxmox client — mock REST API, test node enumeration, VM/container parsing, self-signed cert handling — `size: S` | `depends: T-19.1.1`
+- [x] **T-19.1.1** Implement Proxmox API client (`platform-api/src/lib/cloud/proxmox.ts`) — implements `CloudDiscoveryClient` interface; Proxmox REST API: `GET /api2/json/nodes` → per-node `GET /qemu` + `/lxc`; `PVEAPIToken` header auth; supports `verifySsl: false` — `size: M` | `depends: T-17.2.1`
+- [x] **T-19.1.2** Add Proxmox integration endpoint — `POST /integrations/proxmox` with body `{ baseUrl, tokenId, tokenSecret, verifySsl }`; register in cloud discovery factory — `size: S` | `depends: T-19.1.1, T-17.3.2`
+- [x] **T-19.1.3** Add Proxmox modal to IntegrationsPage — base URL, token ID, token secret inputs, verify SSL toggle with warning — `size: S`
+- [x] **T-19.1.4** Write unit tests for Proxmox client — mock REST API, test node enumeration, VM/container parsing, self-signed cert handling — `size: S` | `depends: T-19.1.1`
 
 ### Story 19.2: Bitbucket Integration
 
@@ -272,12 +272,12 @@ Connect Bitbucket for repo discovery and push webhooks.
 
 **Tasks:**
 
-- [ ] **T-19.2.1** Implement Bitbucket API client (`platform-api/src/lib/bitbucket.ts`) — constructor takes auth credentials + optional `baseUrl` (for Bitbucket Server); methods: `listRepositories(workspace)`, `getRepository(workspace, slug)`, `createWebhook(workspace, slug, url)`, `deleteWebhook(workspace, slug, hookId)` — `size: M`
-- [ ] **T-19.2.2** Add Bitbucket integration service methods — `createBitbucketIntegration`, `listBitbucketRepos`, `syncBitbucketRepos`, `unsyncBitbucketRepo`, `handleBitbucketPushEvent`; follow same patterns as GitHub/GitLab — `size: M` | `depends: T-19.2.1`
-- [ ] **T-19.2.3** Add Bitbucket router endpoints — `POST /integrations/bitbucket`, `GET /integrations/bitbucket/repos`, `POST /integrations/bitbucket/repos/sync`, `DELETE /integrations/bitbucket/repos/:id/sync`, `POST /integrations/bitbucket/webhook` — `size: S` | `depends: T-19.2.2`
-- [ ] **T-19.2.4** Add Bitbucket card + modal to IntegrationsPage — workspace, app password inputs; "Manage Repos" button when connected — `size: S`
-- [ ] **T-19.2.5** Write unit tests for Bitbucket client — test `listRepositories`, Cloud vs Server API differences, webhook management — `size: S` | `depends: T-19.2.1`
-- [ ] **T-19.2.6** Write integration tests for Bitbucket endpoints — test connect, repo discovery, sync, webhook handling; mock Bitbucket API — `size: M` | `depends: T-19.2.3`
+- [x] **T-19.2.1** Implement Bitbucket API client (`platform-api/src/lib/bitbucket.ts`) — constructor takes auth credentials + optional `baseUrl` (for Bitbucket Server); methods: `listRepositories(workspace)`, `getRepository(workspace, slug)`, `createWebhook(workspace, slug, url)`, `deleteWebhook(workspace, slug, hookId)` — `size: M`
+- [x] **T-19.2.2** Add Bitbucket integration service methods — `createBitbucketIntegration`, `listBitbucketRepos`, `syncBitbucketRepos`, `unsyncBitbucketRepo`, `handleBitbucketPushEvent`; follow same patterns as GitHub/GitLab — `size: M` | `depends: T-19.2.1`
+- [x] **T-19.2.3** Add Bitbucket router endpoints — `POST /integrations/bitbucket`, `GET /integrations/bitbucket/repos`, `POST /integrations/bitbucket/repos/sync`, `DELETE /integrations/bitbucket/repos/:id/sync`, `POST /integrations/bitbucket/webhook` — `size: S` | `depends: T-19.2.2`
+- [x] **T-19.2.4** Add Bitbucket card + modal to IntegrationsPage — workspace, app password inputs; "Manage Repos" button when connected — `size: S`
+- [x] **T-19.2.5** Write unit tests for Bitbucket client — test `listRepositories`, Cloud vs Server API differences, webhook management — `size: S` | `depends: T-19.2.1`
+- [x] **T-19.2.6** Write integration tests for Bitbucket endpoints — test connect, repo discovery, sync, webhook handling; mock Bitbucket API — `size: M` | `depends: T-19.2.3`
 
 ### Story 19.3: Onboarding Wizard
 

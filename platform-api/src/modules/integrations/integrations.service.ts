@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errors.js';
 import { GitHubClient } from '../../lib/github.js';
 import { GitLabClient } from '../../lib/gitlab.js';
+import { BitbucketClient } from '../../lib/bitbucket.js';
 import { scanOrchestrationQueue } from '../../jobs/queues.js';
 import { logger } from '../../lib/logger.js';
 import type { ListProviderReposQueryType } from './integrations.validation.js';
@@ -558,6 +559,105 @@ export async function listIntegrations(orgId: string) {
 // ---------------------------------------------------------------------------
 // Delete integration
 // ---------------------------------------------------------------------------
+
+// ===========================================================================
+// REPO DISCOVERY — Bitbucket
+// ===========================================================================
+
+export async function createBitbucketIntegration(orgId: string, workspace: string, username: string, appPassword: string, baseUrl?: string) {
+  const existing = await prisma.integration.findFirst({ where: { orgId, provider: 'bitbucket' } });
+  if (existing) throw new AppError('INTEGRATION_ALREADY_EXISTS', 'Bitbucket integration already exists');
+
+  const config: Record<string, unknown> = { workspace, username, app_password: appPassword };
+  if (baseUrl) config.base_url = baseUrl;
+
+  return prisma.integration.create({ data: { orgId, provider: 'bitbucket', status: 'active', config } });
+}
+
+export async function listBitbucketRepos(orgId: string, query: ListProviderReposQueryType) {
+  const integration = await prisma.integration.findFirst({ where: { orgId, provider: 'bitbucket', status: 'active' } });
+  if (!integration) throw new AppError('RESOURCE_NOT_FOUND', 'No active Bitbucket integration');
+
+  const config = integration.config as Record<string, string>;
+  const bb = new BitbucketClient({ username: config.username, appPassword: config.app_password, workspace: config.workspace, baseUrl: config.base_url });
+
+  let repos = await bb.listRepositories();
+  if (query.search) {
+    const q = query.search.toLowerCase();
+    repos = repos.filter((r) => r.full_name.toLowerCase().includes(q));
+  }
+
+  const total = repos.length;
+  const start = (query.page - 1) * query.per_page;
+  const page = repos.slice(start, start + query.per_page);
+
+  const providerIds = page.map((r) => r.uuid);
+  const synced = await prisma.repository.findMany({ where: { orgId, provider: 'bitbucket', providerId: { in: providerIds } }, select: { providerId: true } });
+  const syncedSet = new Set(synced.map((r) => r.providerId));
+
+  return {
+    repos: page.map((r) => ({
+      provider_id: r.uuid,
+      full_name: r.full_name,
+      name: r.name,
+      owner: config.workspace,
+      default_branch: r.mainbranch?.name ?? 'main',
+      language: r.language || null,
+      visibility: r.is_private ? 'private' : 'public',
+      updated_at: r.updated_on,
+      synced: syncedSet.has(r.uuid),
+    })),
+    total,
+  };
+}
+
+export async function syncBitbucketRepos(orgId: string, repoIds: string[]) {
+  const integration = await prisma.integration.findFirst({ where: { orgId, provider: 'bitbucket', status: 'active' } });
+  if (!integration) throw new AppError('RESOURCE_NOT_FOUND', 'No active Bitbucket integration');
+
+  const config = integration.config as Record<string, string>;
+  const bb = new BitbucketClient({ username: config.username, appPassword: config.app_password, workspace: config.workspace, baseUrl: config.base_url });
+  const allRepos = await bb.listRepositories();
+  const repoMap = new Map(allRepos.map((r) => [r.uuid, r]));
+
+  let synced = 0;
+  const errors: string[] = [];
+
+  for (const id of repoIds) {
+    const repo = repoMap.get(id);
+    if (!repo) { errors.push(`Repo ${id} not found`); continue; }
+
+    try {
+      await prisma.repository.upsert({
+        where: { orgId_provider_providerId: { orgId, provider: 'bitbucket', providerId: id } },
+        create: { orgId, provider: 'bitbucket', providerId: id, owner: config.workspace, name: repo.name, defaultBranch: repo.mainbranch?.name ?? 'main', language: repo.language || null },
+        update: { name: repo.name, defaultBranch: repo.mainbranch?.name ?? 'main' },
+      });
+      synced++;
+    } catch (err) { errors.push(`${repo.full_name}: ${(err as Error).message}`); }
+  }
+
+  return { synced, errors };
+}
+
+export async function unsyncBitbucketRepo(orgId: string, providerId: string) {
+  const repo = await prisma.repository.findFirst({ where: { orgId, provider: 'bitbucket', providerId } });
+  if (!repo) throw new AppError('RESOURCE_NOT_FOUND', 'Repository not found');
+  await prisma.repository.update({ where: { id: repo.id }, data: { settings: { archived: true, unsyncedAt: new Date().toISOString() } } });
+}
+
+export async function handleBitbucketPushEvent(payload: { repository: { uuid: string; full_name: string }; push?: { changes: unknown[] } }) {
+  const providerId = payload.repository.uuid;
+  const repo = await prisma.repository.findFirst({ where: { providerId, provider: 'bitbucket' } });
+  if (!repo) return;
+
+  const active = await prisma.scan.findFirst({ where: { repositoryId: repo.id, status: { in: ['pending', 'running'] } } });
+  if (active) return;
+
+  const scan = await prisma.scan.create({ data: { orgId: repo.orgId, scanType: 'code_dependencies', status: 'pending', trigger: 'webhook', repositoryId: repo.id } });
+  await scanOrchestrationQueue.add('scan-repository', { scanId: scan.id, repositoryId: repo.id, orgId: repo.orgId }, { attempts: 3, backoff: { type: 'exponential', delay: 2000 }, removeOnComplete: 100 });
+  log.info('Bitbucket push scan triggered', { repoId: repo.id, scanId: scan.id });
+}
 
 export async function deleteIntegration(orgId: string, integrationId: string) {
   const integration = await prisma.integration.findFirst({

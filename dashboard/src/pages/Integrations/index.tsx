@@ -17,6 +17,8 @@ const PROVIDERS = [
   { key: 'aws', label: 'AWS', icon: '🟧', desc: 'EC2 instance discovery for infrastructure coverage' },
   { key: 'azure', label: 'Azure', icon: '🔵', desc: 'Virtual machine discovery across resource groups' },
   { key: 'gcp', label: 'GCP', icon: '🔴', desc: 'Compute Engine instance discovery across zones' },
+  { key: 'proxmox', label: 'Proxmox', icon: '🟩', desc: 'VM and container discovery across cluster nodes' },
+  { key: 'bitbucket', label: 'Bitbucket', icon: '🪣', desc: 'Repository scanning and push webhooks' },
 ];
 
 export function IntegrationsPage() {
@@ -61,7 +63,7 @@ export function IntegrationsPage() {
                       {new Date(existing!.createdAt).toLocaleDateString()}
                     </span>
                   </div>
-                  {(p.key === 'github' || p.key === 'gitlab') && (
+                  {(p.key === 'github' || p.key === 'gitlab' || p.key === 'bitbucket') && (
                     <button onClick={() => navigate(`/integrations/${p.key}/repos`)}
                       style={{ fontSize: 12, color: '#fff', background: '#2563eb', border: 'none', borderRadius: 4, padding: '6px 12px', cursor: 'pointer', width: '100%', fontWeight: 600, marginBottom: 8 }}>
                       Manage Repositories
@@ -90,6 +92,8 @@ export function IntegrationsPage() {
       {modal === 'aws' && <AwsModal onClose={() => setModal(null)} />}
       {modal === 'azure' && <AzureModal onClose={() => setModal(null)} />}
       {modal === 'gcp' && <GcpModal onClose={() => setModal(null)} />}
+      {modal === 'proxmox' && <ProxmoxModal onClose={() => setModal(null)} />}
+      {modal === 'bitbucket' && <BitbucketModal onClose={() => setModal(null)} />}
     </div>
   );
 }
@@ -264,6 +268,65 @@ function GcpModal({ onClose }: { onClose: () => void }) {
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button onClick={onClose} style={cancelBtn}>Cancel</button>
         <button onClick={() => mutation.mutate()} disabled={!projectId || mutation.isPending} style={submitBtn}>{mutation.isPending ? 'Connecting...' : 'Connect'}</button>
+      </div>
+    </ModalWrapper>
+  );
+}
+
+function ProxmoxModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [baseUrl, setBaseUrl] = useState('');
+  const [tokenId, setTokenId] = useState('');
+  const [tokenSecret, setTokenSecret] = useState('');
+  const [verifySsl, setVerifySsl] = useState(true);
+  const mutation = useMutation({
+    mutationFn: () => apiPost('/integrations/proxmox', { baseUrl, tokenId, tokenSecret, verifySsl }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['integrations'] }); onClose(); },
+  });
+
+  return (
+    <ModalWrapper title="Connect Proxmox" onClose={onClose}>
+      <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Provide API token credentials to discover VMs and containers.</p>
+      <div style={{ marginBottom: 12 }}><label style={formLabel}>Base URL</label><input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} style={formInput} placeholder="https://proxmox.internal:8006" /></div>
+      <div style={{ marginBottom: 12 }}><label style={formLabel}>Token ID</label><input value={tokenId} onChange={(e) => setTokenId(e.target.value)} style={formInput} placeholder="user@pam!sc-discovery" /></div>
+      <div style={{ marginBottom: 12 }}><label style={formLabel}>Token Secret</label><input type="password" value={tokenSecret} onChange={(e) => setTokenSecret(e.target.value)} style={formInput} /></div>
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+          <input type="checkbox" checked={verifySsl} onChange={(e) => setVerifySsl(e.target.checked)} /> Verify SSL certificate
+        </label>
+        {!verifySsl && <p style={{ fontSize: 11, color: '#ca8a04', marginTop: 4 }}>Warning: SSL verification is disabled. Only use for trusted internal instances.</p>}
+      </div>
+      {mutation.isError && <div style={errorBox}>{(mutation.error as Error).message}</div>}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button onClick={onClose} style={cancelBtn}>Cancel</button>
+        <button onClick={() => mutation.mutate()} disabled={!baseUrl || !tokenId || !tokenSecret || mutation.isPending} style={submitBtn}>{mutation.isPending ? 'Connecting...' : 'Connect'}</button>
+      </div>
+    </ModalWrapper>
+  );
+}
+
+function BitbucketModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [workspace, setWorkspace] = useState('');
+  const [username, setUsername] = useState('');
+  const [appPassword, setAppPassword] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
+  const mutation = useMutation({
+    mutationFn: () => apiPost('/integrations/bitbucket', { workspace, username, appPassword, ...(baseUrl ? { baseUrl } : {}) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['integrations'] }); onClose(); },
+  });
+
+  return (
+    <ModalWrapper title="Connect Bitbucket" onClose={onClose}>
+      <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>Provide credentials to discover repositories.</p>
+      <div style={{ marginBottom: 12 }}><label style={formLabel}>Workspace</label><input value={workspace} onChange={(e) => setWorkspace(e.target.value)} style={formInput} placeholder="my-team" /></div>
+      <div style={{ marginBottom: 12 }}><label style={formLabel}>Username</label><input value={username} onChange={(e) => setUsername(e.target.value)} style={formInput} /></div>
+      <div style={{ marginBottom: 12 }}><label style={formLabel}>App Password</label><input type="password" value={appPassword} onChange={(e) => setAppPassword(e.target.value)} style={formInput} /></div>
+      <div style={{ marginBottom: 16 }}><label style={formLabel}>Base URL (for Bitbucket Server, leave empty for Cloud)</label><input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} style={formInput} placeholder="https://bitbucket.internal.corp.com" /></div>
+      {mutation.isError && <div style={errorBox}>{(mutation.error as Error).message}</div>}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button onClick={onClose} style={cancelBtn}>Cancel</button>
+        <button onClick={() => mutation.mutate()} disabled={!workspace || !username || !appPassword || mutation.isPending} style={submitBtn}>{mutation.isPending ? 'Connecting...' : 'Connect'}</button>
       </div>
     </ModalWrapper>
   );

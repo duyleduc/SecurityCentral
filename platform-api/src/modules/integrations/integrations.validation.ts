@@ -52,6 +52,13 @@ export const ConnectGcpBody = z.object({
   serviceAccountKey: z.string().optional(),
 });
 
+export const ConnectProxmoxBody = z.object({
+  baseUrl: z.string().url(),
+  tokenId: z.string().min(1),
+  tokenSecret: z.string().min(1),
+  verifySsl: z.boolean().default(true),
+});
+
 export const CloudProviderParam = z.object({
   provider: z.enum(['aws', 'azure', 'gcp', 'proxmox']),
 });

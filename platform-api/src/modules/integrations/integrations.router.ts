@@ -9,7 +9,7 @@ import { env } from '../../lib/env.js';
 import { verifyWebhookSignature } from '../../lib/github.js';
 import * as integrationsService from './integrations.service.js';
 import * as cloudDiscovery from './cloud-discovery.service.js';
-import { ListProviderReposQuery, SyncReposBody, ConnectAwsBody, ConnectAzureBody, ConnectGcpBody, CloudProviderParam, ListCloudResourcesQuery } from './integrations.validation.js';
+import { ListProviderReposQuery, SyncReposBody, ConnectAwsBody, ConnectAzureBody, ConnectGcpBody, ConnectProxmoxBody, CloudProviderParam, ListCloudResourcesQuery } from './integrations.validation.js';
 import { z } from 'zod';
 
 export const integrationsRouter = Router();
@@ -275,6 +275,75 @@ integrationsRouter.delete(
 );
 
 // ===========================================================================
+// REPO DISCOVERY — Bitbucket
+// ===========================================================================
+
+const CreateBitbucketSchema = z.object({
+  workspace: z.string().min(1),
+  username: z.string().min(1),
+  appPassword: z.string().min(1),
+  baseUrl: z.string().url().optional(),
+});
+
+integrationsRouter.post(
+  '/bitbucket',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ body: CreateBitbucketSchema }),
+  async (req, res, next) => {
+    try {
+      const result = await integrationsService.createBitbucketIntegration(req.auth!.orgId, req.body.workspace, req.body.username, req.body.appPassword, req.body.baseUrl);
+      res.status(201).json(successEnvelope(result));
+    } catch (err) { next(err); }
+  },
+);
+
+integrationsRouter.get(
+  '/bitbucket/repos',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ query: ListProviderReposQuery }),
+  async (req, res, next) => {
+    try {
+      const result = await integrationsService.listBitbucketRepos(req.auth!.orgId, req.query as any);
+      res.json({ data: result.repos, meta: { total: result.total, page: (req.query as any).page ?? 1, per_page: (req.query as any).per_page ?? 50 }, errors: [] });
+    } catch (err) { next(err); }
+  },
+);
+
+integrationsRouter.post(
+  '/bitbucket/repos/sync',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ body: SyncReposBody }),
+  async (req, res, next) => {
+    try {
+      const result = await integrationsService.syncBitbucketRepos(req.auth!.orgId, req.body.repo_ids);
+      res.status(201).json(successEnvelope(result));
+    } catch (err) { next(err); }
+  },
+);
+
+integrationsRouter.delete(
+  '/bitbucket/repos/:id/sync',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  async (req, res, next) => {
+    try {
+      await integrationsService.unsyncBitbucketRepo(req.auth!.orgId, req.params.id);
+      res.status(204).send();
+    } catch (err) { next(err); }
+  },
+);
+
+integrationsRouter.post('/bitbucket/webhook', async (req, res, next) => {
+  try {
+    await integrationsService.handleBitbucketPushEvent(req.body);
+    res.json(successEnvelope({ received: true }));
+  } catch (err) { next(err); }
+});
+
+// ===========================================================================
 // CLOUD DISCOVERY
 // ===========================================================================
 
@@ -315,6 +384,20 @@ integrationsRouter.post(
   async (req, res, next) => {
     try {
       const result = await cloudDiscovery.connectCloudProvider(req.auth!.orgId, 'gcp', req.body);
+      res.status(201).json(successEnvelope(result));
+    } catch (err) { next(err); }
+  },
+);
+
+// POST /integrations/proxmox — connect Proxmox
+integrationsRouter.post(
+  '/proxmox',
+  requireAuth,
+  requirePermission('manage_integrations'),
+  validate({ body: ConnectProxmoxBody }),
+  async (req, res, next) => {
+    try {
+      const result = await cloudDiscovery.connectCloudProvider(req.auth!.orgId, 'proxmox', req.body);
       res.status(201).json(successEnvelope(result));
     } catch (err) { next(err); }
   },
