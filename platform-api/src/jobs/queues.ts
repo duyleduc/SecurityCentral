@@ -14,6 +14,7 @@ export const vulndbSyncQueue = createQueue('vulndb-sync');
 export const githubPrQueue = createQueue('github-pr');
 export const esSyncQueue = createQueue('es-sync');
 export const cloudDiscoveryQueue = createQueue('cloud-discovery');
+export const domainMonitoringQueue = createQueue('domain-monitoring');
 
 export const allQueues = [
   scanOrchestrationQueue,
@@ -23,4 +24,5 @@ export const allQueues = [
   githubPrQueue,
   esSyncQueue,
   cloudDiscoveryQueue,
+  domainMonitoringQueue,
 ] as const;

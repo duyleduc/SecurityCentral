@@ -6,6 +6,7 @@ import { processVulnDbSync } from './vuln-db-sync.js';
 import { processGitHubPr, type GitHubPrJobData } from './github-pr.processor.js';
 import { processNotification, type NotificationJobData } from './notification-dispatcher.js';
 import { processCloudDiscovery } from './cloud-discovery.processor.js';
+import { processDomainCheck, type DomainCheckJobData } from './domain-monitoring.processor.js';
 import type { JobContext } from './context.js';
 
 /**
@@ -29,4 +30,5 @@ export const processors: Record<string, { handler: (job: Job) => Promise<void>; 
   'github-pr': { handler: (job: Job<GitHubPrJobData>) => processGitHubPr(job), concurrency: 3 },
   'es-sync': { handler: (job: Job<EsSyncJobData>) => processFindingSync(job), concurrency: 10 },
   'cloud-discovery': { handler: processCloudDiscovery, concurrency: 1 },
+  'domain-monitoring': { handler: (job: Job<DomainCheckJobData>) => processDomainCheck(job), concurrency: 10 },
 };

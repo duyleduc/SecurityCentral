@@ -11,10 +11,11 @@ describe('BullMQ Queues', () => {
     'github-pr',
     'es-sync',
     'cloud-discovery',
+    'domain-monitoring',
   ];
 
   it('should define all required queues', () => {
-    expect(allQueues).toHaveLength(7);
+    expect(allQueues).toHaveLength(8);
   });
 
   it.each(expectedNames)('should include the "%s" queue', (name) => {
