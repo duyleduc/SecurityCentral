@@ -185,8 +185,8 @@ Database model for tracking domains/endpoints to monitor.
 
 **Tasks:**
 
-- [ ] **T-18.1.1** Add `MonitoredEndpoint` model to Prisma schema — id, orgId (FK), host, port (default 443), label, checkInterval (default '1h'), status (active/paused), lastCheckedAt, lastStatus (healthy/unhealthy/unreachable), lastResponseMs, createdAt; unique `(orgId, host, port)`; index `(orgId, status)` — `size: S`
-- [ ] **T-18.1.2** Run Prisma migration — `npx prisma migrate dev --name add-monitored-endpoints` — `size: S` | `depends: T-18.1.1`
+- [x] **T-18.1.1** Add `MonitoredEndpoint` model to Prisma schema — id, orgId (FK), host, port (default 443), label, checkInterval (default '1h'), status (active/paused), lastCheckedAt, lastStatus (healthy/unhealthy/unreachable), lastResponseMs, createdAt; unique `(orgId, host, port)`; index `(orgId, status)` — `size: S`
+- [x] **T-18.1.2** Run Prisma migration — `npx prisma migrate dev --name add-monitored-endpoints` — `size: S` | `depends: T-18.1.1`
 
 ### Story 18.2: Domain Monitoring Service
 

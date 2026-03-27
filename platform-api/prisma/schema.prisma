@@ -68,7 +68,8 @@ model Organization {
   scans          Scan[]
   findings       Finding[]
   integrations   Integration[]
-  cloudResources CloudResource[]
+  cloudResources     CloudResource[]
+  monitoredEndpoints MonitoredEndpoint[]
 
   @@map("organizations")
 }
@@ -382,4 +383,26 @@ model CloudResource {
   @@unique([orgId, provider, resourceId])
   @@index([serverId], map: "idx_cloud_resources_server")
   @@map("cloud_resources")
+}
+
+// ─── T-18.1.1: Domain Monitoring Endpoints ───────────────────
+
+model MonitoredEndpoint {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orgId          String    @map("org_id") @db.Uuid
+  host           String
+  port           Int       @default(443)
+  label          String?
+  checkInterval  String    @default("1h") @map("check_interval") // 1h | 6h | 24h
+  status         String    @default("active") // active | paused
+  lastCheckedAt  DateTime? @map("last_checked_at") @db.Timestamptz()
+  lastStatus     String?   @map("last_status") // healthy | unhealthy | unreachable
+  lastResponseMs Int?      @map("last_response_ms")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, host, port])
+  @@index([orgId, status], map: "idx_monitored_endpoints_org_status")
+  @@map("monitored_endpoints")
 }
