@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost, apiDelete } from '../../api/client.js';
 
@@ -16,6 +17,7 @@ const PROVIDERS = [
 ];
 
 export function IntegrationsPage() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { data: envelope, isLoading } = useQuery({
     queryKey: ['integrations'],
@@ -56,6 +58,12 @@ export function IntegrationsPage() {
                       {new Date(existing!.createdAt).toLocaleDateString()}
                     </span>
                   </div>
+                  {(p.key === 'github' || p.key === 'gitlab') && (
+                    <button onClick={() => navigate(`/integrations/${p.key}/repos`)}
+                      style={{ fontSize: 12, color: '#fff', background: '#2563eb', border: 'none', borderRadius: 4, padding: '6px 12px', cursor: 'pointer', width: '100%', fontWeight: 600, marginBottom: 8 }}>
+                      Manage Repositories
+                    </button>
+                  )}
                   <button onClick={() => { if (confirm(`Disconnect ${p.label}?`)) deleteMutation.mutate(existing!.id); }}
                     style={{ fontSize: 12, color: '#dc2626', background: 'none', border: '1px solid #dc2626', borderRadius: 4, padding: '4px 12px', cursor: 'pointer', width: '100%' }}>
                     Disconnect

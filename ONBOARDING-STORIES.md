@@ -66,10 +66,10 @@ Dashboard page for browsing and selecting repos to scan.
 
 **Tasks:**
 
-- [ ] **T-16.3.1** Add React Query hooks — `useProviderRepos(provider, query)`, `useSyncRepos(provider)`, `useUnsyncRepo(provider)` in `dashboard/src/api/hooks.ts` — `size: S`
-- [ ] **T-16.3.2** Implement `RepoSelectionPage` component (`dashboard/src/pages/Integrations/RepoSelection.tsx`) — searchable list with checkboxes, per row: checkbox + owner/name + language badge + visibility icon + last updated + synced badge; top bar: search input + "Select All"/"None" + count; bottom: "Sync Selected" button — `size: L` | `depends: T-16.3.1`
-- [ ] **T-16.3.3** Add "Manage Repositories" button to IntegrationsPage — show when GitHub or GitLab is connected, navigates to `/integrations/:provider/repos` — `size: S` | `depends: T-16.3.2`
-- [ ] **T-16.3.4** Add route in `App.tsx` — `<Route path="/integrations/:provider/repos">` wrapped in `ProtectedLayout` — `size: S` | `depends: T-16.3.2`
+- [x] **T-16.3.1** Add React Query hooks — `useProviderRepos(provider, query)`, `useSyncRepos(provider)`, `useUnsyncRepo(provider)` in `dashboard/src/api/hooks.ts` — `size: S`
+- [x] **T-16.3.2** Implement `RepoSelectionPage` component (`dashboard/src/pages/Integrations/RepoSelection.tsx`) — searchable list with checkboxes, per row: checkbox + owner/name + language badge + visibility icon + last updated + synced badge; top bar: search input + "Select All"/"None" + count; bottom: "Sync Selected" button — `size: L` | `depends: T-16.3.1`
+- [x] **T-16.3.3** Add "Manage Repositories" button to IntegrationsPage — show when GitHub or GitLab is connected, navigates to `/integrations/:provider/repos` — `size: S` | `depends: T-16.3.2`
+- [x] **T-16.3.4** Add route in `App.tsx` — `<Route path="/integrations/:provider/repos">` wrapped in `ProtectedLayout` — `size: S` | `depends: T-16.3.2`
 
 ### Story 16.4: Repository Selection Tests
 

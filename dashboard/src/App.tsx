@@ -12,6 +12,7 @@ import { FindingsPage } from './pages/Findings/index.js';
 import { AssetsPage } from './pages/Assets/index.js';
 import { ScansPage } from './pages/Scans/index.js';
 import { IntegrationsPage } from './pages/Integrations/index.js';
+import { RepoSelectionPage } from './pages/Integrations/RepoSelection.js';
 import { SettingsPage } from './pages/Settings/index.js';
 
 const queryClient = new QueryClient({
@@ -51,6 +52,7 @@ export function App() {
             <Route path="/assets/certificates" element={<ProtectedLayout><AssetsPage tab="certificates" /></ProtectedLayout>} />
             <Route path="/scans" element={<ProtectedLayout><ScansPage /></ProtectedLayout>} />
             <Route path="/integrations" element={<ProtectedLayout><IntegrationsPage /></ProtectedLayout>} />
+            <Route path="/integrations/:provider/repos" element={<ProtectedLayout><RepoSelectionPage /></ProtectedLayout>} />
             <Route path="/settings" element={<ProtectedLayout><SettingsPage /></ProtectedLayout>} />
 
             {/* Default redirect */}

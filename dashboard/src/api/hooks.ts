@@ -282,3 +282,51 @@ export function useDashboardAssets() {
     staleTime: 60_000,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Provider Repo Discovery
+// ---------------------------------------------------------------------------
+
+export interface DiscoveredRepo {
+  provider_id: string;
+  full_name: string;
+  name: string;
+  owner: string;
+  default_branch: string;
+  language: string | null;
+  visibility: string;
+  updated_at: string;
+  synced: boolean;
+}
+
+export function useProviderRepos(provider: string, params?: { search?: string; page?: number; per_page?: number }) {
+  return useQuery({
+    queryKey: ['provider-repos', provider, params],
+    queryFn: () => apiGet<DiscoveredRepo[]>(`/integrations/${provider}/repos`, toStringParams(params as PaginatedParams)),
+    enabled: !!provider,
+  });
+}
+
+export function useSyncRepos(provider: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (repoIds: string[]) =>
+      apiPost<{ synced: number; errors: string[] }>(`/integrations/${provider}/repos/sync`, { repo_ids: repoIds }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['provider-repos', provider] });
+      qc.invalidateQueries({ queryKey: ['repositories'] });
+    },
+  });
+}
+
+export function useUnsyncRepo(provider: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (providerId: string) =>
+      apiDelete(`/integrations/${provider}/repos/${providerId}/sync`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['provider-repos', provider] });
+      qc.invalidateQueries({ queryKey: ['repositories'] });
+    },
+  });
+}
