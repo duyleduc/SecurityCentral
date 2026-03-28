@@ -490,15 +490,49 @@ export interface MonitoredEndpoint {
   host: string;
   port: number;
   label: string | null;
+  tags: Record<string, string>;
   checkInterval: string;
   status: string;
   lastCheckedAt: string | null;
   lastStatus: string | null;
   lastResponseMs: number | null;
+  projectId: string | null;
   createdAt: string;
 }
 
-export function useMonitoredEndpoints(params?: { page?: number; per_page?: number; status?: string }) {
+export interface Heartbeat {
+  id: string;
+  status: 'up' | 'down' | 'degraded';
+  statusCode: number | null;
+  responseMs: number;
+  message: string | null;
+  certDaysLeft: number | null;
+  createdAt: string;
+}
+
+export interface UptimePeriod {
+  total: number;
+  up: number;
+  pct: number;
+  avgResponseMs: number;
+}
+
+export interface EndpointDetail extends MonitoredEndpoint {
+  heartbeats: Heartbeat[];
+  uptime: Record<string, UptimePeriod>;
+  responseHistory: Array<{ time: string; ms: number; status: string }>;
+}
+
+export function useEndpointDetail(id: string) {
+  return useQuery({
+    queryKey: ['monitored-endpoints', id],
+    queryFn: () => apiGet<EndpointDetail>(`/monitoring/domains/${id}`),
+    enabled: !!id,
+    refetchInterval: 10_000, // auto-refresh every 10s
+  });
+}
+
+export function useMonitoredEndpoints(params?: { page?: number; per_page?: number; status?: string; projectId?: string; tag?: string }) {
   return useQuery({
     queryKey: ['monitored-endpoints', params],
     queryFn: () => apiGet<MonitoredEndpoint[]>('/monitoring/domains', toStringParams(params as PaginatedParams)),
@@ -508,9 +542,27 @@ export function useMonitoredEndpoints(params?: { page?: number; per_page?: numbe
 export function useAddEndpoints() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { endpoints: Array<{ host: string; port?: number; label?: string }>; checkInterval?: string }) =>
-      apiPost<{ created: number; errors: string[] }>('/monitoring/domains', data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['monitored-endpoints'] }),
+    mutationFn: (data: {
+      endpoints: Array<{ host: string; port?: number; label?: string; tags?: Record<string, string> }>;
+      checkInterval?: string;
+      projectId?: string;
+    }) => apiPost<{ created: number; errors: string[] }>('/monitoring/domains', data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['monitored-endpoints'] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+}
+
+export function useUpdateEndpoint() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: string; label?: string; tags?: Record<string, string>; checkInterval?: string }) =>
+      apiPatch<MonitoredEndpoint>(`/monitoring/domains/${id}`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['monitored-endpoints'] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
+    },
   });
 }
 
@@ -518,7 +570,10 @@ export function useRemoveEndpoint() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiDelete(`/monitoring/domains/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['monitored-endpoints'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['monitored-endpoints'] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
+    },
   });
 }
 

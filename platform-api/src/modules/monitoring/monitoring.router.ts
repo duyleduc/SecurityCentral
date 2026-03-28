@@ -5,7 +5,7 @@ import { successEnvelope } from '../../middleware/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/rbac.js';
 import * as monitoringService from './monitoring.service.js';
-import { AddEndpointsBody, ListEndpointsQuery, EndpointIdParams } from './monitoring.validation.js';
+import { AddEndpointsBody, UpdateEndpointBody, ListEndpointsQuery, EndpointIdParams } from './monitoring.validation.js';
 
 export const monitoringRouter = Router();
 
@@ -33,6 +33,32 @@ monitoringRouter.get(
     try {
       const result = await monitoringService.listEndpoints(req.auth!.orgId, req.query as any);
       res.json({ data: result.data, meta: result.meta, errors: [] });
+    } catch (err) { next(err); }
+  },
+);
+
+// GET /monitoring/domains/:id — detail with heartbeats + uptime stats
+monitoringRouter.get(
+  '/domains/:id',
+  requirePermission('view_findings'),
+  validate({ params: EndpointIdParams }),
+  async (req, res, next) => {
+    try {
+      const result = await monitoringService.getEndpointDetail(req.auth!.orgId, req.params.id);
+      res.json(successEnvelope(result));
+    } catch (err) { next(err); }
+  },
+);
+
+// PATCH /monitoring/domains/:id
+monitoringRouter.patch(
+  '/domains/:id',
+  requirePermission('manage_integrations'),
+  validate({ params: EndpointIdParams, body: UpdateEndpointBody }),
+  async (req, res, next) => {
+    try {
+      const result = await monitoringService.updateEndpoint(req.auth!.orgId, req.params.id, req.body);
+      res.json(successEnvelope(result));
     } catch (err) { next(err); }
   },
 );

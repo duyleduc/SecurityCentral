@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Button, Chip, Stack, Paper, Skeleton,
@@ -25,11 +25,15 @@ import SecurityIcon from '@mui/icons-material/Security';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import LanguageIcon from '@mui/icons-material/Language';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import EditIcon from '@mui/icons-material/Edit';
 import {
   useProject, useRepositories, useAssignRepoToProject, useRemoveRepoFromProject,
   useDeleteProject, useTriggerScan, useProjectScans, useCancelScan, useDeleteScan,
-  useClearProjectScanHistory,
-  type Repository, type Project, type Scan, type ScanTypeOption,
+  useClearProjectScanHistory, useMonitoredEndpoints, useAddEndpoints, useRemoveEndpoint,
+  useTriggerEndpointCheck, useUpdateEndpoint,
+  type Repository, type Project, type Scan, type ScanTypeOption, type MonitoredEndpoint,
 } from '../../api/hooks.js';
 
 // ---------------------------------------------------------------------------
@@ -157,6 +161,11 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           <ScanHistory projectId={projectId} repoIds={repoIds} />
         </Box>
       )}
+
+      {/* Domain monitoring section */}
+      <Box sx={{ mt: 4 }}>
+        <DomainMonitoringSection projectId={projectId} />
+      </Box>
 
       <AddRepoDialog
         open={addRepoOpen}
@@ -636,6 +645,390 @@ function AddRepoDialog({ open, projectId, existingRepoIds, onClose }: {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ===========================================================================
+// Domain monitoring section
+// ===========================================================================
+
+const ENDPOINT_STATUS_COLOR: Record<string, string> = {
+  healthy: '#16a34a',
+  unhealthy: '#dc2626',
+  unreachable: '#dc2626',
+};
+
+function DomainMonitoringSection({ projectId }: { projectId: string }) {
+  const navigate = useNavigate();
+  const endpointsQuery = useMonitoredEndpoints({ projectId, per_page: 200 });
+  const removeEndpoint = useRemoveEndpoint();
+  const triggerCheck = useTriggerEndpointCheck();
+  const [addOpen, setAddOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+
+  const endpoints = (endpointsQuery.data?.data ?? []) as MonitoredEndpoint[];
+  const hasPending = endpoints.some((e) => !e.lastStatus);
+
+  // Auto-refresh every 5s when any endpoint has no status yet (check in progress)
+  useEffect(() => {
+    if (!hasPending) return;
+    const id = window.setInterval(() => endpointsQuery.refetch(), 5000);
+    return () => window.clearInterval(id);
+  }, [hasPending]);
+
+  return (
+    <>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <LanguageIcon color="action" />
+          <Typography variant="h6">Domain Monitoring</Typography>
+          <Chip label={endpoints.length} size="small" />
+        </Stack>
+        <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
+          Add Domain
+        </Button>
+      </Stack>
+
+      {endpoints.length === 0 ? (
+        <Paper sx={{ py: 5, textAlign: 'center' }}>
+          <LanguageIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
+          <Typography color="text.secondary" sx={{ mb: 1 }}>No domains monitored in this project</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Add domains to monitor TLS certificates and endpoint health
+          </Typography>
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
+            Add Domain
+          </Button>
+        </Paper>
+      ) : (
+        <TableContainer component={Paper}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Host</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Tags</TableCell>
+                <TableCell>Interval</TableCell>
+                <TableCell>Last Check</TableCell>
+                <TableCell>Response</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {endpoints.map((ep) => (
+                <TableRow key={ep.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/monitoring/domains/${ep.id}`)}>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {ep.host}{ep.port !== 443 ? `:${ep.port}` : ''}
+                    </Typography>
+                    {ep.label && <Typography variant="caption" color="text.secondary">{ep.label}</Typography>}
+                  </TableCell>
+                  <TableCell>
+                    {ep.lastStatus ? (
+                      <Chip
+                        label={ep.lastStatus}
+                        size="small"
+                        sx={{
+                          bgcolor: ENDPOINT_STATUS_COLOR[ep.lastStatus] ?? '#9e9e9e',
+                          color: '#fff',
+                          fontWeight: 600,
+                          fontSize: '0.7rem',
+                        }}
+                      />
+                    ) : (
+                      <Chip label="pending" size="small" variant="outlined" />
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                      {Object.entries(ep.tags ?? {}).map(([k, v]) => (
+                        <Chip key={k} label={`${k}: ${v}`} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
+                      ))}
+                    </Stack>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="caption">{ep.checkInterval}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="caption" color="text.secondary">
+                      {timeAgo(ep.lastCheckedAt)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="caption" color="text.secondary">
+                      {ep.lastResponseMs != null ? `${ep.lastResponseMs}ms` : '--'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Stack direction="row" spacing={0.5} justifyContent="flex-end" onClick={(e) => e.stopPropagation()}>
+                      <Tooltip title="Edit tags">
+                        <IconButton size="small" onClick={() => setEditId(ep.id)}>
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Check now">
+                        <IconButton size="small" onClick={() => triggerCheck.mutate(ep.id)}>
+                          <RefreshIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Remove">
+                        <IconButton
+                          size="small"
+                          onClick={() => { if (confirm(`Remove ${ep.host}?`)) removeEndpoint.mutate(ep.id); }}
+                          sx={{ color: 'text.disabled', '&:hover': { color: 'error.main' } }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      <AddDomainDialog open={addOpen} projectId={projectId} onClose={() => setAddOpen(false)} />
+      {editId && (
+        <EditTagsDialog
+          endpoint={endpoints.find((e) => e.id === editId)!}
+          onClose={() => setEditId(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// ===========================================================================
+// Add domain dialog
+// ===========================================================================
+
+function AddDomainDialog({ open, projectId, onClose }: {
+  open: boolean;
+  projectId: string;
+  onClose: () => void;
+}) {
+  const addMutation = useAddEndpoints();
+  const [host, setHost] = useState('');
+  const [port, setPort] = useState('443');
+  const [interval, setInterval] = useState<string>('1m');
+  const [tagEntries, setTagEntries] = useState<Array<{ key: string; value: string }>>([]);
+  const [newTagKey, setNewTagKey] = useState('');
+  const [newTagValue, setNewTagValue] = useState('');
+
+  const handleAddTag = () => {
+    const k = newTagKey.trim();
+    const v = newTagValue.trim();
+    if (!k) return;
+    if (tagEntries.some((t) => t.key === k)) return;
+    setTagEntries([...tagEntries, { key: k, value: v }]);
+    setNewTagKey('');
+    setNewTagValue('');
+  };
+
+  const handleRemoveTag = (key: string) => {
+    setTagEntries(tagEntries.filter((t) => t.key !== key));
+  };
+
+  const handleSubmit = async () => {
+    if (!host.trim()) return;
+    const tags: Record<string, string> = {};
+    for (const t of tagEntries) { tags[t.key] = t.value; }
+
+    await addMutation.mutateAsync({
+      endpoints: [{ host: host.trim(), port: parseInt(port, 10) || 443, tags }],
+      checkInterval: interval,
+      projectId,
+    });
+    setHost('');
+    setPort('443');
+    setTagEntries([]);
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Add Domain to Monitor</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <Stack direction="row" spacing={2}>
+            <TextField
+              label="Host"
+              placeholder="example.com"
+              value={host}
+              onChange={(e) => setHost(e.target.value)}
+              fullWidth
+              size="small"
+            />
+            <TextField
+              label="Port"
+              value={port}
+              onChange={(e) => setPort(e.target.value)}
+              sx={{ width: 100 }}
+              size="small"
+            />
+          </Stack>
+
+          <TextField
+            label="Check Interval"
+            select
+            value={interval}
+            onChange={(e) => setInterval(e.target.value)}
+            size="small"
+            SelectProps={{ native: true }}
+          >
+            <option value="30s">Every 30 seconds</option>
+            <option value="1m">Every minute</option>
+            <option value="5m">Every 5 minutes</option>
+            <option value="15m">Every 15 minutes</option>
+            <option value="30m">Every 30 minutes</option>
+            <option value="1h">Every hour</option>
+            <option value="6h">Every 6 hours</option>
+            <option value="24h">Every 24 hours</option>
+          </TextField>
+
+          {/* Tags */}
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>Tags</Typography>
+            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+              {tagEntries.map((t) => (
+                <Chip
+                  key={t.key}
+                  label={`${t.key}: ${t.value}`}
+                  size="small"
+                  onDelete={() => handleRemoveTag(t.key)}
+                />
+              ))}
+            </Stack>
+            <Stack direction="row" spacing={1} alignItems="flex-end">
+              <TextField
+                label="Key"
+                placeholder="env"
+                value={newTagKey}
+                onChange={(e) => setNewTagKey(e.target.value)}
+                size="small"
+                sx={{ flex: 1 }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
+              />
+              <TextField
+                label="Value"
+                placeholder="prod"
+                value={newTagValue}
+                onChange={(e) => setNewTagValue(e.target.value)}
+                size="small"
+                sx={{ flex: 1 }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
+              />
+              <Button variant="outlined" size="small" onClick={handleAddTag} disabled={!newTagKey.trim()}>
+                Add
+              </Button>
+            </Stack>
+          </Box>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button
+          variant="contained"
+          onClick={handleSubmit}
+          disabled={!host.trim() || addMutation.isPending}
+        >
+          {addMutation.isPending ? 'Adding...' : 'Add Domain'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ===========================================================================
+// Edit tags dialog
+// ===========================================================================
+
+function EditTagsDialog({ endpoint, onClose }: {
+  endpoint: MonitoredEndpoint;
+  onClose: () => void;
+}) {
+  const updateMutation = useUpdateEndpoint();
+  const [tagEntries, setTagEntries] = useState<Array<{ key: string; value: string }>>(
+    Object.entries(endpoint.tags ?? {}).map(([key, value]) => ({ key, value })),
+  );
+  const [newTagKey, setNewTagKey] = useState('');
+  const [newTagValue, setNewTagValue] = useState('');
+
+  const handleAddTag = () => {
+    const k = newTagKey.trim();
+    const v = newTagValue.trim();
+    if (!k) return;
+    if (tagEntries.some((t) => t.key === k)) return;
+    setTagEntries([...tagEntries, { key: k, value: v }]);
+    setNewTagKey('');
+    setNewTagValue('');
+  };
+
+  const handleRemoveTag = (key: string) => {
+    setTagEntries(tagEntries.filter((t) => t.key !== key));
+  };
+
+  const handleSave = async () => {
+    const tags: Record<string, string> = {};
+    for (const t of tagEntries) { tags[t.key] = t.value; }
+    await updateMutation.mutateAsync({ id: endpoint.id, tags });
+    onClose();
+  };
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        Edit Tags — {endpoint.host}{endpoint.port !== 443 ? `:${endpoint.port}` : ''}
+      </DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+            {tagEntries.map((t) => (
+              <Chip
+                key={t.key}
+                label={`${t.key}: ${t.value}`}
+                size="small"
+                onDelete={() => handleRemoveTag(t.key)}
+              />
+            ))}
+            {tagEntries.length === 0 && (
+              <Typography variant="body2" color="text.secondary">No tags yet</Typography>
+            )}
+          </Stack>
+          <Stack direction="row" spacing={1} alignItems="flex-end">
+            <TextField
+              label="Key"
+              placeholder="env"
+              value={newTagKey}
+              onChange={(e) => setNewTagKey(e.target.value)}
+              size="small"
+              sx={{ flex: 1 }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
+            />
+            <TextField
+              label="Value"
+              placeholder="prod"
+              value={newTagValue}
+              onChange={(e) => setNewTagValue(e.target.value)}
+              size="small"
+              sx={{ flex: 1 }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
+            />
+            <Button variant="outlined" size="small" onClick={handleAddTag} disabled={!newTagKey.trim()}>
+              Add
+            </Button>
+          </Stack>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={handleSave} disabled={updateMutation.isPending}>
+          {updateMutation.isPending ? 'Saving...' : 'Save'}
+        </Button>
       </DialogActions>
     </Dialog>
   );

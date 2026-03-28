@@ -5,6 +5,7 @@ import { env } from './lib/env.js';
 import { logger } from './lib/logger.js';
 import { getRedisConnection } from './lib/redis.js';
 import { processors } from './jobs/processors.js';
+import { scheduleEndpointChecks } from './jobs/domain-monitoring.processor.js';
 
 const WORKER_PORT = env.PORT + 1; // worker health on a separate port
 
@@ -42,6 +43,7 @@ function startWorkers(): void {
 async function shutdown(signal: string): Promise<void> {
   workerLog.info(`Received ${signal}, shutting down gracefully...`);
 
+  if (schedulerTimer) clearInterval(schedulerTimer);
   await Promise.allSettled(workers.map((w) => w.close()));
   workerLog.info('All workers closed');
 
@@ -84,10 +86,33 @@ function startHealthServer(): void {
   });
 }
 
+// --- Domain monitoring scheduler (runs every 30s) ---
+
+const SCHEDULER_INTERVAL_MS = 15_000; // poll every 15s to catch 1m intervals accurately
+let schedulerTimer: ReturnType<typeof setInterval> | null = null;
+
+function startScheduler(): void {
+  // Run once on startup
+  scheduleEndpointChecks()
+    .then((n) => { if (n > 0) workerLog.info(`Scheduler: queued ${n} endpoint checks`); })
+    .catch((err) => workerLog.error('Scheduler error', { error: (err as Error).message }));
+
+  // Then run on interval
+  schedulerTimer = setInterval(async () => {
+    try {
+      const queued = await scheduleEndpointChecks();
+      if (queued > 0) workerLog.info(`Scheduler: queued ${queued} endpoint checks`);
+    } catch (err) {
+      workerLog.error('Scheduler error', { error: (err as Error).message });
+    }
+  }, SCHEDULER_INTERVAL_MS);
+}
+
 // --- Bootstrap ---
 
 startWorkers();
 startHealthServer();
+startScheduler();
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));

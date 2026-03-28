@@ -399,6 +399,7 @@ model MonitoredEndpoint {
   host           String
   port           Int       @default(443)
   label          String?
+  tags           Json      @default("{}") @db.JsonB // key-value pairs, e.g. {"env":"prod","team":"infra"}
   checkInterval  String    @default("1h") @map("check_interval") // 1h | 6h | 24h
   status         String    @default("active") // active | paused
   lastCheckedAt  DateTime? @map("last_checked_at") @db.Timestamptz()
@@ -406,13 +407,30 @@ model MonitoredEndpoint {
   lastResponseMs Int?      @map("last_response_ms")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz()
 
-  organization Organization @relation(fields: [orgId], references: [id])
-  project      Project?     @relation(fields: [projectId], references: [id])
-  projectId    String?      @map("project_id") @db.Uuid
+  organization Organization     @relation(fields: [orgId], references: [id])
+  project      Project?          @relation(fields: [projectId], references: [id])
+  projectId    String?           @map("project_id") @db.Uuid
+  heartbeats   EndpointHeartbeat[]
 
   @@unique([orgId, host, port])
   @@index([orgId, status], map: "idx_monitored_endpoints_org_status")
   @@map("monitored_endpoints")
+}
+
+model EndpointHeartbeat {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  endpointId     String   @map("endpoint_id") @db.Uuid
+  status         String   // up | down | degraded
+  statusCode     Int?     @map("status_code")
+  responseMs     Int      @map("response_ms")
+  message        String?  // error message if down
+  certDaysLeft   Int?     @map("cert_days_left")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  endpoint MonitoredEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt], map: "idx_heartbeats_endpoint_time")
+  @@map("endpoint_heartbeats")
 }
 
 // ─── Projects ────────────────────────────────────────────────
