@@ -76,7 +76,7 @@ export async function processScanOrchestration(job: Job<ScanOrchestrationJobData
         started_at: startedAt.toISOString(),
         completed_at: new Date().toISOString(),
         findings,
-      }, request_id);
+      }, request_id, scanId);
       log.info('Findings ingested', { created: result.findingsCreated, updated: result.findingsUpdated, resolved: result.findingsResolved });
     }
 
@@ -340,6 +340,12 @@ const ECO_SCANNERS: EcoScanner[] = [
     name: 'dotnet', tool: 'dotnet', installHint: 'Install .NET SDK: https://dotnet.microsoft.com/download',
     run: runDotnetAudit,
   },
+  {
+    manifests: ['Dockerfile', 'docker-compose.yml', 'docker-compose.yaml'],
+    name: 'docker', tool: 'trivy',
+    installHint: 'Install Trivy: brew install trivy (or https://aquasecurity.github.io/trivy/)',
+    run: runDockerScan,
+  },
 ];
 
 /**
@@ -553,21 +559,15 @@ function mapNpmSeverity(s: string): ScanFinding['severity'] {
 // ---------------------------------------------------------------------------
 
 async function runPipAudit(workDir: string, log: ReturnType<typeof jobLogger>): Promise<ScanFinding[]> {
-  log.info('Running pip-audit', { workDir });
+  log.info('Running Python dependency scan', { workDir });
 
-  // Try pip-audit first, then fall back to safety
-  const cmds = [
-    'pip-audit -r requirements.txt --format json 2>/dev/null',
-    'python3 -m pip_audit -r requirements.txt --format json 2>/dev/null',
-  ];
-
-  for (const cmd of cmds) {
+  // Try pip-audit first
+  for (const cmd of ['pip-audit', 'python3 -m pip_audit']) {
     try {
-      const { stdout } = await execAsync(`${cmd} || true`, {
-        cwd: workDir,
-        timeout: 120_000,
-        maxBuffer: 10 * 1024 * 1024,
-      });
+      const { stdout } = await execAsync(
+        `${cmd} -r requirements.txt --format json 2>/dev/null || true`,
+        { cwd: workDir, timeout: 120_000, maxBuffer: 10 * 1024 * 1024 },
+      );
 
       if (!stdout.trim() || stdout.trim() === '[]') {
         log.info('pip-audit returned no vulnerabilities');
@@ -588,7 +588,7 @@ async function runPipAudit(workDir: string, log: ReturnType<typeof jobLogger>): 
 
           findings.push({
             type: 'package_vulnerability',
-            severity: 'high', // pip-audit doesn't provide severity; default high
+            severity: 'high',
             title: `${cveId} in ${pkg.name}@${pkg.version}`,
             description: vuln.description || `Vulnerability ${vuln.id} in ${pkg.name}`,
             cve_id: cveId.startsWith('CVE-') ? cveId : undefined,
@@ -614,8 +614,9 @@ async function runPipAudit(workDir: string, log: ReturnType<typeof jobLogger>): 
     }
   }
 
-  log.info('pip-audit not available, skipping Python dependency scan');
-  return [];
+  // Fallback to osv-scanner for Python
+  log.info('pip-audit not available, falling back to osv-scanner for Python');
+  return runOsvScanner(workDir, 'pypi', log);
 }
 
 // ---------------------------------------------------------------------------
@@ -1034,6 +1035,216 @@ function mapDotnetSeverity(s: string): ScanFinding['severity'] {
 }
 
 // ---------------------------------------------------------------------------
+// Docker / container scanning via Trivy
+// ---------------------------------------------------------------------------
+
+/**
+ * Scans Dockerfiles and docker-compose files using Trivy.
+ *
+ * Trivy can scan:
+ * - Dockerfile misconfigurations (security best practices)
+ * - docker-compose misconfigurations
+ * - Base image vulnerabilities (if image is pullable)
+ */
+async function runDockerScan(workDir: string, log: ReturnType<typeof jobLogger>): Promise<ScanFinding[]> {
+  log.info('Running Docker scan', { workDir });
+
+  const hasTrivy = await isToolInstalled('trivy');
+  if (!hasTrivy) {
+    log.info('Trivy not installed, skipping Docker scan');
+    return [];
+  }
+
+  const findings: ScanFinding[] = [];
+
+  // 1. Scan Dockerfile misconfigurations
+  const dockerfiles = await findFilesInDir(workDir, (name) => name === 'Dockerfile' || name.startsWith('Dockerfile.'));
+  for (const df of dockerfiles) {
+    const relPath = path.relative(workDir, df);
+    log.info('Scanning Dockerfile with Trivy', { file: relPath });
+    const dfFindings = await runTrivyConfig(df, relPath, 'dockerfile', log);
+    findings.push(...dfFindings);
+  }
+
+  // 2. Scan docker-compose files
+  const composeFiles = await findFilesInDir(workDir, (name) =>
+    name === 'docker-compose.yml' || name === 'docker-compose.yaml' || name === 'compose.yml' || name === 'compose.yaml',
+  );
+  for (const cf of composeFiles) {
+    const relPath = path.relative(workDir, cf);
+    log.info('Scanning docker-compose with Trivy', { file: relPath });
+    const cfFindings = await runTrivyConfig(cf, relPath, 'docker-compose', log);
+    findings.push(...cfFindings);
+  }
+
+  // 3. Extract base images from Dockerfiles and scan them for vulnerabilities
+  for (const df of dockerfiles) {
+    const relPath = path.relative(workDir, df);
+    const images = await extractBaseImages(df);
+    for (const image of images) {
+      log.info('Scanning Docker base image', { image, file: relPath });
+      const imgFindings = await runTrivyImage(image, relPath, log);
+      findings.push(...imgFindings);
+    }
+  }
+
+  log.info('Docker scan complete', { findings: findings.length });
+  return findings;
+}
+
+/** Find files in a single directory matching a predicate */
+async function findFilesInDir(dir: string, match: (name: string) => boolean): Promise<string[]> {
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    return entries.filter((e) => e.isFile() && match(e.name)).map((e) => path.join(dir, e.name));
+  } catch {
+    return [];
+  }
+}
+
+/** Extract FROM image names from a Dockerfile */
+async function extractBaseImages(dockerfilePath: string): Promise<string[]> {
+  try {
+    const content = await fs.readFile(dockerfilePath, 'utf-8');
+    const images: string[] = [];
+    for (const line of content.split('\n')) {
+      const match = line.match(/^\s*FROM\s+(?:--platform=\S+\s+)?(\S+?)(?:\s+AS\s+\S+)?$/i);
+      if (match && match[1] !== 'scratch' && !match[1].startsWith('$')) {
+        images.push(match[1]);
+      }
+    }
+    // Deduplicate (multi-stage builds may reuse images)
+    return [...new Set(images)];
+  } catch {
+    return [];
+  }
+}
+
+function parseTrivyConfigOutput(stdout: string, relPath: string, type: string): ScanFinding[] {
+  if (!stdout.trim()) return [];
+  const output = JSON.parse(stdout);
+  const results = output.Results ?? [];
+  const findings: ScanFinding[] = [];
+
+  for (const result of results) {
+    for (const mis of result.Misconfigurations ?? []) {
+      findings.push({
+        type: 'misconfiguration',
+        severity: mapTrivySeverity(mis.Severity),
+        title: `[${relPath}] ${mis.Title ?? mis.ID}`,
+        description: mis.Description ?? mis.Message ?? '',
+        detail: {
+          file: relPath,
+          type,
+          rule_id: mis.ID,
+          resolution: mis.Resolution,
+          references: mis.References?.slice(0, 3),
+        },
+        remediation: mis.Resolution ?? 'Review Dockerfile best practices.',
+        auto_fixable: false,
+      });
+    }
+  }
+
+  return findings;
+}
+
+/** Run Trivy config scan on a file (Dockerfile or docker-compose misconfigurations) */
+async function runTrivyConfig(
+  filePath: string,
+  relPath: string,
+  type: string,
+  log: ReturnType<typeof jobLogger>,
+): Promise<ScanFinding[]> {
+  try {
+    const { stdout } = await execFileAsync('trivy', [
+      'config', '--format', 'json', '--severity', 'CRITICAL,HIGH,MEDIUM,LOW', filePath,
+    ], { timeout: 60_000, maxBuffer: 10 * 1024 * 1024 });
+
+    return parseTrivyConfigOutput(stdout, relPath, type);
+  } catch (err) {
+    const execErr = err as { stdout?: string; message: string };
+    // Trivy exits non-zero when findings exist
+    if (execErr.stdout) {
+      try {
+        return parseTrivyConfigOutput(execErr.stdout, relPath, type);
+      } catch { /* fall through */ }
+    }
+    log.warn('Trivy config scan failed', { file: relPath, error: execErr.message.slice(0, 200) });
+    return [];
+  }
+}
+
+/** Run Trivy image scan for known vulnerabilities in a Docker base image */
+async function runTrivyImage(
+  image: string,
+  dockerfileRelPath: string,
+  log: ReturnType<typeof jobLogger>,
+): Promise<ScanFinding[]> {
+  try {
+    const { stdout } = await execFileAsync('trivy', [
+      'image', '--format', 'json', '--severity', 'CRITICAL,HIGH,MEDIUM', '--no-progress', image,
+    ], { timeout: 180_000, maxBuffer: 50 * 1024 * 1024 });
+
+    return parseTrivyImageOutput(stdout, image, dockerfileRelPath);
+  } catch (err) {
+    const execErr = err as { stdout?: string; message: string };
+    if (execErr.stdout) {
+      try {
+        return parseTrivyImageOutput(execErr.stdout, image, dockerfileRelPath);
+      } catch { /* fall through */ }
+    }
+    log.warn('Trivy image scan failed', { image, error: execErr.message.slice(0, 200) });
+    return [];
+  }
+}
+
+function parseTrivyImageOutput(stdout: string, image: string, dockerfileRelPath: string): ScanFinding[] {
+  if (!stdout.trim()) return [];
+
+  const output = JSON.parse(stdout);
+  const results = output.Results ?? [];
+  const findings: ScanFinding[] = [];
+
+  for (const result of results) {
+    for (const vuln of result.Vulnerabilities ?? []) {
+      findings.push({
+        type: 'container_vulnerability',
+        severity: mapTrivySeverity(vuln.Severity),
+        title: `${vuln.VulnerabilityID}: ${vuln.Title ?? vuln.PkgName} in ${image}`,
+        description: vuln.Description?.slice(0, 500) ?? '',
+        cve_id: vuln.VulnerabilityID?.startsWith('CVE-') ? vuln.VulnerabilityID : undefined,
+        cvss_score: vuln.CVSS?.nvd?.V3Score ?? vuln.CVSS?.redhat?.V3Score,
+        detail: {
+          image,
+          dockerfile: dockerfileRelPath,
+          package_name: vuln.PkgName,
+          installed_version: vuln.InstalledVersion,
+          fixed_version: vuln.FixedVersion,
+          target: result.Target,
+        },
+        remediation: vuln.FixedVersion
+          ? `Update base image or package ${vuln.PkgName} to ${vuln.FixedVersion}`
+          : 'No fix available. Consider using a different base image.',
+        auto_fixable: !!vuln.FixedVersion,
+      });
+    }
+  }
+
+  return findings;
+}
+
+function mapTrivySeverity(s: string): ScanFinding['severity'] {
+  switch (s?.toUpperCase()) {
+    case 'CRITICAL': return 'critical';
+    case 'HIGH': return 'high';
+    case 'MEDIUM': return 'medium';
+    case 'LOW': return 'low';
+    default: return 'info';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // osv-scanner — universal fallback for any ecosystem
 // ---------------------------------------------------------------------------
 
@@ -1374,6 +1585,9 @@ const ECOSYSTEM_SIGNATURES: Array<{ file: string; ecosystem: EcosystemInfo }> = 
   { file: 'mix.lock', ecosystem: { name: 'hex', language: 'Elixir', lockFile: 'mix.lock', tools: ['mix audit'] } },
   { file: 'packages.config', ecosystem: { name: 'nuget', language: 'C#/.NET', lockFile: 'packages.config', tools: ['dotnet list package --vulnerable'] } },
   { file: 'Directory.Packages.props', ecosystem: { name: 'nuget', language: 'C#/.NET', lockFile: 'Directory.Packages.props', tools: ['dotnet list package --vulnerable'] } },
+  { file: 'Dockerfile', ecosystem: { name: 'docker', language: 'Docker', lockFile: 'Dockerfile', tools: ['trivy'] } },
+  { file: 'docker-compose.yml', ecosystem: { name: 'docker-compose', language: 'Docker', lockFile: 'docker-compose.yml', tools: ['trivy'] } },
+  { file: 'docker-compose.yaml', ecosystem: { name: 'docker-compose', language: 'Docker', lockFile: 'docker-compose.yaml', tools: ['trivy'] } },
 ];
 
 /** Max depth to search for manifest files (avoid scanning deep into node_modules, etc.) */

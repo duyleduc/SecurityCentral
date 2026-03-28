@@ -36,6 +36,8 @@ export async function ingestFindings(
   orgId: string,
   input: SubmitFindingsInput,
   requestId?: string,
+  /** If provided, use this existing scan record instead of creating a new one */
+  existingScanId?: string,
 ): Promise<IngestionResult> {
   const source = SOURCE_MAP[input.scan_type] ?? 'code_scanner';
 
@@ -46,23 +48,26 @@ export async function ingestFindings(
   });
 
   const serverId = server?.id ?? null;
-  // For code_scanner source, findings are against a repository — the scan_id may link to one
-  // For now we leave repositoryId null and let orchestration fill it in
 
-  // 1. Create or update scan record
-  const scan = await prisma.scan.create({
-    data: {
-      orgId,
-      scanType: input.scan_type as any,
-      status: 'completed',
-      trigger: 'agent',
-      serverId,
-      startedAt: new Date(input.started_at),
-      completedAt: new Date(input.completed_at),
-      durationMs: new Date(input.completed_at).getTime() - new Date(input.started_at).getTime(),
-      findingsTotal: input.findings.length,
-    },
-  });
+  // 1. Use existing scan or create a new one
+  let scan: { id: string };
+  if (existingScanId) {
+    scan = { id: existingScanId };
+  } else {
+    scan = await prisma.scan.create({
+      data: {
+        orgId,
+        scanType: input.scan_type as any,
+        status: 'completed',
+        trigger: 'agent',
+        serverId,
+        startedAt: new Date(input.started_at),
+        completedAt: new Date(input.completed_at),
+        durationMs: new Date(input.completed_at).getTime() - new Date(input.started_at).getTime(),
+        findingsTotal: input.findings.length,
+      },
+    });
+  }
 
   // 2. Deduplicate and upsert findings
   let created = 0;

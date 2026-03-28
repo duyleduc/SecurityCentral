@@ -28,8 +28,8 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
   useProject, useRepositories, useAssignRepoToProject, useRemoveRepoFromProject,
   useDeleteProject, useTriggerScan, useProjectScans, useCancelScan, useDeleteScan,
-  useClearProjectScanHistory, useScan,
-  type Repository, type Project, type Scan, type Finding, type ScanTypeOption,
+  useClearProjectScanHistory,
+  type Repository, type Project, type Scan, type ScanTypeOption,
 } from '../../api/hooks.js';
 
 // ---------------------------------------------------------------------------
@@ -341,7 +341,7 @@ function ScanHistory({ projectId, repoIds }: { projectId: string; repoIds: strin
   const deleteScan = useDeleteScan();
   const clearHistory = useClearProjectScanHistory();
   const [confirmClear, setConfirmClear] = useState(false);
-  const [selectedScanId, setSelectedScanId] = useState<string | null>(null);
+  const nav = useNavigate();
 
   const scans = ((scansQuery.data?.data ?? []) as Scan[]);
   const activeScans = scans.filter((s) => s.status === 'pending' || s.status === 'running');
@@ -441,7 +441,7 @@ function ScanHistory({ projectId, repoIds }: { projectId: string; repoIds: strin
             </TableHead>
             <TableBody>
               {historyScans.map((scan) => (
-                <TableRow key={scan.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelectedScanId(scan.id)}>
+                <TableRow key={scan.id} hover sx={{ cursor: 'pointer' }} onClick={() => nav(`/scans/${scan.id}`)}>
                   <TableCell sx={{ fontWeight: 500 }}>
                     {scan.repository ? `${scan.repository.owner}/${scan.repository.name}` : '--'}
                   </TableCell>
@@ -511,9 +511,6 @@ function ScanHistory({ projectId, repoIds }: { projectId: string; repoIds: strin
         </TableContainer>
       )}
 
-      {/* Scan detail dialog */}
-      <ScanDetailDialog scanId={selectedScanId} onClose={() => setSelectedScanId(null)} />
-
       {/* Clear history confirmation */}
       <Dialog open={confirmClear} onClose={() => setConfirmClear(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Clear Scan History</DialogTitle>
@@ -543,303 +540,8 @@ function ScanHistory({ projectId, repoIds }: { projectId: string; repoIds: strin
   );
 }
 
-// ===========================================================================
-// Scan detail dialog
-// ===========================================================================
-
-const SEVERITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+// Keep STATUS_COLOR for scan history table
 const SEVERITY_COLOR: Record<string, string> = { critical: '#d32f2f', high: '#f44336', medium: '#ff9800', low: '#2196f3', info: '#9e9e9e' };
-
-function ScanDetailDialog({ scanId, onClose }: { scanId: string | null; onClose: () => void }) {
-  const scanQuery = useScan(scanId ?? '');
-  const cancelScan = useCancelScan();
-  const deleteScan = useDeleteScan();
-  const scan = scanQuery.data?.data as Scan | undefined;
-  const findings = (scan?.findings ?? []) as Finding[];
-
-  const canCancel = scan?.status === 'pending' || scan?.status === 'running';
-  const canDelete = scan?.status === 'completed' || scan?.status === 'failed' || scan?.status === 'cancelled';
-
-  const handleDelete = () => {
-    if (!scanId) return;
-    if (confirm('Delete this scan and its findings? This cannot be undone.')) {
-      deleteScan.mutate(scanId, { onSuccess: onClose });
-    }
-  };
-
-  const handleCancel = () => {
-    if (!scanId) return;
-    cancelScan.mutate(scanId);
-  };
-
-  const severityCounts = findings.reduce<Record<string, number>>((acc, f) => {
-    acc[f.severity] = (acc[f.severity] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  const sortedFindings = [...findings].sort(
-    (a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9),
-  );
-
-  return (
-    <Dialog open={scanId !== null} onClose={onClose} maxWidth="md" fullWidth scroll="paper">
-      <DialogTitle>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Stack direction="row" spacing={1} alignItems="center">
-            <HistoryIcon color="primary" />
-            <Typography variant="h6">Scan Details</Typography>
-          </Stack>
-          {scan && (
-            <Chip
-              label={scan.status}
-              size="small"
-              color={STATUS_COLOR[scan.status] ?? 'default'}
-              icon={scan.status === 'completed' ? <CheckCircleIcon /> : scan.status === 'failed' ? <ErrorIcon /> : undefined}
-            />
-          )}
-        </Stack>
-      </DialogTitle>
-
-      <DialogContent dividers>
-        {scanQuery.isLoading ? (
-          <Box sx={{ py: 4 }}>
-            <Skeleton variant="rounded" height={60} sx={{ mb: 2 }} />
-            <Skeleton variant="rounded" height={200} />
-          </Box>
-        ) : !scan ? (
-          <Alert severity="error">Scan not found</Alert>
-        ) : (
-          <Stack spacing={3}>
-            {/* Overview grid */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 2 }}>
-              <InfoCard label="Repository" value={scan.repository ? `${scan.repository.owner}/${scan.repository.name}` : '--'} />
-              <InfoCard label="Scan Type" value={scan.scanType.replace(/_/g, ' ')} />
-              <InfoCard label="Trigger" value={scan.trigger} />
-              <InfoCard label="Duration" value={formatDuration(scan.durationMs)} />
-              <InfoCard label="Started" value={scan.startedAt ? new Date(scan.startedAt).toLocaleString() : '--'} />
-              <InfoCard label="Completed" value={scan.completedAt ? new Date(scan.completedAt).toLocaleString() : '--'} />
-            </Box>
-
-            {/* Ecosystems */}
-            {scan.metadata?.ecosystems && scan.metadata.ecosystems.length > 0 && (
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>Detected Ecosystems</Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  {scan.metadata.ecosystems.map((eco, idx) => (
-                    <Chip
-                      key={`${eco.name}-${idx}`}
-                      label={eco.subdir ? `${eco.language} (${eco.name}) — ${eco.subdir}` : `${eco.language} (${eco.name})`}
-                      size="small"
-                      variant="outlined"
-                    />
-                  ))}
-                </Stack>
-              </Box>
-            )}
-
-            {/* Scan warnings (missing tools, skipped scanners) */}
-            {scan.metadata?.warnings && scan.metadata.warnings.length > 0 && (
-              <Alert severity="warning" variant="outlined" icon={<WarningAmberIcon />}>
-                <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Scan Incomplete — Missing Tools</Typography>
-                {scan.metadata.warnings.map((w: string, i: number) => (
-                  <Typography key={i} variant="body2" sx={{ mb: 0.5 }}>{w}</Typography>
-                ))}
-              </Alert>
-            )}
-
-            {/* Scanners info */}
-            {scan.metadata?.scannersRun && (
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>Scanners</Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  {scan.metadata.scannersRun.map((s: string) => (
-                    <Chip key={s} label={s} size="small" color="success" variant="outlined" />
-                  ))}
-                  {scan.metadata.scannersSkipped?.map((s: string) => (
-                    <Chip key={s} label={`${s} (skipped)`} size="small" color="warning" variant="outlined" />
-                  ))}
-                </Stack>
-              </Box>
-            )}
-
-            {/* Error message */}
-            {scan.errorMessage && (
-              <Alert severity="error" variant="outlined">
-                <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Error</Typography>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>{scan.errorMessage}</Typography>
-              </Alert>
-            )}
-
-            {/* Severity summary */}
-            {findings.length > 0 && (
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>Findings Summary</Typography>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  {['critical', 'high', 'medium', 'low', 'info'].map((sev) => {
-                    const count = severityCounts[sev] ?? 0;
-                    if (count === 0) return null;
-                    return (
-                      <Chip
-                        key={sev}
-                        label={`${sev}: ${count}`}
-                        size="small"
-                        sx={{ bgcolor: SEVERITY_COLOR[sev], color: '#fff', fontWeight: 600 }}
-                      />
-                    );
-                  })}
-                  <Chip label={`${findings.length} total`} size="small" variant="outlined" />
-                </Stack>
-              </Box>
-            )}
-
-            {/* Findings list */}
-            {scan.status === 'completed' && (
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Findings ({findings.length})
-                </Typography>
-
-                {findings.length === 0 ? (
-                  <Paper sx={{ py: 3, textAlign: 'center' }}>
-                    {scan.metadata?.scannersSkipped?.length > 0 ? (
-                      <>
-                        <WarningAmberIcon sx={{ fontSize: 32, color: 'warning.main', mb: 1 }} />
-                        <Typography color="text.secondary">
-                          No vulnerabilities found, but some scanners were skipped due to missing tools
-                        </Typography>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircleIcon sx={{ fontSize: 32, color: 'success.main', mb: 1 }} />
-                        <Typography color="text.secondary">No vulnerabilities found</Typography>
-                      </>
-                    )}
-                  </Paper>
-                ) : (
-                  <Stack spacing={1}>
-                    {sortedFindings.map((f) => (
-                      <FindingRow key={f.id} finding={f} />
-                    ))}
-                  </Stack>
-                )}
-              </Box>
-            )}
-          </Stack>
-        )}
-      </DialogContent>
-      <DialogActions>
-        {canCancel && (
-          <Button
-            color="warning"
-            startIcon={cancelScan.isPending ? <CircularProgress size={16} /> : <StopIcon />}
-            onClick={handleCancel}
-            disabled={cancelScan.isPending}
-          >
-            Cancel Scan
-          </Button>
-        )}
-        {canDelete && (
-          <Button
-            color="error"
-            startIcon={deleteScan.isPending ? <CircularProgress size={16} /> : <DeleteIcon />}
-            onClick={handleDelete}
-            disabled={deleteScan.isPending}
-          >
-            Delete
-          </Button>
-        )}
-        <Box sx={{ flex: 1 }} />
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-function InfoCard({ label, value }: { label: string; value: string }) {
-  return (
-    <Paper variant="outlined" sx={{ p: 1.5 }}>
-      <Typography variant="caption" color="text.secondary">{label}</Typography>
-      <Typography variant="body2" sx={{ fontWeight: 500 }}>{value}</Typography>
-    </Paper>
-  );
-}
-
-function FindingRow({ finding }: { finding: Finding }) {
-  const [expanded, setExpanded] = useState(false);
-  const detail = finding.detail ?? {};
-
-  return (
-    <Paper
-      variant="outlined"
-      sx={{ overflow: 'hidden', cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
-      onClick={() => setExpanded(!expanded)}
-    >
-      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ p: 1.5 }}>
-        <Chip
-          label={finding.severity}
-          size="small"
-          sx={{
-            bgcolor: SEVERITY_COLOR[finding.severity] ?? '#9e9e9e',
-            color: '#fff',
-            fontWeight: 600,
-            minWidth: 64,
-            textAlign: 'center',
-          }}
-        />
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>{finding.title}</Typography>
-          {finding.cveId && (
-            <Typography variant="caption" color="text.secondary">{finding.cveId}</Typography>
-          )}
-        </Box>
-        {finding.cvssScore != null && (
-          <Chip label={`CVSS ${finding.cvssScore}`} size="small" variant="outlined" />
-        )}
-        {finding.autoFixable && (
-          <Chip label="Auto-fixable" size="small" color="success" variant="outlined" />
-        )}
-      </Stack>
-
-      {expanded && (
-        <Box sx={{ px: 2, pb: 2, borderTop: 1, borderColor: 'divider', pt: 1.5 }}>
-          {finding.description && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{finding.description}</Typography>
-          )}
-
-          {/* Detail fields */}
-          {Object.keys(detail).length > 0 && (
-            <Box sx={{ mb: 1.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Details</Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px', mt: 0.5 }}>
-                {Object.entries(detail).map(([key, val]) => {
-                  if (val == null || val === '' || (Array.isArray(val) && val.length === 0)) return null;
-                  const display = Array.isArray(val) ? val.join(', ') : String(val);
-                  if (display.length > 300) return null;
-                  return [
-                    <Typography key={`${key}-l`} variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{key}:</Typography>,
-                    <Typography key={`${key}-v`} variant="caption" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{display}</Typography>,
-                  ];
-                })}
-              </Box>
-            </Box>
-          )}
-
-          {/* Remediation */}
-          {finding.remediation && (
-            <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>Remediation</Typography>
-              <Paper variant="outlined" sx={{ p: 1, mt: 0.5, bgcolor: 'action.hover' }}>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', whiteSpace: 'pre-wrap' }}>
-                  {finding.remediation}
-                </Typography>
-              </Paper>
-            </Box>
-          )}
-        </Box>
-      )}
-    </Paper>
-  );
-}
 
 // ===========================================================================
 // Add repo dialog

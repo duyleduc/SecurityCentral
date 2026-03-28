@@ -66,6 +66,7 @@ export interface EcosystemInfo {
   language: string;
   lockFile: string;
   tools: string[];
+  subdir?: string;
 }
 
 export interface Scan {
@@ -82,7 +83,13 @@ export interface Scan {
   completedAt?: string;
   durationMs?: number;
   createdAt?: string;
-  metadata?: { ecosystems?: EcosystemInfo[]; requestedType?: string };
+  metadata?: {
+    ecosystems?: EcosystemInfo[];
+    requestedType?: string;
+    scannersRun?: string[];
+    scannersSkipped?: string[];
+    warnings?: string[];
+  };
   repository?: { id: string; name: string; owner: string };
   findings?: Finding[];
 }
