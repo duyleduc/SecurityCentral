@@ -132,7 +132,9 @@ export async function deleteRepository(orgId: string, repoId: string) {
 // Trigger scan
 // ---------------------------------------------------------------------------
 
-export async function triggerScan(orgId: string, repoId: string, requestId?: string) {
+export type TriggerScanType = 'full' | 'code_dependencies' | 'code_secrets';
+
+export async function triggerScan(orgId: string, repoId: string, requestId?: string, scanType?: TriggerScanType) {
   const repo = await prisma.repository.findFirst({
     where: { id: repoId, orgId },
   });
@@ -153,14 +155,17 @@ export async function triggerScan(orgId: string, repoId: string, requestId?: str
     throw new AppError('SCAN_ALREADY_RUNNING', 'Repository already has an active scan');
   }
 
+  const resolvedType = scanType === 'code_secrets' ? 'code_secrets' : 'code_dependencies';
+
   // Create pending scan record
   const scan = await prisma.scan.create({
     data: {
       orgId,
-      scanType: 'code_dependencies',
+      scanType: resolvedType,
       status: 'pending',
       trigger: 'manual',
       repositoryId: repoId,
+      metadata: { requestedType: scanType ?? 'full' },
     },
   });
 

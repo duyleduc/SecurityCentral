@@ -78,7 +78,8 @@ repositoriesRouter.post(
   validate({ params: RepoIdSchema }),
   async (req, res, next) => {
     try {
-      const scan = await repoService.triggerScan(req.auth!.orgId, req.params.id, req.requestId);
+      const scanType = req.body?.scan_type as string | undefined;
+      const scan = await repoService.triggerScan(req.auth!.orgId, req.params.id, req.requestId, scanType as any);
       res.status(201).json(successEnvelope(scan));
     } catch (err) {
       next(err);

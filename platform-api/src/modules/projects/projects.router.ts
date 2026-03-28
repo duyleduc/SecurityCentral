@@ -6,6 +6,7 @@ import { successEnvelope } from '../../middleware/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/rbac.js';
 import * as projectsService from './projects.service.js';
+import * as scansService from '../scans/scans.service.js';
 
 export const projectsRouter = Router();
 projectsRouter.use(requireAuth);
@@ -74,6 +75,14 @@ projectsRouter.post('/:id/repos/:repoId', requirePermission('manage_integrations
   } catch (err) { next(err); }
 });
 
+// DELETE /projects/:id/repos/:repoId — remove repo from project
+projectsRouter.delete('/:id/repos/:repoId', requirePermission('manage_integrations'), async (req, res, next) => {
+  try {
+    await projectsService.removeRepoFromProject(req.auth!.orgId, req.params.repoId, req.params.id);
+    res.json(successEnvelope({ removed: true }));
+  } catch (err) { next(err); }
+});
+
 // POST /projects/:id/servers/:serverId — assign server to project
 projectsRouter.post('/:id/servers/:serverId', requirePermission('manage_integrations'), async (req, res, next) => {
   try {
@@ -87,5 +96,13 @@ projectsRouter.post('/assign-repo/:repoId', requirePermission('manage_integratio
   try {
     await projectsService.assignRepoToProject(req.auth!.orgId, req.params.repoId, req.body.projectId);
     res.json(successEnvelope({ assigned: true }));
+  } catch (err) { next(err); }
+});
+
+// DELETE /projects/:id/scan-history — clear completed/failed/cancelled scan history
+projectsRouter.delete('/:id/scan-history', requirePermission('trigger_scans'), validate({ params: IdParam }), async (req, res, next) => {
+  try {
+    const result = await scansService.clearProjectScanHistory(req.auth!.orgId, req.params.id);
+    res.json(successEnvelope(result));
   } catch (err) { next(err); }
 });

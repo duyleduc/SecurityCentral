@@ -55,3 +55,18 @@ scansRouter.post(
     }
   },
 );
+
+// DELETE /scans/:id
+scansRouter.delete(
+  '/:id',
+  requirePermission('trigger_scans'),
+  validate({ params: ScanIdSchema }),
+  async (req, res, next) => {
+    try {
+      await scansService.deleteScan(req.auth!.orgId, req.params.id);
+      res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  },
+);

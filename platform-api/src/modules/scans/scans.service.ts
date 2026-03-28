@@ -79,3 +79,55 @@ export async function cancelScan(orgId: string, scanId: string) {
     data: { status: 'cancelled' },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Delete scan
+// ---------------------------------------------------------------------------
+
+const DELETABLE = new Set(['completed', 'failed', 'cancelled']);
+
+export async function deleteScan(orgId: string, scanId: string) {
+  const scan = await prisma.scan.findFirst({ where: { id: scanId, orgId } });
+  if (!scan) throw new AppError('RESOURCE_NOT_FOUND', `Scan ${scanId} not found`);
+
+  if (!DELETABLE.has(scan.status)) {
+    throw new AppError('VALIDATION_ERROR', `Cannot delete scan in "${scan.status}" status. Cancel it first.`);
+  }
+
+  await prisma.finding.deleteMany({ where: { scanId } });
+  await prisma.scan.delete({ where: { id: scanId } });
+}
+
+// ---------------------------------------------------------------------------
+// Clear scan history for repos in a project
+// ---------------------------------------------------------------------------
+
+export async function clearProjectScanHistory(orgId: string, projectId: string) {
+  const repos = await prisma.repository.findMany({
+    where: { orgId, projectId },
+    select: { id: true },
+  });
+
+  if (repos.length === 0) return { deleted: 0 };
+
+  const repoIds = repos.map((r) => r.id);
+
+  // Only delete completed/failed/cancelled scans — not active ones
+  const scansToDelete = await prisma.scan.findMany({
+    where: {
+      orgId,
+      repositoryId: { in: repoIds },
+      status: { in: ['completed', 'failed', 'cancelled'] },
+    },
+    select: { id: true },
+  });
+
+  if (scansToDelete.length === 0) return { deleted: 0 };
+
+  const scanIds = scansToDelete.map((s) => s.id);
+
+  await prisma.finding.deleteMany({ where: { scanId: { in: scanIds } } });
+  await prisma.scan.deleteMany({ where: { id: { in: scanIds } } });
+
+  return { deleted: scansToDelete.length };
+}

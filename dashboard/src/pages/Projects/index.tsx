@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box, Typography, Card, CardContent, CardActionArea, Grid, Button, Chip, Stack,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, Skeleton, IconButton, Tooltip,
@@ -12,8 +12,17 @@ import CodeIcon from '@mui/icons-material/Code';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useProjects, useCreateProject, useDeleteProject, type Project } from '../../api/hooks.js';
 import { SEVERITY_COLORS } from '../../theme/theme.js';
+import { ProjectDetail } from './ProjectDetail.js';
 
 export function ProjectsPage() {
+  const { id } = useParams<{ id?: string }>();
+
+  if (id) return <ProjectDetail projectId={id} />;
+
+  return <ProjectList />;
+}
+
+function ProjectList() {
   const projects = useProjects();
   const data = (projects.data?.data ?? []) as Project[];
   const [createOpen, setCreateOpen] = useState(false);

@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errors.js';
+import { scanOrchestrationQueue } from '../../jobs/queues.js';
 
 // ---------------------------------------------------------------------------
 // CRUD
@@ -94,7 +95,38 @@ export async function assignRepoToProject(orgId: string, repoId: string, project
   const project = await prisma.project.findFirst({ where: { id: projectId, orgId } });
   if (!project) throw new AppError('RESOURCE_NOT_FOUND', 'Project not found');
 
-  return prisma.repository.update({ where: { id: repoId }, data: { projectId } });
+  const updated = await prisma.repository.update({ where: { id: repoId }, data: { projectId } });
+
+  // Auto-trigger first scan if repo has never been scanned
+  if (!repo.lastScanAt) {
+    const activeScan = await prisma.scan.findFirst({
+      where: { repositoryId: repoId, status: { in: ['pending', 'running'] } },
+    });
+
+    if (!activeScan) {
+      const scan = await prisma.scan.create({
+        data: { orgId, scanType: 'code_dependencies', status: 'pending', trigger: 'manual', repositoryId: repoId },
+      });
+
+      await scanOrchestrationQueue.add('scan-repository', {
+        scanId: scan.id, repositoryId: repoId, orgId,
+      }, {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: 100,
+        removeOnFail: 500,
+      });
+    }
+  }
+
+  return updated;
+}
+
+export async function removeRepoFromProject(orgId: string, repoId: string, projectId: string) {
+  const repo = await prisma.repository.findFirst({ where: { id: repoId, orgId, projectId } });
+  if (!repo) throw new AppError('RESOURCE_NOT_FOUND', 'Repository not found in this project');
+
+  return prisma.repository.update({ where: { id: repoId }, data: { projectId: null } });
 }
 
 export async function assignServerToProject(orgId: string, serverId: string, projectId: string) {

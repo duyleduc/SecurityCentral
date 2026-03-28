@@ -56,9 +56,15 @@ export async function processScanOrchestration(job: Job<ScanOrchestrationJobData
     await cloneRepo(cloneUrl, repo.defaultBranch, workDir);
     log.info('Clone complete', { workDir });
 
+    // --- Detect ecosystems ---
+    const ecosystems = await detectEcosystems(workDir);
+    log.info('Detected ecosystems', { ecosystems });
+
     // --- Scan ---
-    log.info('Running scanner');
-    const findings = await runScanner(workDir, scan.scanType, log);
+    const requestedType = (scan.metadata as Record<string, unknown>)?.requestedType as string | undefined;
+    const effectiveScanType = requestedType === 'code_secrets' ? 'code_secrets' : scan.scanType;
+    log.info('Running scanner', { effectiveScanType, ecosystems });
+    const findings = await runScanner(workDir, effectiveScanType, log);
     log.info('Scan finished', { findingCount: findings.length });
 
     // --- Ingest findings ---
@@ -79,7 +85,14 @@ export async function processScanOrchestration(job: Job<ScanOrchestrationJobData
     const completedAt = new Date();
     await prisma.scan.update({
       where: { id: scanId },
-      data: { status: 'completed', completedAt, durationMs: completedAt.getTime() - startedAt.getTime(), findingsTotal: findings.length, findingsNew: findings.length },
+      data: {
+        status: 'completed',
+        completedAt,
+        durationMs: completedAt.getTime() - startedAt.getTime(),
+        findingsTotal: findings.length,
+        findingsNew: findings.length,
+        metadata: { ...(scan.metadata as Record<string, unknown>), ecosystems } as any,
+      },
     });
     log.info('Scan completed', { scanId, findings: findings.length, durationMs: completedAt.getTime() - startedAt.getTime() });
 
@@ -249,7 +262,47 @@ async function scanDependencies(workDir: string, log: ReturnType<typeof jobLogge
     findings.push(...bundleFindings);
   }
 
+  // govulncheck (Go)
+  if (await fileExists(path.join(workDir, 'go.sum'))) {
+    const goFindings = await runGoVulncheck(workDir, log);
+    findings.push(...goFindings);
+  }
+
+  // cargo audit (Rust)
+  if (await fileExists(path.join(workDir, 'Cargo.lock'))) {
+    const rustFindings = await runCargoAudit(workDir, log);
+    findings.push(...rustFindings);
+  }
+
+  // Maven (Java)
+  if (await fileExists(path.join(workDir, 'pom.xml'))) {
+    const mavenFindings = await runMvnAudit(workDir, log);
+    findings.push(...mavenFindings);
+  }
+
+  // Gradle (Java/Kotlin)
+  if (!await fileExists(path.join(workDir, 'pom.xml')) &&
+      (await fileExists(path.join(workDir, 'build.gradle')) || await fileExists(path.join(workDir, 'build.gradle.kts')))) {
+    const gradleFindings = await runGradleAudit(workDir, log);
+    findings.push(...gradleFindings);
+  }
+
+  // .NET
+  if (await fileExists(path.join(workDir, 'packages.config')) ||
+      await fileExists(path.join(workDir, 'Directory.Packages.props')) ||
+      (await findFileWithExt(workDir, '.csproj'))) {
+    const dotnetFindings = await runDotnetAudit(workDir, log);
+    findings.push(...dotnetFindings);
+  }
+
   return findings;
+}
+
+async function findFileWithExt(dir: string, ext: string): Promise<boolean> {
+  try {
+    const entries = await fs.readdir(dir);
+    return entries.some((e) => e.endsWith(ext));
+  } catch { return false; }
 }
 
 async function fileExists(p: string): Promise<boolean> {
@@ -505,6 +558,391 @@ function mapBundleSeverity(s: string): ScanFinding['severity'] {
   }
 }
 
+// ---------------------------------------------------------------------------
+// govulncheck (Go)
+// ---------------------------------------------------------------------------
+
+async function runGoVulncheck(workDir: string, log: ReturnType<typeof jobLogger>): Promise<ScanFinding[]> {
+  log.info('Running govulncheck', { workDir });
+
+  try {
+    await execAsync('govulncheck --version', { timeout: 5000 });
+  } catch {
+    log.info('govulncheck not installed, skipping Go scan. Install with: go install golang.org/x/vuln/cmd/govulncheck@latest');
+    return [];
+  }
+
+  try {
+    const { stdout } = await execAsync('govulncheck -json ./... 2>/dev/null || true', {
+      cwd: workDir,
+      timeout: 180_000,
+      maxBuffer: 50 * 1024 * 1024,
+      env: { ...process.env, GOFLAGS: '-mod=readonly' },
+    });
+
+    if (!stdout.trim()) return [];
+
+    const findings: ScanFinding[] = [];
+    // govulncheck JSON outputs one object per line (NDJSON)
+    for (const line of stdout.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line);
+        const vuln = entry.finding;
+        if (!vuln) continue;
+
+        const osv = entry.osv ?? {};
+        const aliases = osv.aliases ?? [];
+        const cveId = aliases.find((a: string) => a.startsWith('CVE-')) ?? osv.id ?? '';
+
+        findings.push({
+          type: 'package_vulnerability',
+          severity: mapGoSeverity(osv.database_specific?.severity ?? ''),
+          title: `${cveId || osv.id}: ${osv.summary ?? 'Go vulnerability'}`,
+          description: osv.details ?? osv.summary ?? '',
+          cve_id: cveId || undefined,
+          detail: {
+            package_name: vuln.trace?.[0]?.module ?? 'unknown',
+            ecosystem: 'go',
+            osv_id: osv.id,
+            affected_module: vuln.trace?.[0]?.module,
+            affected_function: vuln.trace?.[0]?.function,
+            fixed_version: osv.affected?.[0]?.ranges?.[0]?.events?.find((e: any) => e.fixed)?.fixed,
+          },
+          remediation: osv.affected?.[0]?.ranges?.[0]?.events?.find((e: any) => e.fixed)?.fixed
+            ? `Update module to version ${osv.affected[0].ranges[0].events.find((e: any) => e.fixed).fixed}`
+            : 'No fix available yet. Check advisory for workarounds.',
+          auto_fixable: !!osv.affected?.[0]?.ranges?.[0]?.events?.find((e: any) => e.fixed),
+        });
+      } catch {
+        // skip unparseable lines
+      }
+    }
+
+    log.info('govulncheck complete', { vulnerabilities: findings.length });
+    return findings;
+  } catch (err) {
+    log.warn('govulncheck failed', { error: (err as Error).message.slice(0, 200) });
+    return [];
+  }
+}
+
+function mapGoSeverity(s: string): ScanFinding['severity'] {
+  switch (s.toUpperCase()) {
+    case 'CRITICAL': return 'critical';
+    case 'HIGH': return 'high';
+    case 'MODERATE': case 'MEDIUM': return 'medium';
+    case 'LOW': return 'low';
+    default: return 'high';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// cargo audit (Rust)
+// ---------------------------------------------------------------------------
+
+async function runCargoAudit(workDir: string, log: ReturnType<typeof jobLogger>): Promise<ScanFinding[]> {
+  log.info('Running cargo audit', { workDir });
+
+  try {
+    await execAsync('cargo audit --version', { timeout: 5000 });
+  } catch {
+    log.info('cargo-audit not installed, skipping Rust scan. Install with: cargo install cargo-audit');
+    return [];
+  }
+
+  try {
+    const { stdout } = await execAsync('cargo audit --json 2>/dev/null || true', {
+      cwd: workDir,
+      timeout: 120_000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+
+    if (!stdout.trim()) return [];
+
+    const audit = JSON.parse(stdout);
+    const vulns = audit.vulnerabilities?.list ?? [];
+    const findings: ScanFinding[] = [];
+
+    for (const v of vulns) {
+      const adv = v.advisory ?? {};
+      findings.push({
+        type: 'package_vulnerability',
+        severity: mapCargoSeverity(adv.cvss?.score),
+        title: `${adv.id}: ${adv.title ?? 'Rust vulnerability'} in ${v.package?.name ?? 'unknown'}`,
+        description: adv.description ?? adv.title ?? '',
+        cve_id: adv.aliases?.find((a: string) => a.startsWith('CVE-')) ?? adv.id ?? undefined,
+        cvss_score: adv.cvss?.score,
+        detail: {
+          package_name: v.package?.name,
+          installed_version: v.package?.version,
+          ecosystem: 'crates',
+          advisory_id: adv.id,
+          patched_versions: v.versions?.patched,
+          unaffected_versions: v.versions?.unaffected,
+        },
+        remediation: v.versions?.patched?.length
+          ? `Update ${v.package?.name} to: ${v.versions.patched.join(' or ')}`
+          : 'No patched version available.',
+        auto_fixable: !!v.versions?.patched?.length,
+      });
+    }
+
+    log.info('cargo audit complete', { vulnerabilities: findings.length });
+    return findings;
+  } catch (err) {
+    log.warn('cargo audit failed', { error: (err as Error).message.slice(0, 200) });
+    return [];
+  }
+}
+
+function mapCargoSeverity(cvss?: number): ScanFinding['severity'] {
+  if (!cvss) return 'high';
+  if (cvss >= 9.0) return 'critical';
+  if (cvss >= 7.0) return 'high';
+  if (cvss >= 4.0) return 'medium';
+  return 'low';
+}
+
+// ---------------------------------------------------------------------------
+// Maven dependency-check (Java)
+// ---------------------------------------------------------------------------
+
+async function runMvnAudit(workDir: string, log: ReturnType<typeof jobLogger>): Promise<ScanFinding[]> {
+  log.info('Running Maven dependency check', { workDir });
+
+  // Try mvn dependency:tree + OWASP dependency-check, or fall back to parsing pom.xml
+  try {
+    await execAsync('mvn --version', { timeout: 5000 });
+  } catch {
+    log.info('Maven not installed, trying osv-scanner for Java');
+    return runOsvScanner(workDir, 'maven', log);
+  }
+
+  try {
+    // Use mvn org.owasp:dependency-check-maven:check if plugin is configured,
+    // otherwise fall back to osv-scanner
+    const { stdout } = await execAsync(
+      'mvn org.owasp:dependency-check-maven:check -Dformat=JSON -DprettyPrint=true -DfailBuildOnCVSS=999 -q 2>/dev/null || true',
+      { cwd: workDir, timeout: 300_000, maxBuffer: 50 * 1024 * 1024 },
+    );
+
+    // Check if the JSON report was generated
+    const reportPath = path.join(workDir, 'target', 'dependency-check-report.json');
+    if (await fileExists(reportPath)) {
+      const reportStr = await fs.readFile(reportPath, 'utf-8');
+      return parseDependencyCheckReport(reportStr, 'maven', log);
+    }
+
+    // Fallback
+    return runOsvScanner(workDir, 'maven', log);
+  } catch {
+    return runOsvScanner(workDir, 'maven', log);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Gradle dependency-check (Java/Kotlin)
+// ---------------------------------------------------------------------------
+
+async function runGradleAudit(workDir: string, log: ReturnType<typeof jobLogger>): Promise<ScanFinding[]> {
+  log.info('Running Gradle dependency check', { workDir });
+
+  try {
+    const gradleCmd = await fileExists(path.join(workDir, 'gradlew')) ? './gradlew' : 'gradle';
+
+    const { stdout } = await execAsync(
+      `${gradleCmd} dependencyCheckAnalyze -DdependencyCheck.format=JSON -q 2>/dev/null || true`,
+      { cwd: workDir, timeout: 300_000, maxBuffer: 50 * 1024 * 1024 },
+    );
+
+    const reportPath = path.join(workDir, 'build', 'reports', 'dependency-check-report.json');
+    if (await fileExists(reportPath)) {
+      const reportStr = await fs.readFile(reportPath, 'utf-8');
+      return parseDependencyCheckReport(reportStr, 'gradle', log);
+    }
+
+    return runOsvScanner(workDir, 'gradle', log);
+  } catch {
+    return runOsvScanner(workDir, 'gradle', log);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// OWASP dependency-check JSON report parser (shared by Maven & Gradle)
+// ---------------------------------------------------------------------------
+
+function parseDependencyCheckReport(reportStr: string, ecosystem: string, log: ReturnType<typeof jobLogger>): ScanFinding[] {
+  try {
+    const report = JSON.parse(reportStr);
+    const deps = report.dependencies ?? [];
+    const findings: ScanFinding[] = [];
+
+    for (const dep of deps) {
+      const vulns = dep.vulnerabilities ?? [];
+      for (const vuln of vulns) {
+        findings.push({
+          type: 'package_vulnerability',
+          severity: mapCargoSeverity(vuln.cvssv3?.baseScore ?? vuln.cvssv2?.score),
+          title: `${vuln.name}: ${vuln.description?.slice(0, 100) ?? 'Vulnerability'} in ${dep.fileName ?? 'unknown'}`,
+          description: vuln.description ?? '',
+          cve_id: vuln.name?.startsWith('CVE-') ? vuln.name : undefined,
+          cvss_score: vuln.cvssv3?.baseScore ?? vuln.cvssv2?.score,
+          detail: {
+            package_name: dep.fileName,
+            ecosystem,
+            evidence: dep.evidenceCollected?.vendorEvidence?.slice(0, 3),
+          },
+          remediation: 'Update the dependency to a non-vulnerable version.',
+          auto_fixable: false,
+        });
+      }
+    }
+
+    log.info('Dependency-check report parsed', { ecosystem, vulnerabilities: findings.length });
+    return findings;
+  } catch {
+    log.warn('Failed to parse dependency-check report', { ecosystem });
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// dotnet list package --vulnerable (.NET / C#)
+// ---------------------------------------------------------------------------
+
+async function runDotnetAudit(workDir: string, log: ReturnType<typeof jobLogger>): Promise<ScanFinding[]> {
+  log.info('Running dotnet vulnerability check', { workDir });
+
+  try {
+    await execAsync('dotnet --version', { timeout: 5000 });
+  } catch {
+    log.info('dotnet SDK not installed, trying osv-scanner for .NET');
+    return runOsvScanner(workDir, 'nuget', log);
+  }
+
+  try {
+    const { stdout } = await execAsync(
+      'dotnet list package --vulnerable --format json 2>/dev/null || true',
+      { cwd: workDir, timeout: 120_000, maxBuffer: 10 * 1024 * 1024 },
+    );
+
+    if (!stdout.trim()) return runOsvScanner(workDir, 'nuget', log);
+
+    // Try to parse .NET 8+ JSON format
+    try {
+      const report = JSON.parse(stdout);
+      const findings: ScanFinding[] = [];
+
+      for (const project of report.projects ?? []) {
+        for (const framework of project.frameworks ?? []) {
+          for (const pkg of framework.topLevelPackages ?? []) {
+            for (const vuln of pkg.vulnerabilities ?? []) {
+              findings.push({
+                type: 'package_vulnerability',
+                severity: mapDotnetSeverity(vuln.severity),
+                title: `${vuln.advisoryUrl?.match(/CVE-[\d-]+/)?.[0] ?? 'Vulnerability'} in ${pkg.id}@${pkg.resolvedVersion}`,
+                description: `Package ${pkg.id} version ${pkg.resolvedVersion} is vulnerable.`,
+                cve_id: vuln.advisoryUrl?.match(/CVE-[\d-]+/)?.[0],
+                detail: {
+                  package_name: pkg.id,
+                  installed_version: pkg.resolvedVersion,
+                  ecosystem: 'nuget',
+                  advisory_url: vuln.advisoryUrl,
+                  framework: framework.framework,
+                },
+                remediation: `Update: dotnet add package ${pkg.id}`,
+                auto_fixable: true,
+              });
+            }
+          }
+        }
+      }
+
+      log.info('dotnet audit complete', { vulnerabilities: findings.length });
+      return findings;
+    } catch {
+      return runOsvScanner(workDir, 'nuget', log);
+    }
+  } catch {
+    return runOsvScanner(workDir, 'nuget', log);
+  }
+}
+
+function mapDotnetSeverity(s: string): ScanFinding['severity'] {
+  switch (s?.toLowerCase()) {
+    case 'critical': return 'critical';
+    case 'high': return 'high';
+    case 'moderate': case 'medium': return 'medium';
+    case 'low': return 'low';
+    default: return 'high';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// osv-scanner — universal fallback for any ecosystem
+// ---------------------------------------------------------------------------
+
+async function runOsvScanner(workDir: string, ecosystem: string, log: ReturnType<typeof jobLogger>): Promise<ScanFinding[]> {
+  try {
+    await execAsync('osv-scanner --version', { timeout: 5000 });
+  } catch {
+    log.info(`osv-scanner not installed, skipping ${ecosystem} fallback scan. Install: go install github.com/google/osv-scanner/cmd/osv-scanner@latest`);
+    return [];
+  }
+
+  log.info(`Running osv-scanner as fallback for ${ecosystem}`);
+
+  try {
+    const { stdout } = await execAsync(
+      `osv-scanner --format json --recursive '${workDir}' 2>/dev/null || true`,
+      { timeout: 180_000, maxBuffer: 50 * 1024 * 1024 },
+    );
+
+    if (!stdout.trim()) return [];
+
+    const output = JSON.parse(stdout);
+    const results = output.results ?? [];
+    const findings: ScanFinding[] = [];
+
+    for (const result of results) {
+      for (const pkg of result.packages ?? []) {
+        for (const vuln of pkg.vulnerabilities ?? []) {
+          const aliases = vuln.aliases ?? [];
+          const cveId = aliases.find((a: string) => a.startsWith('CVE-'));
+          const severity = vuln.database_specific?.severity ?? vuln.severity?.[0]?.score;
+
+          findings.push({
+            type: 'package_vulnerability',
+            severity: typeof severity === 'number' ? mapCargoSeverity(severity) : mapGoSeverity(severity ?? ''),
+            title: `${cveId ?? vuln.id}: ${vuln.summary ?? 'Vulnerability'} in ${pkg.package?.name ?? 'unknown'}`,
+            description: vuln.details ?? vuln.summary ?? '',
+            cve_id: cveId ?? undefined,
+            cvss_score: typeof severity === 'number' ? severity : undefined,
+            detail: {
+              package_name: pkg.package?.name,
+              installed_version: pkg.package?.version,
+              ecosystem: pkg.package?.ecosystem ?? ecosystem,
+              osv_id: vuln.id,
+              aliases,
+            },
+            remediation: vuln.affected?.[0]?.ranges?.[0]?.events?.find((e: any) => e.fixed)
+              ? `Update to version ${vuln.affected[0].ranges[0].events.find((e: any) => e.fixed).fixed}`
+              : 'No fix available yet.',
+            auto_fixable: !!vuln.affected?.[0]?.ranges?.[0]?.events?.find((e: any) => e.fixed),
+          });
+        }
+      }
+    }
+
+    log.info(`osv-scanner complete for ${ecosystem}`, { vulnerabilities: findings.length });
+    return findings;
+  } catch (err) {
+    log.warn(`osv-scanner failed for ${ecosystem}`, { error: (err as Error).message.slice(0, 200) });
+    return [];
+  }
+}
+
 // ===========================================================================
 // SAST — Semgrep (static application security testing)
 // ===========================================================================
@@ -709,6 +1147,52 @@ function buildSastRemediation(r: SemgrepResult): string {
   }
 
   return parts.join('\n') || 'Review the code and apply secure coding practices.';
+}
+
+// ===========================================================================
+// Ecosystem detection
+// ===========================================================================
+
+interface EcosystemInfo {
+  name: string;
+  language: string;
+  lockFile: string;
+  tools: string[];
+}
+
+const ECOSYSTEM_SIGNATURES: Array<{ file: string; ecosystem: EcosystemInfo }> = [
+  { file: 'package-lock.json', ecosystem: { name: 'npm', language: 'JavaScript/TypeScript', lockFile: 'package-lock.json', tools: ['npm audit'] } },
+  { file: 'yarn.lock', ecosystem: { name: 'yarn', language: 'JavaScript/TypeScript', lockFile: 'yarn.lock', tools: ['npm audit'] } },
+  { file: 'pnpm-lock.yaml', ecosystem: { name: 'pnpm', language: 'JavaScript/TypeScript', lockFile: 'pnpm-lock.yaml', tools: ['npm audit'] } },
+  { file: 'requirements.txt', ecosystem: { name: 'pypi', language: 'Python', lockFile: 'requirements.txt', tools: ['pip-audit'] } },
+  { file: 'Pipfile.lock', ecosystem: { name: 'pypi', language: 'Python', lockFile: 'Pipfile.lock', tools: ['pip-audit'] } },
+  { file: 'poetry.lock', ecosystem: { name: 'pypi', language: 'Python', lockFile: 'poetry.lock', tools: ['pip-audit'] } },
+  { file: 'composer.lock', ecosystem: { name: 'composer', language: 'PHP', lockFile: 'composer.lock', tools: ['composer audit'] } },
+  { file: 'Gemfile.lock', ecosystem: { name: 'rubygems', language: 'Ruby', lockFile: 'Gemfile.lock', tools: ['bundle-audit'] } },
+  { file: 'go.sum', ecosystem: { name: 'go', language: 'Go', lockFile: 'go.sum', tools: ['govulncheck'] } },
+  { file: 'Cargo.lock', ecosystem: { name: 'crates', language: 'Rust', lockFile: 'Cargo.lock', tools: ['cargo audit'] } },
+  { file: 'pom.xml', ecosystem: { name: 'maven', language: 'Java', lockFile: 'pom.xml', tools: ['mvn dependency-check'] } },
+  { file: 'build.gradle', ecosystem: { name: 'gradle', language: 'Java/Kotlin', lockFile: 'build.gradle', tools: ['gradle dependencyCheckAnalyze'] } },
+  { file: 'build.gradle.kts', ecosystem: { name: 'gradle', language: 'Kotlin', lockFile: 'build.gradle.kts', tools: ['gradle dependencyCheckAnalyze'] } },
+  { file: 'Package.swift', ecosystem: { name: 'swiftpm', language: 'Swift', lockFile: 'Package.swift', tools: [] } },
+  { file: 'pubspec.lock', ecosystem: { name: 'pub', language: 'Dart/Flutter', lockFile: 'pubspec.lock', tools: [] } },
+  { file: 'mix.lock', ecosystem: { name: 'hex', language: 'Elixir', lockFile: 'mix.lock', tools: ['mix audit'] } },
+  { file: 'packages.config', ecosystem: { name: 'nuget', language: 'C#/.NET', lockFile: 'packages.config', tools: ['dotnet list package --vulnerable'] } },
+  { file: 'Directory.Packages.props', ecosystem: { name: 'nuget', language: 'C#/.NET', lockFile: 'Directory.Packages.props', tools: ['dotnet list package --vulnerable'] } },
+];
+
+async function detectEcosystems(workDir: string): Promise<EcosystemInfo[]> {
+  const found: EcosystemInfo[] = [];
+  const seen = new Set<string>();
+
+  for (const sig of ECOSYSTEM_SIGNATURES) {
+    if (await fileExists(path.join(workDir, sig.file)) && !seen.has(sig.ecosystem.name)) {
+      found.push(sig.ecosystem);
+      seen.add(sig.ecosystem.name);
+    }
+  }
+
+  return found;
 }
 
 // --- Secret scanning ---

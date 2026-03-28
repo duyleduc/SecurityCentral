@@ -58,16 +58,29 @@ export interface Certificate {
   keyAlgorithm: string;
 }
 
+export interface EcosystemInfo {
+  name: string;
+  language: string;
+  lockFile: string;
+  tools: string[];
+}
+
 export interface Scan {
   id: string;
   scanType: string;
   status: string;
   trigger: string;
+  repositoryId?: string;
   findingsTotal: number;
   findingsNew: number;
   findingsResolved: number;
+  errorMessage?: string;
   startedAt?: string;
   completedAt?: string;
+  durationMs?: number;
+  createdAt?: string;
+  metadata?: { ecosystems?: EcosystemInfo[]; requestedType?: string };
+  repository?: { id: string; name: string; owner: string };
 }
 
 export interface DashboardSummary {
@@ -175,11 +188,17 @@ export function useRepository(id: string) {
   });
 }
 
+export type ScanTypeOption = 'full' | 'code_dependencies' | 'code_secrets';
+
 export function useTriggerScan() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (repoId: string) => apiPost<Scan>(`/repositories/${repoId}/scan`, {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['scans'] }),
+    mutationFn: ({ repoId, scanType }: { repoId: string; scanType?: ScanTypeOption }) =>
+      apiPost<Scan>(`/repositories/${repoId}/scan`, scanType ? { scan_type: scanType } : {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['scans'] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
+    },
   });
 }
 
@@ -251,7 +270,55 @@ export function useCancelScan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (scanId: string) => apiPost<Scan>(`/scans/${scanId}/cancel`, {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['scans'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['scans'] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+}
+
+export function useDeleteScan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (scanId: string) => apiDelete(`/scans/${scanId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['scans'] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+}
+
+export function useProjectScans(projectId: string, repoIds: string[]) {
+  return useQuery({
+    queryKey: ['scans', 'project', projectId, repoIds],
+    queryFn: async () => {
+      if (repoIds.length === 0) return { data: [] as Scan[], meta: { total: 0 } };
+      // Fetch scans for all repos in the project
+      const results = await Promise.all(
+        repoIds.map((id) => apiGet<Scan[]>('/scans', { repository_id: id, per_page: '20' })),
+      );
+      const allScans = results.flatMap((r) => (r.data ?? []) as Scan[]);
+      // Sort by newest first
+      allScans.sort((a, b) => {
+        const da = a.startedAt ?? a.completedAt ?? '';
+        const db = b.startedAt ?? b.completedAt ?? '';
+        return db.localeCompare(da);
+      });
+      return { data: allScans, meta: { total: allScans.length } };
+    },
+    enabled: repoIds.length > 0,
+    refetchInterval: 5000, // Poll every 5s for live scan status
+  });
+}
+
+export function useClearProjectScanHistory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string) => apiDelete(`/projects/${projectId}/scan-history`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['scans'] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
+    },
   });
 }
 
@@ -513,7 +580,19 @@ export function useAssignRepoToProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ repoId, projectId }: { repoId: string; projectId: string }) =>
-      apiPost(`/projects/assign-repo/${repoId}`, { projectId }),
+      apiPost(`/projects/${projectId}/repos/${repoId}`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      qc.invalidateQueries({ queryKey: ['repositories'] });
+    },
+  });
+}
+
+export function useRemoveRepoFromProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ repoId, projectId }: { repoId: string; projectId: string }) =>
+      apiDelete(`/projects/${projectId}/repos/${repoId}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['projects'] });
       qc.invalidateQueries({ queryKey: ['repositories'] });
