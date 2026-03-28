@@ -21,8 +21,11 @@ export interface Finding {
   repositoryId?: string;
   serverId?: string;
   certificateId?: string;
+  detail?: Record<string, unknown>;
+  remediation?: string;
   autoFixable: boolean;
   firstSeenAt: string;
+  createdAt?: string;
   resolvedAt?: string;
 }
 
@@ -81,6 +84,7 @@ export interface Scan {
   createdAt?: string;
   metadata?: { ecosystems?: EcosystemInfo[]; requestedType?: string };
   repository?: { id: string; name: string; owner: string };
+  findings?: Finding[];
 }
 
 export interface DashboardSummary {

@@ -45,6 +45,23 @@ export async function getScanById(orgId: string, scanId: string) {
     include: {
       repository: { select: { id: true, name: true, owner: true } },
       server: { select: { id: true, hostname: true } },
+      findings: {
+        orderBy: [{ severity: 'asc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          severity: true,
+          status: true,
+          title: true,
+          description: true,
+          cveId: true,
+          cvssScore: true,
+          source: true,
+          detail: true,
+          remediation: true,
+          autoFixable: true,
+          createdAt: true,
+        },
+      },
     },
   });
 

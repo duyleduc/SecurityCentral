@@ -64,8 +64,9 @@ export async function processScanOrchestration(job: Job<ScanOrchestrationJobData
     const requestedType = (scan.metadata as Record<string, unknown>)?.requestedType as string | undefined;
     const effectiveScanType = requestedType === 'code_secrets' ? 'code_secrets' : scan.scanType;
     log.info('Running scanner', { effectiveScanType, ecosystems });
-    const findings = await runScanner(workDir, effectiveScanType, log);
-    log.info('Scan finished', { findingCount: findings.length });
+    const scanResult = await runScanner(workDir, effectiveScanType, log);
+    const { findings, warnings, scannersRun, scannersSkipped } = scanResult;
+    log.info('Scan finished', { findingCount: findings.length, scannersRun, scannersSkipped, warnings });
 
     // --- Ingest findings ---
     if (findings.length > 0) {
@@ -91,7 +92,13 @@ export async function processScanOrchestration(job: Job<ScanOrchestrationJobData
         durationMs: completedAt.getTime() - startedAt.getTime(),
         findingsTotal: findings.length,
         findingsNew: findings.length,
-        metadata: { ...(scan.metadata as Record<string, unknown>), ecosystems } as any,
+        metadata: {
+          ...(scan.metadata as Record<string, unknown>),
+          ecosystems,
+          scannersRun,
+          scannersSkipped,
+          warnings: warnings.length > 0 ? warnings : undefined,
+        } as any,
       },
     });
     log.info('Scan completed', { scanId, findings: findings.length, durationMs: completedAt.getTime() - startedAt.getTime() });
@@ -146,10 +153,10 @@ async function cloneRepo(cloneUrl: string, branch: string, destDir: string): Pro
   await fs.mkdir(destDir, { recursive: true });
 
   try {
-    await execAsync(
-      `git clone --depth 1 --branch '${branch}' '${cloneUrl}' '${destDir}'`,
-      { timeout: 120_000, maxBuffer: 10 * 1024 * 1024 },
-    );
+    await execFileAsync('git', ['clone', '--depth', '1', '--branch', branch, cloneUrl, destDir], {
+      timeout: 120_000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
   } catch (err) {
     // Strip tokens from error message
     const msg = (err as Error).message.replace(/https:\/\/[^@]+@/g, 'https://***@');
@@ -173,12 +180,24 @@ interface ScanFinding {
   auto_fixable: boolean;
 }
 
-async function runScanner(workDir: string, scanType: string, log: ReturnType<typeof jobLogger>): Promise<ScanFinding[]> {
+interface ScanResult {
+  findings: ScanFinding[];
+  warnings: string[];
+  scannersRun: string[];
+  scannersSkipped: string[];
+}
+
+async function runScanner(workDir: string, scanType: string, log: ReturnType<typeof jobLogger>): Promise<ScanResult> {
   // Try sc-scan Go binary
   const binary = await findBinary('sc-scan');
   if (binary) {
     log.info('Using sc-scan binary', { path: binary });
-    return runGoBinary(binary, workDir, scanType, log);
+    try {
+      const findings = await runGoBinary(binary, workDir, scanType, log);
+      return { findings, warnings: [], scannersRun: ['sc-scan'], scannersSkipped: [] };
+    } catch (err) {
+      log.warn('sc-scan binary failed, falling back', { error: (err as Error).message });
+    }
   }
 
   log.info('sc-scan binary not found, using built-in Node scanner');
@@ -198,104 +217,239 @@ async function runGoBinary(bin: string, workDir: string, scanType: string, log: 
   if (scanType === 'code_dependencies') { args.push('--scan-deps', '--scan-secrets=false'); }
   else if (scanType === 'code_secrets') { args.push('--scan-deps=false', '--scan-secrets'); }
 
-  try {
-    const { stdout } = await execFileAsync(bin, args, { timeout: 300_000, maxBuffer: 50 * 1024 * 1024 });
-    return JSON.parse(stdout) as ScanFinding[];
-  } catch (err) {
-    log.warn('sc-scan binary failed, falling back', { error: (err as Error).message });
-    return runBuiltinScanner(workDir, scanType, log);
-  }
+  const { stdout } = await execFileAsync(bin, args, { timeout: 300_000, maxBuffer: 50 * 1024 * 1024 });
+  return JSON.parse(stdout) as ScanFinding[];
 }
 
 // ===========================================================================
 // Built-in Node.js scanner (no Go binary needed)
 // ===========================================================================
 
-async function runBuiltinScanner(workDir: string, scanType: string, log: ReturnType<typeof jobLogger>): Promise<ScanFinding[]> {
+async function runBuiltinScanner(workDir: string, scanType: string, log: ReturnType<typeof jobLogger>): Promise<ScanResult> {
   const findings: ScanFinding[] = [];
+  const warnings: string[] = [];
+  const scannersRun: string[] = [];
+  const scannersSkipped: string[] = [];
 
   // 1. Dependency scan (SCA) — npm audit, pip-audit, composer audit, bundle-audit
   if (scanType !== 'code_secrets') {
-    const depFindings = await scanDependencies(workDir, log);
-    findings.push(...depFindings);
+    const depResult = await scanDependencies(workDir, log);
+    findings.push(...depResult.findings);
+    warnings.push(...depResult.warnings);
+    scannersRun.push(...depResult.scannersRun);
+    scannersSkipped.push(...depResult.scannersSkipped);
   }
 
   // 2. SAST scan — Semgrep for code-level vulnerabilities (SQL injection, XSS, etc.)
   if (scanType !== 'code_secrets') {
-    const sastFindings = await runSemgrep(workDir, log);
-    findings.push(...sastFindings);
+    const hasSmg = await isToolInstalled('semgrep');
+    if (hasSmg) {
+      const sastFindings = await runSemgrep(workDir, log);
+      findings.push(...sastFindings);
+      scannersRun.push('semgrep');
+    } else {
+      scannersSkipped.push('semgrep');
+      warnings.push('Semgrep not installed — SAST scan skipped. Install with: pip install semgrep');
+    }
   }
 
   // 3. Secret scan — regex patterns for hardcoded credentials
   const secretFindings = await scanSecrets(workDir, log);
   findings.push(...secretFindings);
+  scannersRun.push('secret-regex');
 
-  return findings;
+  return { findings, warnings, scannersRun, scannersSkipped };
 }
 
-// --- Dependency scanning via native audit tools ---
+async function isToolInstalled(name: string): Promise<boolean> {
+  try {
+    await execAsync(`${name} --version`, { timeout: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-async function scanDependencies(workDir: string, log: ReturnType<typeof jobLogger>): Promise<ScanFinding[]> {
+// --- Dependency scanning via native audit tools (recursive) ---
+
+interface DepScanResult {
+  findings: ScanFinding[];
+  warnings: string[];
+  scannersRun: string[];
+  scannersSkipped: string[];
+}
+
+/** Maps manifest file names to their scanner and metadata */
+interface EcoScanner {
+  /** Manifest files that trigger this scanner */
+  manifests: string[];
+  name: string;
+  tool: string;
+  installHint: string;
+  run: (dir: string, log: ReturnType<typeof jobLogger>) => Promise<ScanFinding[]>;
+  /** Optional: skip if another ecosystem was already found in this dir (e.g., skip gradle if pom.xml present) */
+  skipIf?: string[];
+}
+
+const ECO_SCANNERS: EcoScanner[] = [
+  {
+    manifests: ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'],
+    name: 'npm', tool: 'npm', installHint: 'Install Node.js: https://nodejs.org',
+    run: runNpmAudit,
+  },
+  {
+    manifests: ['requirements.txt', 'Pipfile.lock', 'poetry.lock'],
+    name: 'pip', tool: 'pip-audit', installHint: 'pip install pip-audit',
+    run: runPipAudit,
+  },
+  {
+    manifests: ['composer.lock'],
+    name: 'composer', tool: 'composer', installHint: 'Install Composer: https://getcomposer.org',
+    run: runComposerAudit,
+  },
+  {
+    manifests: ['Gemfile.lock'],
+    name: 'bundler', tool: 'bundle-audit', installHint: 'gem install bundler-audit',
+    run: runBundleAudit,
+  },
+  {
+    manifests: ['go.sum'],
+    name: 'go', tool: 'govulncheck', installHint: 'go install golang.org/x/vuln/cmd/govulncheck@latest',
+    run: runGoVulncheck,
+  },
+  {
+    manifests: ['Cargo.lock'],
+    name: 'cargo', tool: 'cargo-audit', installHint: 'cargo install cargo-audit',
+    run: runCargoAudit,
+  },
+  {
+    manifests: ['pom.xml'],
+    name: 'maven', tool: 'mvn',
+    installHint: 'Install Maven: https://maven.apache.org/install.html (or install osv-scanner: go install github.com/google/osv-scanner/cmd/osv-scanner@latest)',
+    run: runMvnAudit,
+  },
+  {
+    manifests: ['build.gradle', 'build.gradle.kts'],
+    name: 'gradle', tool: 'gradle',
+    installHint: 'Install Gradle: https://gradle.org/install/ (or install osv-scanner: go install github.com/google/osv-scanner/cmd/osv-scanner@latest)',
+    run: runGradleAudit,
+    skipIf: ['maven'], // skip gradle if pom.xml already handled this dir
+  },
+  {
+    manifests: ['packages.config', 'Directory.Packages.props', '*.csproj'],
+    name: 'dotnet', tool: 'dotnet', installHint: 'Install .NET SDK: https://dotnet.microsoft.com/download',
+    run: runDotnetAudit,
+  },
+];
+
+/**
+ * Recursively discovers manifest files and runs the appropriate dependency
+ * scanner in each subdirectory where a manifest is found.
+ */
+async function scanDependencies(workDir: string, log: ReturnType<typeof jobLogger>): Promise<DepScanResult> {
   const findings: ScanFinding[] = [];
+  const warnings: string[] = [];
+  const scannersRun: string[] = [];
+  const scannersSkipped: string[] = [];
 
-  // npm audit
-  if (await fileExists(path.join(workDir, 'package-lock.json')) || await fileExists(path.join(workDir, 'yarn.lock'))) {
-    const npmFindings = await runNpmAudit(workDir, log);
-    findings.push(...npmFindings);
+  // 1. Discover all directories that contain manifest files
+  const targets = await discoverManifestDirs(workDir, log);
+  log.info('Discovered dependency manifest directories', {
+    count: targets.length,
+    dirs: targets.map((t) => ({ dir: path.relative(workDir, t.dir), scanner: t.scanner.name })),
+  });
+
+  // 2. Run scanners in each directory
+  for (const { dir, scanner } of targets) {
+    const relDir = path.relative(workDir, dir) || '.';
+    log.info(`Running ${scanner.name} dependency scan`, { dir: relDir });
+
+    const ecoFindings = await scanner.run(dir, log);
+
+    // Tag findings with subdirectory for context
+    for (const f of ecoFindings) {
+      if (relDir !== '.') {
+        f.title = `[${relDir}] ${f.title}`;
+        (f.detail as Record<string, unknown>).subdir = relDir;
+      }
+    }
+
+    findings.push(...ecoFindings);
+
+    if (ecoFindings.length === 0) {
+      const hasNativeTool = await isToolInstalled(scanner.tool);
+      const hasOsvScanner = await isToolInstalled('osv-scanner');
+      if (!hasNativeTool && !hasOsvScanner) {
+        const label = relDir === '.' ? scanner.name : `${scanner.name} (${relDir})`;
+        if (!scannersSkipped.includes(label)) {
+          scannersSkipped.push(label);
+          warnings.push(`${label}: project detected but no scanning tool available — dependency scan skipped. ${scanner.installHint}`);
+        }
+      } else {
+        const label = relDir === '.' ? scanner.name : `${scanner.name} (${relDir})`;
+        if (!scannersRun.includes(label)) scannersRun.push(label);
+      }
+    } else {
+      const label = relDir === '.' ? scanner.name : `${scanner.name} (${relDir})`;
+      if (!scannersRun.includes(label)) scannersRun.push(label);
+    }
   }
 
-  // pip-audit
-  if (await fileExists(path.join(workDir, 'requirements.txt'))) {
-    const pipFindings = await runPipAudit(workDir, log);
-    findings.push(...pipFindings);
+  return { findings, warnings, scannersRun, scannersSkipped };
+}
+
+interface ManifestTarget {
+  dir: string;
+  scanner: EcoScanner;
+}
+
+/** Walk the repo tree (up to MAX_DETECT_DEPTH) and find directories with dependency manifests */
+async function discoverManifestDirs(workDir: string, log: ReturnType<typeof jobLogger>): Promise<ManifestTarget[]> {
+  const targets: ManifestTarget[] = [];
+  const seen = new Set<string>(); // "scanner.name:dir" dedup
+
+  async function walk(dir: string, depth: number) {
+    if (depth > MAX_DETECT_DEPTH) return;
+
+    let entries: import('node:fs').Dirent[];
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    const fileNames = entries.filter((e) => e.isFile()).map((e) => e.name);
+    const fileNameSet = new Set(fileNames);
+    const scannersInDir = new Set<string>();
+
+    for (const scanner of ECO_SCANNERS) {
+      // Support exact match and extension patterns (e.g., "*.csproj")
+      const hasManifest = scanner.manifests.some((m) =>
+        m.startsWith('*') ? fileNames.some((f) => f.endsWith(m.slice(1))) : fileNameSet.has(m),
+      );
+      if (!hasManifest) continue;
+
+      // Check skipIf (e.g., skip gradle if maven already found in same dir)
+      if (scanner.skipIf?.some((s) => scannersInDir.has(s))) continue;
+
+      const key = `${scanner.name}:${dir}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        targets.push({ dir, scanner });
+        scannersInDir.add(scanner.name);
+      }
+    }
+
+    // Recurse
+    for (const e of entries) {
+      if (e.isDirectory() && !SKIP_DIRS.has(e.name)) {
+        await walk(path.join(dir, e.name), depth + 1);
+      }
+    }
   }
 
-  // composer audit (PHP)
-  if (await fileExists(path.join(workDir, 'composer.lock'))) {
-    const composerFindings = await runComposerAudit(workDir, log);
-    findings.push(...composerFindings);
-  }
-
-  // bundle-audit (Ruby)
-  if (await fileExists(path.join(workDir, 'Gemfile.lock'))) {
-    const bundleFindings = await runBundleAudit(workDir, log);
-    findings.push(...bundleFindings);
-  }
-
-  // govulncheck (Go)
-  if (await fileExists(path.join(workDir, 'go.sum'))) {
-    const goFindings = await runGoVulncheck(workDir, log);
-    findings.push(...goFindings);
-  }
-
-  // cargo audit (Rust)
-  if (await fileExists(path.join(workDir, 'Cargo.lock'))) {
-    const rustFindings = await runCargoAudit(workDir, log);
-    findings.push(...rustFindings);
-  }
-
-  // Maven (Java)
-  if (await fileExists(path.join(workDir, 'pom.xml'))) {
-    const mavenFindings = await runMvnAudit(workDir, log);
-    findings.push(...mavenFindings);
-  }
-
-  // Gradle (Java/Kotlin)
-  if (!await fileExists(path.join(workDir, 'pom.xml')) &&
-      (await fileExists(path.join(workDir, 'build.gradle')) || await fileExists(path.join(workDir, 'build.gradle.kts')))) {
-    const gradleFindings = await runGradleAudit(workDir, log);
-    findings.push(...gradleFindings);
-  }
-
-  // .NET
-  if (await fileExists(path.join(workDir, 'packages.config')) ||
-      await fileExists(path.join(workDir, 'Directory.Packages.props')) ||
-      (await findFileWithExt(workDir, '.csproj'))) {
-    const dotnetFindings = await runDotnetAudit(workDir, log);
-    findings.push(...dotnetFindings);
-  }
-
-  return findings;
+  await walk(workDir, 0);
+  return targets;
 }
 
 async function findFileWithExt(dir: string, ext: string): Promise<boolean> {
@@ -891,13 +1045,12 @@ async function runOsvScanner(workDir: string, ecosystem: string, log: ReturnType
     return [];
   }
 
-  log.info(`Running osv-scanner as fallback for ${ecosystem}`);
+  log.info(`Running osv-scanner as fallback for ${ecosystem}`, { workDir });
 
   try {
-    const { stdout } = await execAsync(
-      `osv-scanner --format json --recursive '${workDir}' 2>/dev/null || true`,
-      { timeout: 180_000, maxBuffer: 50 * 1024 * 1024 },
-    );
+    const { stdout } = await execFileAsync('osv-scanner', [
+      '--format', 'json', '--recursive', workDir,
+    ], { timeout: 180_000, maxBuffer: 50 * 1024 * 1024 });
 
     if (!stdout.trim()) return [];
 
@@ -938,7 +1091,54 @@ async function runOsvScanner(workDir: string, ecosystem: string, log: ReturnType
     log.info(`osv-scanner complete for ${ecosystem}`, { vulnerabilities: findings.length });
     return findings;
   } catch (err) {
-    log.warn(`osv-scanner failed for ${ecosystem}`, { error: (err as Error).message.slice(0, 200) });
+    // osv-scanner exits with code 1 when vulnerabilities are found — parse stdout from error
+    const execErr = err as { stdout?: string; stderr?: string; message: string };
+    if (execErr.stdout) {
+      try {
+        const output = JSON.parse(execErr.stdout);
+        const results = output.results ?? [];
+        const findings: ScanFinding[] = [];
+
+        for (const result of results) {
+          for (const pkg of result.packages ?? []) {
+            for (const vuln of pkg.vulnerabilities ?? []) {
+              const aliases = vuln.aliases ?? [];
+              const cveId = aliases.find((a: string) => a.startsWith('CVE-'));
+              const severity = vuln.database_specific?.severity ?? vuln.severity?.[0]?.score;
+
+              findings.push({
+                type: 'package_vulnerability',
+                severity: typeof severity === 'number' ? mapCargoSeverity(severity) : mapGoSeverity(severity ?? ''),
+                title: `${cveId ?? vuln.id}: ${vuln.summary ?? 'Vulnerability'} in ${pkg.package?.name ?? 'unknown'}`,
+                description: vuln.details ?? vuln.summary ?? '',
+                cve_id: cveId ?? undefined,
+                cvss_score: typeof severity === 'number' ? severity : undefined,
+                detail: {
+                  package_name: pkg.package?.name,
+                  installed_version: pkg.package?.version,
+                  ecosystem: pkg.package?.ecosystem ?? ecosystem,
+                  osv_id: vuln.id,
+                  aliases,
+                },
+                remediation: vuln.affected?.[0]?.ranges?.[0]?.events?.find((e: any) => e.fixed)
+                  ? `Update to version ${vuln.affected[0].ranges[0].events.find((e: any) => e.fixed).fixed}`
+                  : 'No fix available yet.',
+                auto_fixable: !!vuln.affected?.[0]?.ranges?.[0]?.events?.find((e: any) => e.fixed),
+              });
+            }
+          }
+        }
+
+        log.info(`osv-scanner complete for ${ecosystem} (via exit code 1)`, { vulnerabilities: findings.length });
+        return findings;
+      } catch {
+        // JSON parse failed
+      }
+    }
+    log.warn(`osv-scanner failed for ${ecosystem}`, {
+      error: execErr.message.slice(0, 300),
+      stderr: execErr.stderr?.slice(0, 500),
+    });
     return [];
   }
 }
@@ -958,35 +1158,25 @@ async function runOsvScanner(workDir: string, ecosystem: string, log: ReturnType
  *   p/default           — Semgrep recommended rules
  */
 async function runSemgrep(workDir: string, log: ReturnType<typeof jobLogger>): Promise<ScanFinding[]> {
-  // Check if semgrep is installed
-  try {
-    await execAsync('semgrep --version', { timeout: 5000 });
-  } catch {
-    log.info('Semgrep not installed, skipping SAST scan. Install with: pip install semgrep');
-    return [];
-  }
-
   log.info('Running Semgrep SAST scan');
 
   try {
     // Run semgrep with security rulesets, JSON output, no git tracking
-    const { stdout } = await execAsync(
-      [
-        'semgrep scan',
-        '--config auto',           // auto-detect best rules for the codebase
-        '--json',                  // structured JSON output
-        '--quiet',                 // suppress progress bars
-        '--no-git',                // don't require git
-        '--timeout 60',            // per-rule timeout
-        '--max-target-bytes 1000000', // skip files >1MB
-        `'${workDir}'`,
-      ].join(' '),
-      {
-        timeout: 300_000,  // 5 min total timeout
-        maxBuffer: 50 * 1024 * 1024,
-        env: { ...process.env, SEMGREP_SEND_METRICS: 'off' },
-      },
-    );
+    // Use execFileAsync to avoid shell quoting issues with long temp paths
+    const { stdout } = await execFileAsync('semgrep', [
+      'scan',
+      '--config', 'auto',           // auto-detect best rules for the codebase
+      '--json',                      // structured JSON output
+      '--quiet',                     // suppress progress bars
+      '--no-git',                    // don't require git
+      '--timeout', '60',             // per-rule timeout
+      '--max-target-bytes', '1000000', // skip files >1MB
+      workDir,
+    ], {
+      timeout: 300_000,  // 5 min total timeout
+      maxBuffer: 50 * 1024 * 1024,
+      env: { ...process.env, SEMGREP_SEND_METRICS: 'off' },
+    });
 
     if (!stdout.trim()) {
       log.info('Semgrep returned no results');
@@ -1016,7 +1206,10 @@ async function runSemgrep(workDir: string, log: ReturnType<typeof jobLogger>): P
         // JSON parse failed
       }
     }
-    log.warn('Semgrep scan failed', { error: (err as Error).message.slice(0, 200) });
+    log.warn('Semgrep scan failed', {
+      error: execErr.message.slice(0, 300),
+      stderr: execErr.stderr?.slice(0, 500),
+    });
     return [];
   }
 }
@@ -1158,6 +1351,8 @@ interface EcosystemInfo {
   language: string;
   lockFile: string;
   tools: string[];
+  /** Subdirectory where the manifest was found (relative to workDir), empty string for root */
+  subdir?: string;
 }
 
 const ECOSYSTEM_SIGNATURES: Array<{ file: string; ecosystem: EcosystemInfo }> = [
@@ -1181,17 +1376,43 @@ const ECOSYSTEM_SIGNATURES: Array<{ file: string; ecosystem: EcosystemInfo }> = 
   { file: 'Directory.Packages.props', ecosystem: { name: 'nuget', language: 'C#/.NET', lockFile: 'Directory.Packages.props', tools: ['dotnet list package --vulnerable'] } },
 ];
 
+/** Max depth to search for manifest files (avoid scanning deep into node_modules, etc.) */
+const MAX_DETECT_DEPTH = 4;
+
 async function detectEcosystems(workDir: string): Promise<EcosystemInfo[]> {
   const found: EcosystemInfo[] = [];
-  const seen = new Set<string>();
+  const seenKey = new Set<string>(); // "ecosystem:subdir" to dedup
 
-  for (const sig of ECOSYSTEM_SIGNATURES) {
-    if (await fileExists(path.join(workDir, sig.file)) && !seen.has(sig.ecosystem.name)) {
-      found.push(sig.ecosystem);
-      seen.add(sig.ecosystem.name);
+  async function walk(dir: string, depth: number) {
+    if (depth > MAX_DETECT_DEPTH) return;
+
+    let entries: import('node:fs').Dirent[];
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    const relDir = path.relative(workDir, dir);
+
+    // Check for manifest files in current directory
+    for (const sig of ECOSYSTEM_SIGNATURES) {
+      const key = `${sig.ecosystem.name}:${relDir}`;
+      if (!seenKey.has(key) && entries.some((e) => e.isFile() && e.name === sig.file)) {
+        seenKey.add(key);
+        found.push({ ...sig.ecosystem, subdir: relDir || undefined });
+      }
+    }
+
+    // Recurse into subdirectories
+    for (const e of entries) {
+      if (e.isDirectory() && !SKIP_DIRS.has(e.name)) {
+        await walk(path.join(dir, e.name), depth + 1);
+      }
     }
   }
 
+  await walk(workDir, 0);
   return found;
 }
 
