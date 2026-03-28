@@ -5,11 +5,13 @@ import {
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
   Paper, Skeleton, Checkbox, InputAdornment,
   Dialog, DialogTitle, DialogContent, DialogActions, Select, MenuItem, FormControl, InputLabel, Divider,
+  CircularProgress,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SyncIcon from '@mui/icons-material/Sync';
 import LinkOffIcon from '@mui/icons-material/LinkOff';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import FolderIcon from '@mui/icons-material/Folder';
 import AddIcon from '@mui/icons-material/Add';
 import { useProviderRepos, useSyncRepos, useUnsyncRepo, useProjects, useCreateProject, useAssignRepoToProject, type DiscoveredRepo } from '../../api/hooks.js';
@@ -55,6 +57,8 @@ export function RepoSelectionPage() {
   const selectNone = () => setSelected(new Set());
 
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [unsyncTarget, setUnsyncTarget] = useState<DiscoveredRepo | null>(null);
+  const [unsyncResult, setUnsyncResult] = useState<{ success: boolean; name: string } | null>(null);
 
   const handleSync = () => {
     if (selected.size === 0) return;
@@ -68,17 +72,22 @@ export function RepoSelectionPage() {
       const result = await syncMutation.mutateAsync([...selected]);
       setSyncResult(result.data as { synced: number; errors: string[] });
       setSelected(new Set());
-      // Project assignment happens after sync — assign each synced repo to the project
-      // (The sync response doesn't return repo IDs, so project assignment is best-effort via the provider IDs)
     } catch (err) {
       setSyncResult({ synced: 0, errors: [(err as Error).message] });
     }
   };
 
-  const handleUnsync = (providerId: string) => {
-    if (confirm('Unsync this repository? Historical data will be preserved.')) {
-      unsyncMutation.mutate(providerId);
+  const handleUnsyncConfirm = async () => {
+    if (!unsyncTarget) return;
+    const name = unsyncTarget.full_name;
+    setUnsyncResult(null);
+    try {
+      await unsyncMutation.mutateAsync(unsyncTarget.provider_id);
+      setUnsyncResult({ success: true, name });
+    } catch {
+      setUnsyncResult({ success: false, name });
     }
+    setUnsyncTarget(null);
   };
 
   return (
@@ -96,9 +105,18 @@ export function RepoSelectionPage() {
 
       {/* Sync result banner */}
       {syncResult && (
-        <Alert severity={syncResult.errors.length > 0 ? 'warning' : 'success'} sx={{ mb: 2 }}>
+        <Alert severity={syncResult.errors.length > 0 ? 'warning' : 'success'} sx={{ mb: 2 }} onClose={() => setSyncResult(null)}>
           {syncResult.synced > 0 && <span>{syncResult.synced} repo(s) synced successfully. </span>}
           {syncResult.errors.map((e, i) => <Box key={i}>{e}</Box>)}
+        </Alert>
+      )}
+
+      {/* Unsync result banner */}
+      {unsyncResult && (
+        <Alert severity={unsyncResult.success ? 'success' : 'error'} sx={{ mb: 2 }} onClose={() => setUnsyncResult(null)}>
+          {unsyncResult.success
+            ? <><strong>{unsyncResult.name}</strong> has been unsynced. You can sync it again at any time.</>
+            : <>Failed to unsync <strong>{unsyncResult.name}</strong>. Please try again.</>}
         </Alert>
       )}
 
@@ -201,7 +219,7 @@ export function RepoSelectionPage() {
                           size="small"
                           color="error"
                           startIcon={<LinkOffIcon />}
-                          onClick={() => handleUnsync(repo.provider_id)}
+                          onClick={() => setUnsyncTarget(repo)}
                           disabled={unsyncMutation.isPending}
                         >
                           Unsync
@@ -248,7 +266,71 @@ export function RepoSelectionPage() {
         onConfirm={handleSyncConfirm}
         onClose={() => setAssignDialogOpen(false)}
       />
+
+      {/* Unsync confirmation dialog */}
+      <UnsyncConfirmDialog
+        repo={unsyncTarget}
+        isPending={unsyncMutation.isPending}
+        onConfirm={handleUnsyncConfirm}
+        onClose={() => setUnsyncTarget(null)}
+      />
     </Box>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Dialog: Confirm unsync
+// ---------------------------------------------------------------------------
+
+function UnsyncConfirmDialog({ repo, isPending, onConfirm, onClose }: {
+  repo: DiscoveredRepo | null;
+  isPending: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={repo !== null} onClose={isPending ? undefined : onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <WarningAmberIcon color="warning" />
+          <Typography variant="h6">Unsync Repository</Typography>
+        </Stack>
+      </DialogTitle>
+      <DialogContent>
+        <Typography variant="body1" sx={{ mb: 2 }}>
+          Are you sure you want to unsync <strong>{repo?.full_name}</strong>?
+        </Typography>
+
+        <Paper variant="outlined" sx={{ p: 2, bgcolor: 'action.hover' }}>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            <strong>What happens when you unsync:</strong>
+          </Typography>
+          <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+            <li>
+              <Typography variant="body2">New scans will no longer run for this repository</Typography>
+            </li>
+            <li>
+              <Typography variant="body2">Existing scan results and findings are preserved</Typography>
+            </li>
+            <li>
+              <Typography variant="body2">You can sync this repository again at any time</Typography>
+            </li>
+          </Box>
+        </Paper>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={isPending}>Cancel</Button>
+        <Button
+          variant="contained"
+          color="error"
+          startIcon={isPending ? <CircularProgress size={16} color="inherit" /> : <LinkOffIcon />}
+          onClick={onConfirm}
+          disabled={isPending}
+        >
+          {isPending ? 'Unsyncing...' : 'Unsync'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 

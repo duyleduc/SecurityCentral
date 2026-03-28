@@ -126,9 +126,28 @@ export async function apiPut<T>(path: string, body: unknown): Promise<ApiEnvelop
 
 export async function apiDelete(path: string): Promise<void> {
   await ensureToken();
+
   const headers: Record<string, string> = {};
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-  await fetch(`${API_BASE}${path}`, { method: 'DELETE', headers });
+
+  let res = await fetch(`${API_BASE}${path}`, { method: 'DELETE', headers });
+
+  // Auto-refresh on 401
+  if (res.status === 401 && accessToken) {
+    try {
+      await refreshToken();
+      headers['Authorization'] = `Bearer ${accessToken}`;
+      res = await fetch(`${API_BASE}${path}`, { method: 'DELETE', headers });
+    } catch {
+      throw new ApiError('AUTH_TOKEN_EXPIRED', 'Session expired, please log in again', 401);
+    }
+  }
+
+  if (!res.ok && res.status !== 204) {
+    const envelope = (await res.json().catch(() => null)) as ApiEnvelope<null> | null;
+    const err = envelope?.errors?.[0];
+    throw new ApiError(err?.code ?? 'UNKNOWN', err?.message ?? `DELETE failed (${res.status})`, res.status);
+  }
 }
 
 // ---------------------------------------------------------------------------

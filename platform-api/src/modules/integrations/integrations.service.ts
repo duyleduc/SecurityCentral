@@ -325,13 +325,15 @@ export async function listGitHubRepos(
   const start = (query.page - 1) * query.per_page;
   const pageRepos = allRepos.slice(start, start + query.per_page);
 
-  // Cross-reference with synced repos
+  // Cross-reference with synced repos (exclude archived/unsynced)
   const providerIds = pageRepos.map((r) => String(r.id));
   const syncedRepos = await prisma.repository.findMany({
     where: { orgId, provider: 'github', providerId: { in: providerIds } },
-    select: { providerId: true },
+    select: { providerId: true, settings: true },
   });
-  const syncedSet = new Set(syncedRepos.map((r) => r.providerId));
+  const syncedSet = new Set(
+    syncedRepos.filter((r) => !(r.settings as Record<string, unknown>)?.archived).map((r) => r.providerId),
+  );
 
   const repos: DiscoveredRepo[] = pageRepos.map((r) => ({
     provider_id: String(r.id),
@@ -388,6 +390,7 @@ export async function syncGitHubRepos(orgId: string, repoIds: string[]): Promise
           name: repo.name,
           defaultBranch: repo.default_branch,
           language: repo.language,
+          settings: {},
         },
       });
       synced++;
@@ -454,13 +457,15 @@ export async function listGitLabRepos(
     throw new AppError('VALIDATION_ERROR', `Cannot connect to GitLab: ${msg}`);
   }
 
-  // Cross-reference with synced repos
+  // Cross-reference with synced repos (exclude archived/unsynced)
   const providerIds = result.projects.map((p) => String(p.id));
   const syncedRepos = await prisma.repository.findMany({
     where: { orgId, provider: 'gitlab', providerId: { in: providerIds } },
-    select: { providerId: true },
+    select: { providerId: true, settings: true },
   });
-  const syncedSet = new Set(syncedRepos.map((r) => r.providerId));
+  const syncedSet = new Set(
+    syncedRepos.filter((r) => !(r.settings as Record<string, unknown>)?.archived).map((r) => r.providerId),
+  );
 
   const repos: DiscoveredRepo[] = result.projects.map((p) => ({
     provider_id: String(p.id),
@@ -514,6 +519,7 @@ export async function syncGitLabRepos(orgId: string, repoIds: string[]): Promise
         update: {
           name,
           defaultBranch: project.default_branch,
+          settings: {},
         },
       });
 
@@ -627,8 +633,13 @@ export async function listBitbucketRepos(orgId: string, query: ListProviderRepos
   const page = repos.slice(start, start + query.per_page);
 
   const providerIds = page.map((r) => r.uuid);
-  const synced = await prisma.repository.findMany({ where: { orgId, provider: 'bitbucket', providerId: { in: providerIds } }, select: { providerId: true } });
-  const syncedSet = new Set(synced.map((r) => r.providerId));
+  const synced = await prisma.repository.findMany({
+    where: { orgId, provider: 'bitbucket', providerId: { in: providerIds } },
+    select: { providerId: true, settings: true },
+  });
+  const syncedSet = new Set(
+    synced.filter((r) => !(r.settings as Record<string, unknown>)?.archived).map((r) => r.providerId),
+  );
 
   return {
     repos: page.map((r) => ({
@@ -666,7 +677,7 @@ export async function syncBitbucketRepos(orgId: string, repoIds: string[]) {
       await prisma.repository.upsert({
         where: { orgId_provider_providerId: { orgId, provider: 'bitbucket', providerId: id } },
         create: { orgId, provider: 'bitbucket', providerId: id, owner: config.workspace, name: repo.name, defaultBranch: repo.mainbranch?.name ?? 'main', language: repo.language || null },
-        update: { name: repo.name, defaultBranch: repo.mainbranch?.name ?? 'main' },
+        update: { name: repo.name, defaultBranch: repo.mainbranch?.name ?? 'main', settings: {} },
       });
       synced++;
     } catch (err) { errors.push(`${repo.full_name}: ${(err as Error).message}`); }
