@@ -350,7 +350,7 @@ export async function listGitHubRepos(
   return { repos, total };
 }
 
-export async function syncGitHubRepos(orgId: string, repoIds: string[]): Promise<{ synced: number; errors: string[] }> {
+export async function syncGitHubRepos(orgId: string, repoIds: string[], projectId?: string): Promise<{ synced: number; errors: string[] }> {
   const integration = await prisma.integration.findFirst({
     where: { orgId, provider: 'github', status: 'active' },
   });
@@ -385,12 +385,14 @@ export async function syncGitHubRepos(orgId: string, repoIds: string[]): Promise
           name: repo.name,
           defaultBranch: repo.default_branch,
           language: repo.language,
+          projectId: projectId ?? null,
         },
         update: {
           name: repo.name,
           defaultBranch: repo.default_branch,
           language: repo.language,
           settings: {},
+          ...(projectId ? { projectId } : {}),
         },
       });
       synced++;
@@ -399,7 +401,7 @@ export async function syncGitHubRepos(orgId: string, repoIds: string[]): Promise
     }
   }
 
-  log.info('GitHub repos synced', { orgId, synced, errors: errors.length });
+  log.info('GitHub repos synced', { orgId, synced, errors: errors.length, projectId });
   return { synced, errors };
 }
 
@@ -482,7 +484,7 @@ export async function listGitLabRepos(
   return { repos, total: result.total };
 }
 
-export async function syncGitLabRepos(orgId: string, repoIds: string[]): Promise<{ synced: number; errors: string[] }> {
+export async function syncGitLabRepos(orgId: string, repoIds: string[], projectId?: string): Promise<{ synced: number; errors: string[] }> {
   const integration = await prisma.integration.findFirst({
     where: { orgId, provider: 'gitlab', status: 'active' },
   });
@@ -515,11 +517,13 @@ export async function syncGitLabRepos(orgId: string, repoIds: string[]): Promise
           owner,
           name,
           defaultBranch: project.default_branch,
+          projectId: projectId ?? null,
         },
         update: {
           name,
           defaultBranch: project.default_branch,
           settings: {},
+          ...(projectId ? { projectId } : {}),
         },
       });
 
@@ -537,7 +541,7 @@ export async function syncGitLabRepos(orgId: string, repoIds: string[]): Promise
     }
   }
 
-  log.info('GitLab repos synced', { orgId, synced, errors: errors.length });
+  log.info('GitLab repos synced', { orgId, synced, errors: errors.length, projectId });
   return { synced, errors };
 }
 
@@ -657,7 +661,7 @@ export async function listBitbucketRepos(orgId: string, query: ListProviderRepos
   };
 }
 
-export async function syncBitbucketRepos(orgId: string, repoIds: string[]) {
+export async function syncBitbucketRepos(orgId: string, repoIds: string[], projectId?: string) {
   const integration = await prisma.integration.findFirst({ where: { orgId, provider: 'bitbucket', status: 'active' } });
   if (!integration) throw new AppError('RESOURCE_NOT_FOUND', 'No active Bitbucket integration');
 
@@ -676,8 +680,8 @@ export async function syncBitbucketRepos(orgId: string, repoIds: string[]) {
     try {
       await prisma.repository.upsert({
         where: { orgId_provider_providerId: { orgId, provider: 'bitbucket', providerId: id } },
-        create: { orgId, provider: 'bitbucket', providerId: id, owner: config.workspace, name: repo.name, defaultBranch: repo.mainbranch?.name ?? 'main', language: repo.language || null },
-        update: { name: repo.name, defaultBranch: repo.mainbranch?.name ?? 'main', settings: {} },
+        create: { orgId, provider: 'bitbucket', providerId: id, owner: config.workspace, name: repo.name, defaultBranch: repo.mainbranch?.name ?? 'main', language: repo.language || null, projectId: projectId ?? null },
+        update: { name: repo.name, defaultBranch: repo.mainbranch?.name ?? 'main', settings: {}, ...(projectId ? { projectId } : {}) },
       });
       synced++;
     } catch (err) { errors.push(`${repo.full_name}: ${(err as Error).message}`); }

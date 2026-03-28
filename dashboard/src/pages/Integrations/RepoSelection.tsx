@@ -69,7 +69,10 @@ export function RepoSelectionPage() {
     setAssignDialogOpen(false);
     setSyncResult(null);
     try {
-      const result = await syncMutation.mutateAsync([...selected]);
+      const result = await syncMutation.mutateAsync({
+        repoIds: [...selected],
+        projectId: projectId ?? undefined,
+      });
       setSyncResult(result.data as { synced: number; errors: string[] });
       setSelected(new Set());
     } catch (err) {

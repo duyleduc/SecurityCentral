@@ -88,6 +88,7 @@ export async function listEndpoints(orgId: string, query: ListEndpointsQueryType
       skip,
       take: per_page,
       orderBy: { createdAt: 'desc' },
+      include: { project: { select: { id: true, name: true } } },
     }),
     prisma.monitoredEndpoint.count({ where: where as any }),
   ]);
@@ -141,6 +142,7 @@ export async function removeEndpoint(orgId: string, endpointId: string) {
 export async function getEndpointDetail(orgId: string, endpointId: string) {
   const endpoint = await prisma.monitoredEndpoint.findFirst({
     where: { id: endpointId, orgId },
+    include: { project: { select: { id: true, name: true } } },
   });
   if (!endpoint) throw new AppError('RESOURCE_NOT_FOUND', 'Endpoint not found');
 

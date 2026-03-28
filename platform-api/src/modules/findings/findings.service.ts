@@ -71,6 +71,9 @@ async function listFindingsFromPg(
   if (query.certificate_id) {
     where.certificateId = query.certificate_id;
   }
+  if (query.project_id) {
+    where.repository = { projectId: query.project_id };
+  }
 
   const orderBy = buildPrismaSort(query.sort, query.order);
 
@@ -81,7 +84,7 @@ async function listFindingsFromPg(
       take: query.per_page,
       orderBy,
       include: {
-        repository: { select: { name: true, owner: true } },
+        repository: { select: { name: true, owner: true, projectId: true, project: { select: { id: true, name: true } } } },
         server: { select: { hostname: true } },
         certificate: { select: { subjectCn: true } },
       },

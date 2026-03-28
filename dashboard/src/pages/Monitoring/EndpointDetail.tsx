@@ -1,8 +1,9 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Box, Typography, Button, Chip, Stack, Paper, Skeleton, Alert,
   IconButton, Tooltip,
 } from '@mui/material';
+import FolderIcon from '@mui/icons-material/Folder';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -82,11 +83,23 @@ export function EndpointDetailPage() {
           </Stack>
           {ep.label && <Typography variant="body2" color="text.secondary" sx={{ ml: 3.5 }}>{ep.label}</Typography>}
         </Box>
-        <Tooltip title="Check now">
-          <IconButton onClick={() => triggerCheck.mutate(ep.id)} disabled={triggerCheck.isPending}>
-            <RefreshIcon />
-          </IconButton>
-        </Tooltip>
+        <Stack direction="row" spacing={1} alignItems="center">
+          {ep.project && (
+            <Chip
+              icon={<FolderIcon />}
+              label={ep.project.name}
+              variant="outlined"
+              component={Link}
+              to={`/projects/${ep.project.id}`}
+              clickable
+            />
+          )}
+          <Tooltip title="Check now">
+            <IconButton onClick={() => triggerCheck.mutate(ep.id)} disabled={triggerCheck.isPending}>
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+        </Stack>
       </Stack>
 
       {/* Uptime cards */}

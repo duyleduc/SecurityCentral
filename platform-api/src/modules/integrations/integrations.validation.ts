@@ -18,6 +18,7 @@ export type ListProviderReposQueryType = z.infer<typeof ListProviderReposQuery>;
 
 export const SyncReposBody = z.object({
   repo_ids: z.array(z.string().min(1)).min(1).max(200),
+  project_id: z.string().uuid().optional(),
 });
 
 export const ProviderParam = z.object({

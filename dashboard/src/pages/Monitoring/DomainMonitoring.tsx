@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Box, Typography, Card, CardContent, Button, Chip, Stack, Alert, TextField,
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
-  Paper, Skeleton, Tabs, Tab, Select, MenuItem, Divider,
+  Paper, Skeleton, Tabs, Tab, Select, MenuItem, Divider, IconButton, Tooltip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -74,10 +75,11 @@ export function DomainMonitoringPage() {
               <TableRow>
                 <TableCell>Status</TableCell>
                 <TableCell>Endpoint</TableCell>
+                <TableCell>Tags</TableCell>
                 <TableCell>Last Checked</TableCell>
                 <TableCell align="right">Response</TableCell>
                 <TableCell>Interval</TableCell>
-                <TableCell sx={{ width: 160 }} />
+                <TableCell sx={{ width: 120 }} />
               </TableRow>
             </TableHead>
             <TableBody>
@@ -110,7 +112,7 @@ function AddDomainsForm({ onDone }: { onDone: () => void }) {
   const [host, setHost] = useState('');
   const [port, setPort] = useState('443');
   const [bulkText, setBulkText] = useState('');
-  const [interval, setInterval] = useState('1h');
+  const [interval, setInterval] = useState('1m');
   const addMutation = useAddEndpoints();
   const [result, setResult] = useState<{ created: number; errors: string[] } | null>(null);
 
@@ -157,6 +159,11 @@ function AddDomainsForm({ onDone }: { onDone: () => void }) {
           <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: 'auto' }}>
             <Typography variant="caption" color="text.secondary">Check every:</Typography>
             <Select size="small" value={interval} onChange={(e) => setInterval(e.target.value)} sx={{ minWidth: 100 }}>
+              <MenuItem value="30s">30 seconds</MenuItem>
+              <MenuItem value="1m">1 minute</MenuItem>
+              <MenuItem value="5m">5 minutes</MenuItem>
+              <MenuItem value="15m">15 minutes</MenuItem>
+              <MenuItem value="30m">30 minutes</MenuItem>
               <MenuItem value="1h">1 hour</MenuItem>
               <MenuItem value="6h">6 hours</MenuItem>
               <MenuItem value="24h">24 hours</MenuItem>
@@ -222,49 +229,75 @@ function AddDomainsForm({ onDone }: { onDone: () => void }) {
 }
 
 function EndpointRow({ endpoint: ep }: { endpoint: MonitoredEndpoint }) {
+  const navigate = useNavigate();
   const removeMutation = useRemoveEndpoint();
   const checkMutation = useTriggerEndpointCheck();
 
   const status = STATUS_CONFIG[ep.lastStatus ?? ''] ?? { color: '#999', label: ep.lastStatus ?? 'Pending' };
+  const tags = ep.tags ?? {};
 
   return (
-    <TableRow hover>
+    <TableRow hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/monitoring/domains/${ep.id}`)}>
       <TableCell>
         <FiberManualRecordIcon sx={{ fontSize: 10, color: status.color }} />
       </TableCell>
       <TableCell>
-        <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>{ep.host}</Typography>
-        {ep.port !== 443 && (
-          <Typography variant="body2" component="span" color="text.secondary">:{ep.port}</Typography>
-        )}
-        {ep.label && (
-          <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>({ep.label})</Typography>
-        )}
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Box>
+            <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>{ep.host}</Typography>
+            {ep.port !== 443 && (
+              <Typography variant="body2" component="span" color="text.secondary">:{ep.port}</Typography>
+            )}
+            {ep.label && (
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>({ep.label})</Typography>
+            )}
+          </Box>
+          {ep.project && (
+            <Chip
+              label={ep.project.name}
+              size="small"
+              variant="outlined"
+              component={Link}
+              to={`/projects/${ep.project.id}`}
+              clickable
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              sx={{ fontSize: '0.7rem', ml: 1 }}
+            />
+          )}
+        </Stack>
+      </TableCell>
+      <TableCell>
+        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+          {Object.entries(tags).map(([k, v]) => (
+            <Chip key={k} label={`${k}: ${v}`} size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
+          ))}
+        </Stack>
       </TableCell>
       <TableCell sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>{relativeTime(ep.lastCheckedAt)}</TableCell>
       <TableCell align="right" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
         {ep.lastResponseMs != null ? `${ep.lastResponseMs}ms` : '--'}
       </TableCell>
       <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{ep.checkInterval}</TableCell>
-      <TableCell align="right">
+      <TableCell align="right" onClick={(e) => e.stopPropagation()}>
         <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={() => checkMutation.mutate(ep.id)}
-            disabled={checkMutation.isPending}
-          >
-            {checkMutation.isPending ? '...' : 'Check'}
-          </Button>
-          <Button
-            size="small"
-            color="error"
-            startIcon={<DeleteIcon />}
-            onClick={() => { if (confirm(`Remove ${ep.host}?`)) removeMutation.mutate(ep.id); }}
-          >
-            Remove
-          </Button>
+          <Tooltip title="Check now">
+            <IconButton
+              size="small"
+              onClick={() => checkMutation.mutate(ep.id)}
+              disabled={checkMutation.isPending}
+            >
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Remove">
+            <IconButton
+              size="small"
+              onClick={() => { if (confirm(`Remove ${ep.host}?`)) removeMutation.mutate(ep.id); }}
+              sx={{ color: 'text.disabled', '&:hover': { color: 'error.main' } }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Stack>
       </TableCell>
     </TableRow>

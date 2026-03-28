@@ -70,7 +70,20 @@ export async function getCertificateById(orgId: string, certId: string) {
     throw new AppError('RESOURCE_NOT_FOUND', `Certificate ${certId} not found`);
   }
 
-  return cert;
+  // Resolve linked endpoint and project from discoveredFrom (e.g. "probe:host:443")
+  let endpoint: { id: string; host: string; port: number; project: { id: string; name: string } | null } | null = null;
+  if (cert.discoveredFrom?.startsWith('probe:')) {
+    const parts = cert.discoveredFrom.replace('probe:', '').split(':');
+    const host = parts.slice(0, -1).join(':'); // handle IPv6
+    const port = parseInt(parts[parts.length - 1], 10) || 443;
+    const ep = await prisma.monitoredEndpoint.findFirst({
+      where: { orgId, host, port },
+      select: { id: true, host: true, port: true, project: { select: { id: true, name: true } } },
+    });
+    if (ep) endpoint = ep;
+  }
+
+  return { ...cert, endpoint };
 }
 
 // ---------------------------------------------------------------------------

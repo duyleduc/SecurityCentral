@@ -12,6 +12,7 @@ export const ListFindingsSchema = z.object({
   repository_id: z.string().uuid().optional(),
   server_id: z.string().uuid().optional(),
   certificate_id: z.string().uuid().optional(),
+  project_id: z.string().uuid().optional(),
   q: z.string().optional(),                  // full-text search
   sort: z.enum(['severity', 'cvss_score', 'first_seen_at', 'created_at']).optional(),
   order: z.enum(['asc', 'desc']).optional(),

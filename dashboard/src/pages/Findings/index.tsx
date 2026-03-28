@@ -9,13 +9,12 @@ import SearchIcon from '@mui/icons-material/Search';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ClearIcon from '@mui/icons-material/Clear';
-import { useFindings, type Finding } from '../../api/hooks.js';
+import { useFindings, useProjects, type Finding, type Project } from '../../api/hooks.js';
 import { FindingDetail } from '../FindingDetail/index.js';
-import { SEVERITY_COLORS, SEVERITY_BG, STATUS_COLORS } from '../../theme/theme.js';
+import { SEVERITY_COLORS, STATUS_COLORS } from '../../theme/theme.js';
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'] as const;
 const STATUSES = ['open', 'in_progress', 'resolved', 'suppressed', 'false_positive'] as const;
-const SOURCES = ['code_scanner', 'infra_agent', 'cert_monitor'] as const;
 
 const STATUS_LABEL: Record<string, string> = {
   open: 'Open',
@@ -32,15 +31,18 @@ export function FindingsPage() {
   const [perPage] = useState(25);
   const [severity, setSeverity] = useState('');
   const [status, setStatus] = useState('');
-  const [source, setSource] = useState('');
+  const [projectId, setProjectId] = useState('');
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('created_at');
   const [order, setOrder] = useState<'asc' | 'desc'>('desc');
 
+  const projectsQuery = useProjects();
+  const projects = (projectsQuery.data?.data ?? []) as Project[];
+
   const params: Record<string, string | number> = { page, per_page: perPage, sort, order };
   if (severity) params.severity = severity;
   if (status) params.status = status;
-  if (source) params.source = source;
+  if (projectId) params.project_id = projectId;
   if (q) params.q = q;
 
   const findings = useFindings(params);
@@ -96,19 +98,19 @@ export function FindingsPage() {
         </Select>
         <Select
           size="small"
-          value={source}
-          onChange={(e) => { setSource(e.target.value); setPage(1); }}
+          value={projectId}
+          onChange={(e) => { setProjectId(e.target.value); setPage(1); }}
           displayEmpty
-          sx={{ minWidth: 150 }}
+          sx={{ minWidth: 180 }}
         >
-          <MenuItem value="">All Sources</MenuItem>
-          {SOURCES.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
+          <MenuItem value="">All Projects</MenuItem>
+          {projects.map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
         </Select>
-        {(severity || status || source || q) && (
+        {(severity || status || projectId || q) && (
           <Button
             size="small"
             startIcon={<ClearIcon />}
-            onClick={() => { setSeverity(''); setStatus(''); setSource(''); setQ(''); setPage(1); }}
+            onClick={() => { setSeverity(''); setStatus(''); setProjectId(''); setQ(''); setPage(1); }}
           >
             Clear filters
           </Button>
@@ -122,7 +124,7 @@ export function FindingsPage() {
             <TableRow>
               <SortableCell label="Severity" col="severity" cur={sort} ord={order} onSort={toggleSort} />
               <TableCell>Title</TableCell>
-              <TableCell>Source</TableCell>
+              <TableCell>Project</TableCell>
               <TableCell>CVE</TableCell>
               <TableCell>Status</TableCell>
               <SortableCell label="First Seen" col="first_seen_at" cur={sort} ord={order} onSort={toggleSort} />
@@ -166,7 +168,21 @@ export function FindingsPage() {
                     {f.title.length > 55 ? f.title.slice(0, 52) + '...' : f.title}
                   </Box>
                 </TableCell>
-                <TableCell sx={{ color: 'text.secondary' }}>{f.source}</TableCell>
+                <TableCell>
+                  {f.repository?.project ? (
+                    <Chip
+                      label={f.repository.project.name}
+                      size="small"
+                      variant="outlined"
+                      component={Link}
+                      to={`/projects/${f.repository.project.id}`}
+                      clickable
+                      sx={{ fontSize: '0.7rem' }}
+                    />
+                  ) : (
+                    <Typography variant="caption" color="text.secondary">--</Typography>
+                  )}
+                </TableCell>
                 <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{f.cveId ?? '-'}</TableCell>
                 <TableCell>
                   <Chip

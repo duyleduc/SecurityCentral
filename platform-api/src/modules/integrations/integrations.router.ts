@@ -212,7 +212,7 @@ integrationsRouter.post(
   validate({ body: SyncReposBody }),
   async (req, res, next) => {
     try {
-      const result = await integrationsService.syncGitHubRepos(req.auth!.orgId, req.body.repo_ids);
+      const result = await integrationsService.syncGitHubRepos(req.auth!.orgId, req.body.repo_ids, req.body.project_id);
       res.status(201).json(successEnvelope(result));
     } catch (err) { next(err); }
   },
@@ -254,7 +254,7 @@ integrationsRouter.post(
   validate({ body: SyncReposBody }),
   async (req, res, next) => {
     try {
-      const result = await integrationsService.syncGitLabRepos(req.auth!.orgId, req.body.repo_ids);
+      const result = await integrationsService.syncGitLabRepos(req.auth!.orgId, req.body.repo_ids, req.body.project_id);
       res.status(201).json(successEnvelope(result));
     } catch (err) { next(err); }
   },
@@ -316,7 +316,7 @@ integrationsRouter.post(
   validate({ body: SyncReposBody }),
   async (req, res, next) => {
     try {
-      const result = await integrationsService.syncBitbucketRepos(req.auth!.orgId, req.body.repo_ids);
+      const result = await integrationsService.syncBitbucketRepos(req.auth!.orgId, req.body.repo_ids, req.body.project_id);
       res.status(201).json(successEnvelope(result));
     } catch (err) { next(err); }
   },

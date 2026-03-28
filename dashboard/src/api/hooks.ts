@@ -27,6 +27,9 @@ export interface Finding {
   firstSeenAt: string;
   createdAt?: string;
   resolvedAt?: string;
+  repository?: { name: string; owner: string; projectId?: string; project?: { id: string; name: string } | null };
+  server?: { hostname: string };
+  certificate?: { subjectCn: string };
 }
 
 export interface Repository {
@@ -388,8 +391,8 @@ export function useProviderRepos(provider: string, params?: { search?: string; p
 export function useSyncRepos(provider: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (repoIds: string[]) =>
-      apiPost<{ synced: number; errors: string[] }>(`/integrations/${provider}/repos/sync`, { repo_ids: repoIds }),
+    mutationFn: ({ repoIds, projectId }: { repoIds: string[]; projectId?: string }) =>
+      apiPost<{ synced: number; errors: string[] }>(`/integrations/${provider}/repos/sync`, { repo_ids: repoIds, project_id: projectId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['provider-repos', provider] });
       qc.invalidateQueries({ queryKey: ['repositories'] });
@@ -497,6 +500,7 @@ export interface MonitoredEndpoint {
   lastStatus: string | null;
   lastResponseMs: number | null;
   projectId: string | null;
+  project?: { id: string; name: string } | null;
   createdAt: string;
 }
 
