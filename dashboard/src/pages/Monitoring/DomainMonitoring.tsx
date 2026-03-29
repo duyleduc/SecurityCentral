@@ -4,13 +4,17 @@ import {
   Box, Typography, Card, CardContent, Button, Chip, Stack, Alert, TextField,
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
   Paper, Skeleton, Tabs, Tab, Select, MenuItem, Divider, IconButton, Tooltip,
+  Checkbox, ListItemText, OutlinedInput, InputAdornment,
 } from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import LockIcon from '@mui/icons-material/Lock';
-import { useMonitoredEndpoints, useAddEndpoints, useRemoveEndpoint, useTriggerEndpointCheck, type MonitoredEndpoint } from '../../api/hooks.js';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+import { useMonitoredEndpoints, useAddEndpoints, useRemoveEndpoint, useTriggerEndpointCheck, useProjects, type MonitoredEndpoint, type Project } from '../../api/hooks.js';
 
 const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
   healthy: { color: '#16a34a', label: 'Healthy' },
@@ -32,10 +36,27 @@ function relativeTime(dateStr: string | null): string {
 export function DomainMonitoringPage() {
   const [page, setPage] = useState(1);
   const [showAdd, setShowAdd] = useState(false);
+  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
+  const [tagsQuery, setTagsQuery] = useState('');
 
-  const endpoints = useMonitoredEndpoints({ page, per_page: 50 });
+  const projectsQuery = useProjects();
+  const projects = (projectsQuery.data?.data ?? []) as Project[];
+
+  const params: Record<string, string | number> = { page, per_page: 50 };
+  if (selectedProjects.length > 0) params.project_ids = selectedProjects.join(',');
+  if (tagsQuery.trim()) params.tags = tagsQuery.trim();
+
+  const endpoints = useMonitoredEndpoints(params);
   const data = (endpoints.data?.data ?? []) as MonitoredEndpoint[];
   const meta = endpoints.data?.meta;
+
+  const handleProjectChange = (e: SelectChangeEvent<string[]>) => {
+    const val = e.target.value;
+    setSelectedProjects(typeof val === 'string' ? val.split(',') : val);
+    setPage(1);
+  };
+
+  const hasFilters = selectedProjects.length > 0 || tagsQuery.trim();
 
   return (
     <Box>
@@ -52,6 +73,51 @@ export function DomainMonitoringPage() {
       </Stack>
 
       {showAdd && <AddDomainsForm onDone={() => setShowAdd(false)} />}
+
+      {/* Filters */}
+      <Stack direction="row" spacing={1.5} sx={{ mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Select
+          size="small"
+          multiple
+          value={selectedProjects}
+          onChange={handleProjectChange}
+          displayEmpty
+          input={<OutlinedInput size="small" />}
+          renderValue={(selected) => {
+            if (selected.length === 0) return <Typography variant="body2" color="text.secondary">All Projects</Typography>;
+            return selected.map((id) => projects.find((p) => p.id === id)?.name ?? id).join(', ');
+          }}
+          sx={{ minWidth: 200 }}
+        >
+          {projects.map((p) => (
+            <MenuItem key={p.id} value={p.id}>
+              <Checkbox size="small" checked={selectedProjects.includes(p.id)} />
+              <ListItemText primary={p.name} />
+            </MenuItem>
+          ))}
+        </Select>
+
+        <TextField
+          size="small"
+          placeholder="Tags: env=prod,team=infra"
+          value={tagsQuery}
+          onChange={(e) => { setTagsQuery(e.target.value); setPage(1); }}
+          sx={{ minWidth: 240 }}
+          InputProps={{
+            startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+          }}
+        />
+
+        {hasFilters && (
+          <Button
+            size="small"
+            startIcon={<ClearIcon />}
+            onClick={() => { setSelectedProjects([]); setTagsQuery(''); setPage(1); }}
+          >
+            Clear
+          </Button>
+        )}
+      </Stack>
 
       {/* Endpoint list */}
       <TableContainer component={Paper}>

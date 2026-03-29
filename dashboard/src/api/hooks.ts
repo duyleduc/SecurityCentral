@@ -536,7 +536,7 @@ export function useEndpointDetail(id: string) {
   });
 }
 
-export function useMonitoredEndpoints(params?: { page?: number; per_page?: number; status?: string; projectId?: string; tag?: string }) {
+export function useMonitoredEndpoints(params?: { page?: number; per_page?: number; status?: string; projectId?: string; project_ids?: string; tag?: string; tags?: string }) {
   return useQuery({
     queryKey: ['monitored-endpoints', params],
     queryFn: () => apiGet<MonitoredEndpoint[]>('/monitoring/domains', toStringParams(params as PaginatedParams)),
@@ -586,6 +586,17 @@ export function useTriggerEndpointCheck() {
   return useMutation({
     mutationFn: (id: string) => apiPost(`/monitoring/domains/${id}/check`, {}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['monitored-endpoints'] }),
+  });
+}
+
+export function useTriggerCheckAll() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPost('/monitoring/domains/check-all', {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['monitored-endpoints'] });
+      qc.invalidateQueries({ queryKey: ['certificates'] });
+    },
   });
 }
 

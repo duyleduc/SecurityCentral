@@ -22,7 +22,6 @@ import BugReportIcon from '@mui/icons-material/BugReport';
 import FolderIcon from '@mui/icons-material/Folder';
 import DnsIcon from '@mui/icons-material/Dns';
 import HttpsIcon from '@mui/icons-material/Https';
-import CloudIcon from '@mui/icons-material/Cloud';
 import RadarIcon from '@mui/icons-material/Radar';
 import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import ExtensionIcon from '@mui/icons-material/Extension';
@@ -36,7 +35,6 @@ const NAV_ITEMS = [
   { path: '/findings', label: 'Findings', icon: <BugReportIcon /> },
   { path: '/assets/servers', label: 'Servers', icon: <DnsIcon /> },
   { path: '/assets/certificates', label: 'Certificates', icon: <HttpsIcon /> },
-  { path: '/infrastructure/coverage', label: 'Coverage', icon: <CloudIcon /> },
   { path: '/monitoring/domains', label: 'Monitoring', icon: <RadarIcon /> },
   { path: '/integrations', label: 'Integrations', icon: <ExtensionIcon /> },
   { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },

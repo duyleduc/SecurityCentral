@@ -140,6 +140,15 @@ export function RepoSelectionPage() {
         <Typography variant="caption" color="text.secondary">
           {selected.size > 0 ? `${selected.size} selected` : `${total} repos found`}
         </Typography>
+        <Box sx={{ flex: 1 }} />
+        <Button
+          variant="contained"
+          startIcon={<SyncIcon />}
+          onClick={handleSync}
+          disabled={selected.size === 0 || syncMutation.isPending}
+        >
+          {syncMutation.isPending ? 'Syncing...' : `Sync ${selected.size} Selected`}
+        </Button>
       </Stack>
 
       {/* Repo list */}
@@ -237,27 +246,16 @@ export function RepoSelectionPage() {
         )}
       </TableContainer>
 
-      {/* Footer: pagination + sync button */}
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Button size="small" variant="outlined" disabled={page <= 1} onClick={() => { setPage(page - 1); setSelected(new Set()); }}>
-            Previous
-          </Button>
-          <Typography variant="body2" color="text.secondary">
-            Page {page} of {totalPages || 1}
-          </Typography>
-          <Button size="small" variant="outlined" disabled={page >= totalPages} onClick={() => { setPage(page + 1); setSelected(new Set()); }}>
-            Next
-          </Button>
-        </Stack>
-
-        <Button
-          variant="contained"
-          startIcon={<SyncIcon />}
-          onClick={handleSync}
-          disabled={selected.size === 0 || syncMutation.isPending}
-        >
-          {syncMutation.isPending ? 'Syncing...' : `Sync ${selected.size} Selected`}
+      {/* Footer: pagination */}
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2 }}>
+        <Button size="small" variant="outlined" disabled={page <= 1} onClick={() => { setPage(page - 1); setSelected(new Set()); }}>
+          Previous
+        </Button>
+        <Typography variant="body2" color="text.secondary">
+          Page {page} of {totalPages || 1}
+        </Typography>
+        <Button size="small" variant="outlined" disabled={page >= totalPages} onClick={() => { setPage(page + 1); setSelected(new Set()); }}>
+          Next
         </Button>
       </Stack>
 

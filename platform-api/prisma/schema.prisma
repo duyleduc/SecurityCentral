@@ -244,7 +244,7 @@ model Finding {
   remediation   String?
   autoFixable   Boolean       @default(false) @map("auto_fixable")
   fixPrUrl      String?       @map("fix_pr_url")
-  scanId        String        @map("scan_id") @db.Uuid
+  scanId        String?       @map("scan_id") @db.Uuid
   firstSeenAt   DateTime      @default(now()) @map("first_seen_at") @db.Timestamptz()
   resolvedAt    DateTime?     @map("resolved_at") @db.Timestamptz()
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz()
@@ -254,7 +254,7 @@ model Finding {
   repository   Repository?  @relation(fields: [repositoryId], references: [id])
   server       Server?      @relation(fields: [serverId], references: [id])
   certificate  Certificate? @relation(fields: [certificateId], references: [id])
-  scan         Scan         @relation(fields: [scanId], references: [id])
+  scan         Scan?        @relation(fields: [scanId], references: [id])
 
   // T-1.2.6: Indexes per spec
   @@index([orgId, status], map: "idx_findings_org_status")
@@ -400,7 +400,7 @@ model MonitoredEndpoint {
   port           Int       @default(443)
   label          String?
   tags           Json      @default("{}") @db.JsonB // key-value pairs, e.g. {"env":"prod","team":"infra"}
-  checkInterval  String    @default("1h") @map("check_interval") // 1h | 6h | 24h
+  checkInterval  String    @default("24h") @map("check_interval") // 1h | 6h | 24h
   status         String    @default("active") // active | paused
   lastCheckedAt  DateTime? @map("last_checked_at") @db.Timestamptz()
   lastStatus     String?   @map("last_status") // healthy | unhealthy | unreachable

@@ -33,7 +33,7 @@ const STEPS = [
     title: 'Monitor Servers',
     desc: 'Install the agent on your servers or connect a cloud account (AWS, Azure, GCP, Proxmox) to discover infrastructure.',
     action: 'Set Up',
-    link: '/infrastructure/coverage',
+    link: '/assets/servers',
     secondaryAction: 'Copy Install Command',
   },
   {

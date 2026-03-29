@@ -28,7 +28,9 @@ export const ListEndpointsQuery = z.object({
   per_page: z.coerce.number().int().min(1).max(200).default(50),
   status: z.string().optional(),
   projectId: z.string().uuid().optional(),
+  project_ids: z.string().optional(), // comma-separated project UUIDs
   tag: z.string().optional(), // filter by tag key, e.g. "env" or "env:prod"
+  tags: z.string().optional(), // comma-separated key=value pairs (AND condition)
 });
 
 export type ListEndpointsQueryType = z.infer<typeof ListEndpointsQuery>;

@@ -17,7 +17,6 @@ import { ScansPage } from './pages/Scans/index.js';
 import { IntegrationsPage } from './pages/Integrations/index.js';
 import { RepoSelectionPage } from './pages/Integrations/RepoSelection.js';
 import { SettingsPage } from './pages/Settings/index.js';
-import { InfrastructureCoveragePage } from './pages/Infrastructure/CoverageDashboard.js';
 import { DomainMonitoringPage } from './pages/Monitoring/DomainMonitoring.js';
 import { OnboardingWizard } from './pages/Onboarding/OnboardingWizard.js';
 import { ProjectsPage } from './pages/Projects/index.js';
@@ -62,7 +61,6 @@ export function App() {
               <Route path="/assets/servers" element={<ProtectedLayout><AssetsPage tab="servers" /></ProtectedLayout>} />
               <Route path="/assets/certificates" element={<ProtectedLayout><AssetsPage tab="certificates" /></ProtectedLayout>} />
               <Route path="/assets/certificates/:id" element={<ProtectedLayout><CertificateDetailPage /></ProtectedLayout>} />
-              <Route path="/infrastructure/coverage" element={<ProtectedLayout><InfrastructureCoveragePage /></ProtectedLayout>} />
               <Route path="/monitoring/domains" element={<ProtectedLayout><DomainMonitoringPage /></ProtectedLayout>} />
               <Route path="/monitoring/domains/:id" element={<ProtectedLayout><EndpointDetailPage /></ProtectedLayout>} />
               <Route path="/scans" element={<ProtectedLayout><ScansPage /></ProtectedLayout>} />

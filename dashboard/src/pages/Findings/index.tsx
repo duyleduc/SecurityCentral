@@ -124,7 +124,7 @@ export function FindingsPage() {
             <TableRow>
               <SortableCell label="Severity" col="severity" cur={sort} ord={order} onSort={toggleSort} />
               <TableCell>Title</TableCell>
-              <TableCell>Project</TableCell>
+              <TableCell>Repository</TableCell>
               <TableCell>CVE</TableCell>
               <TableCell>Status</TableCell>
               <SortableCell label="First Seen" col="first_seen_at" cur={sort} ord={order} onSort={toggleSort} />
@@ -169,16 +169,21 @@ export function FindingsPage() {
                   </Box>
                 </TableCell>
                 <TableCell>
-                  {f.repository?.project ? (
-                    <Chip
-                      label={f.repository.project.name}
-                      size="small"
-                      variant="outlined"
-                      component={Link}
-                      to={`/projects/${f.repository.project.id}`}
-                      clickable
-                      sx={{ fontSize: '0.7rem' }}
-                    />
+                  {f.repository ? (
+                    <Stack direction="column" spacing={0.3}>
+                      <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
+                        {f.repository.owner}/{f.repository.name}
+                      </Typography>
+                      {f.repository.project && (
+                        <Box
+                          component={Link}
+                          to={`/projects/${f.repository.project.id}`}
+                          sx={{ color: 'primary.main', textDecoration: 'none', fontSize: '0.7rem', '&:hover': { textDecoration: 'underline' } }}
+                        >
+                          {f.repository.project.name}
+                        </Box>
+                      )}
+                    </Stack>
                   ) : (
                     <Typography variant="caption" color="text.secondary">--</Typography>
                   )}

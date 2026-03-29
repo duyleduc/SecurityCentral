@@ -76,7 +76,7 @@ export async function processScanOrchestration(job: Job<ScanOrchestrationJobData
         started_at: startedAt.toISOString(),
         completed_at: new Date().toISOString(),
         findings,
-      }, request_id, scanId);
+      }, request_id, scanId, repositoryId);
       log.info('Findings ingested', { created: result.findingsCreated, updated: result.findingsUpdated, resolved: result.findingsResolved });
     }
 

@@ -9,7 +9,8 @@ import LanguageIcon from '@mui/icons-material/Language';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import { useCertificate } from '../../api/hooks.js';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import { useCertificate, useTriggerEndpointCheck } from '../../api/hooks.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -49,8 +50,9 @@ function expiryColor(days: number): string {
 export function CertificateDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: envelope, isLoading } = useCertificate(id ?? '');
+  const { data: envelope, isLoading, refetch } = useCertificate(id ?? '');
   const cert = envelope?.data as Record<string, unknown> | undefined;
+  const triggerCheck = useTriggerEndpointCheck();
 
   if (isLoading) {
     return (
@@ -116,6 +118,19 @@ export function CertificateDetailPage() {
               clickable
             />
           )}
+          {endpoint && (
+            <Tooltip title="Refresh certificate data">
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<RefreshIcon />}
+                disabled={triggerCheck.isPending}
+                onClick={() => triggerCheck.mutate(endpoint.id, { onSuccess: () => setTimeout(() => refetch(), 3000) })}
+              >
+                {triggerCheck.isPending ? 'Refreshing...' : 'Refresh'}
+              </Button>
+            </Tooltip>
+          )}
         </Stack>
       </Stack>
 
@@ -149,6 +164,7 @@ export function CertificateDetailPage() {
 
       {/* Info cards */}
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2, mb: 3 }}>
+        <InfoCard label="Issued By" value={(cert.issuerCn as string) ?? '--'} />
         <InfoCard label="Key Algorithm" value={cert.keyAlgorithm as string} />
         <InfoCard label="Signature" value={(cert.signatureAlgorithm as string) ?? '--'} />
         <InfoCard label="Chain Valid" value={cert.chainValid != null ? (cert.chainValid ? 'Yes' : 'No') : '--'} />

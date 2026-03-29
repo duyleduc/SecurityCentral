@@ -38,6 +38,8 @@ export async function ingestFindings(
   requestId?: string,
   /** If provided, use this existing scan record instead of creating a new one */
   existingScanId?: string,
+  /** If provided, link findings to this repository */
+  repositoryId?: string,
 ): Promise<IngestionResult> {
   const source = SOURCE_MAP[input.scan_type] ?? 'code_scanner';
 
@@ -75,7 +77,7 @@ export async function ingestFindings(
   const ingestedIds: string[] = [];
 
   for (const item of input.findings) {
-    const result = await upsertFinding(orgId, scan.id, source, serverId, item);
+    const result = await upsertFinding(orgId, scan.id, source, serverId, repositoryId ?? null, item);
     ingestedIds.push(result.id);
     if (result.isNew) created++;
     else updated++;
@@ -142,6 +144,7 @@ async function upsertFinding(
   scanId: string,
   source: string,
   serverId: string | null,
+  repositoryId: string | null,
   item: FindingItem,
 ): Promise<{ id: string; isNew: boolean }> {
   // Build match criteria
@@ -152,6 +155,7 @@ async function upsertFinding(
   };
 
   if (serverId) matchWhere.serverId = serverId;
+  if (repositoryId) matchWhere.repositoryId = repositoryId;
 
   if (item.cve_id) {
     matchWhere.cveId = item.cve_id;
@@ -194,6 +198,7 @@ async function upsertFinding(
       cvssScore: item.cvss_score ?? null,
       cvssVector: item.cvss_vector ?? null,
       serverId,
+      repositoryId,
       detail: item.detail,
       remediation: item.remediation ?? null,
       autoFixable: item.auto_fixable,

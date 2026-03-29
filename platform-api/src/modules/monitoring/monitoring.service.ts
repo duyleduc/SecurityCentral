@@ -70,10 +70,24 @@ export async function listEndpoints(orgId: string, query: ListEndpointsQueryType
 
   const where: Record<string, unknown> = { orgId };
   if (query.status) where.status = query.status;
-  if (query.projectId) where.projectId = query.projectId;
 
-  // Tag filter: "env" (key exists) or "env:prod" (key=value)
-  if (query.tag) {
+  // Project filter: multi or single
+  if (query.project_ids) {
+    where.projectId = { in: query.project_ids.split(',') };
+  } else if (query.projectId) {
+    where.projectId = query.projectId;
+  }
+
+  // Tag filter: multi AND or single
+  if (query.tags) {
+    const tagPairs = query.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
+    const tagConditions = tagPairs.map((pair: string) => {
+      const [key, ...rest] = pair.split('=');
+      const value = rest.join('=');
+      return { tags: { path: [key], equals: value } };
+    });
+    where.AND = tagConditions;
+  } else if (query.tag) {
     const [tagKey, tagValue] = query.tag.split(':');
     if (tagValue) {
       where.tags = { path: [tagKey], equals: tagValue };
@@ -210,4 +224,31 @@ export async function triggerCheck(orgId: string, endpointId: string) {
   });
 
   return { queued: true, endpointId: endpoint.id };
+}
+
+// ---------------------------------------------------------------------------
+// Trigger check for ALL active endpoints (refresh all certificates)
+// ---------------------------------------------------------------------------
+
+export async function triggerCheckAll(orgId: string) {
+  const endpoints = await prisma.monitoredEndpoint.findMany({
+    where: { orgId, status: 'active' },
+    select: { id: true, host: true, port: true },
+  });
+
+  for (const ep of endpoints) {
+    await domainMonitoringQueue.add('check-endpoint', {
+      endpointId: ep.id,
+      host: ep.host,
+      port: ep.port,
+      orgId,
+    }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 2000 },
+      removeOnComplete: 100,
+      priority: 1,
+    });
+  }
+
+  return { queued: endpoints.length };
 }

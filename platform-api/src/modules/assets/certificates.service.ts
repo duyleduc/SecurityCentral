@@ -15,6 +15,37 @@ export async function listCertificates(orgId: string, query: ListCertsQuery) {
   const where: Prisma.CertificateWhereInput = { orgId };
   if (query.status) where.status = query.status;
 
+  // Filter by project and/or tags via monitored endpoints
+  if (query.project_ids || query.tags) {
+    const epWhere: Prisma.MonitoredEndpointWhereInput = { orgId, status: 'active' };
+
+    if (query.project_ids) {
+      epWhere.projectId = { in: query.project_ids.split(',') };
+    }
+
+    if (query.tags) {
+      // tags = "env=prod,team=infra" → AND condition on JSON tags field
+      const tagPairs = query.tags.split(',').map((t) => t.trim()).filter(Boolean);
+      const tagConditions: Prisma.MonitoredEndpointWhereInput[] = tagPairs.map((pair) => {
+        const [key, ...rest] = pair.split('=');
+        const value = rest.join('=');
+        return { tags: { path: [key], equals: value } };
+      });
+      epWhere.AND = tagConditions;
+    }
+
+    const endpoints = await prisma.monitoredEndpoint.findMany({
+      where: epWhere,
+      select: { host: true, port: true },
+    });
+
+    const discoveredFromValues = endpoints.map((ep) => `probe:${ep.host}:${ep.port}`);
+    if (discoveredFromValues.length === 0) {
+      return { data: [], meta: { page, per_page, total: 0 } };
+    }
+    where.discoveredFrom = { in: discoveredFromValues };
+  }
+
   const [data, total] = await Promise.all([
     prisma.certificate.findMany({
       where,

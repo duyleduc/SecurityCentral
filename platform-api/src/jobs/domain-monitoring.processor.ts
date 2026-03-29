@@ -104,6 +104,7 @@ export async function processDomainCheck(job: Job<DomainCheckJobData>): Promise<
         status: certStatus(certInfo.notAfter),
       },
       update: {
+        issuerCn: certInfo.issuer,
         status: certStatus(certInfo.notAfter),
         lastCheckedAt: new Date(),
         chainValid: certInfo.chainValid,
@@ -187,7 +188,7 @@ function probeTls(host: string, port: number): Promise<CertInfo> {
 
         const info: CertInfo = {
           subject: String(cert.subject?.CN ?? ''),
-          issuer: String(cert.issuer?.CN ?? ''),
+          issuer: buildIssuerName(cert.issuer),
           sans: (cert.subjectaltname ?? '').split(',').map((s: string) => s.trim().replace('DNS:', '')).filter(Boolean),
           serialNumber: cert.serialNumber ?? '',
           notBefore: new Date(cert.valid_from),
@@ -197,7 +198,7 @@ function probeTls(host: string, port: number): Promise<CertInfo> {
           chainValid,
           chainDepth,
           raw: cert.raw,
-          isSelfSigned: cert.subject?.CN === cert.issuer?.CN && !cert.issuerCertificate,
+          isSelfSigned: cert.subject?.CN === cert.issuer?.CN && cert.subject?.O === cert.issuer?.O && !cert.issuerCertificate,
           keyBits: cert.bits,
         };
 
@@ -212,6 +213,18 @@ function probeTls(host: string, port: number): Promise<CertInfo> {
       reject(new Error('Connection timeout'));
     });
   });
+}
+
+/**
+ * Build a human-readable issuer name from the certificate issuer fields.
+ * Prefers Organization (O) which shows e.g. "Let's Encrypt", falls back to CN.
+ */
+function buildIssuerName(issuer: { O?: string; CN?: string } | undefined): string {
+  if (!issuer) return '';
+  const org = issuer.O?.trim();
+  const cn = issuer.CN?.trim();
+  if (org && cn && org !== cn) return `${org} (${cn})`;
+  return org || cn || '';
 }
 
 // ---------------------------------------------------------------------------
@@ -331,15 +344,14 @@ async function generateCertFindings(
     if (!existing) {
       await prisma.finding.create({
         data: {
-          orgId,
+          organization: { connect: { id: orgId } },
           source: 'cert_monitor',
           severity: f.severity as any,
           status: 'open',
           title: f.title,
           description: f.description,
-          certificateId: certRecord?.id ?? null,
-          scanId: null as any, // No scan record for probe checks
-          detail: { host, port, fingerprint, days_until_expiry: daysUntilExpiry },
+          ...(certRecord ? { certificate: { connect: { id: certRecord.id } } } : {}),
+          detail: { host, port, fingerprint, days_until_expiry: daysUntilExpiry } as any,
           remediation: 'Renew or replace the certificate',
         },
       });

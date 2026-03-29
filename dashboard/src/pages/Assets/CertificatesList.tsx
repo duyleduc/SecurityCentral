@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Chip, Stack, Select, MenuItem,
+  Box, Typography, Chip, Stack, Select, MenuItem, Button, TextField,
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
-  Paper, Skeleton,
+  Paper, Skeleton, Checkbox, ListItemText, InputAdornment,
+  OutlinedInput,
 } from '@mui/material';
-import { useCertificates, type Certificate } from '../../api/hooks.js';
+import type { SelectChangeEvent } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+import { useCertificates, useProjects, useTriggerCheckAll, type Certificate, type Project } from '../../api/hooks.js';
 import { Pagination } from './RepositoriesList.js';
 
 function expiryColor(notAfter: string): string {
@@ -32,24 +37,53 @@ export function CertificatesList() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
+  const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
+  const [tagsQuery, setTagsQuery] = useState('');
+
+  const projectsQuery = useProjects();
+  const projects = (projectsQuery.data?.data ?? []) as Project[];
+
   const params: Record<string, string | number> = { page, per_page: 25 };
   if (statusFilter) params.status = statusFilter;
+  if (selectedProjects.length > 0) params.project_ids = selectedProjects.join(',');
+  if (tagsQuery.trim()) params.tags = tagsQuery.trim();
 
   const certs = useCertificates(params);
   const data = certs.data?.data as Certificate[] | undefined;
   const meta = certs.data?.meta;
+  const refreshAll = useTriggerCheckAll();
+
+  const handleProjectChange = (e: SelectChangeEvent<string[]>) => {
+    const val = e.target.value;
+    setSelectedProjects(typeof val === 'string' ? val.split(',') : val);
+    setPage(1);
+  };
+
+  const hasFilters = statusFilter || selectedProjects.length > 0 || tagsQuery.trim();
 
   return (
     <Box>
-      <Typography variant="h5" sx={{ mb: 2 }}>Certificates</Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+        <Typography variant="h5">Certificates</Typography>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<RefreshIcon />}
+          onClick={() => refreshAll.mutate()}
+          disabled={refreshAll.isPending}
+        >
+          {refreshAll.isPending ? 'Refreshing...' : 'Refresh All'}
+        </Button>
+      </Stack>
 
-      <Box sx={{ mb: 2 }}>
+      {/* Filters */}
+      <Stack direction="row" spacing={1.5} sx={{ mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         <Select
           size="small"
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
           displayEmpty
-          sx={{ minWidth: 160 }}
+          sx={{ minWidth: 150 }}
         >
           <MenuItem value="">All Statuses</MenuItem>
           <MenuItem value="active">Active</MenuItem>
@@ -57,7 +91,49 @@ export function CertificatesList() {
           <MenuItem value="expired">Expired</MenuItem>
           <MenuItem value="revoked">Revoked</MenuItem>
         </Select>
-      </Box>
+
+        <Select
+          size="small"
+          multiple
+          value={selectedProjects}
+          onChange={handleProjectChange}
+          displayEmpty
+          input={<OutlinedInput size="small" />}
+          renderValue={(selected) => {
+            if (selected.length === 0) return <Typography variant="body2" color="text.secondary">All Projects</Typography>;
+            return selected.map((id) => projects.find((p) => p.id === id)?.name ?? id).join(', ');
+          }}
+          sx={{ minWidth: 200 }}
+        >
+          {projects.map((p) => (
+            <MenuItem key={p.id} value={p.id}>
+              <Checkbox size="small" checked={selectedProjects.includes(p.id)} />
+              <ListItemText primary={p.name} />
+            </MenuItem>
+          ))}
+        </Select>
+
+        <TextField
+          size="small"
+          placeholder="Tags: env=prod,team=infra"
+          value={tagsQuery}
+          onChange={(e) => { setTagsQuery(e.target.value); setPage(1); }}
+          sx={{ minWidth: 240 }}
+          InputProps={{
+            startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+          }}
+        />
+
+        {hasFilters && (
+          <Button
+            size="small"
+            startIcon={<ClearIcon />}
+            onClick={() => { setStatusFilter(''); setSelectedProjects([]); setTagsQuery(''); setPage(1); }}
+          >
+            Clear
+          </Button>
+        )}
+      </Stack>
 
       <TableContainer component={Paper}>
         <Table size="small">

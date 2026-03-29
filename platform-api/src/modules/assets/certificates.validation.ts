@@ -4,6 +4,8 @@ export const ListCertsSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   per_page: z.coerce.number().int().min(1).max(200).default(50),
   status: z.string().optional(), // active | expiring | expired | revoked
+  project_ids: z.string().optional(), // comma-separated project UUIDs
+  tags: z.string().optional(), // comma-separated key=value pairs (AND condition)
 });
 
 export type ListCertsQuery = z.infer<typeof ListCertsSchema>;

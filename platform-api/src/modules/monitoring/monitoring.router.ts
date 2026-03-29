@@ -76,6 +76,18 @@ monitoringRouter.delete(
   },
 );
 
+// POST /monitoring/domains/check-all
+monitoringRouter.post(
+  '/domains/check-all',
+  requirePermission('trigger_scans'),
+  async (req, res, next) => {
+    try {
+      const result = await monitoringService.triggerCheckAll(req.auth!.orgId);
+      res.json(successEnvelope(result));
+    } catch (err) { next(err); }
+  },
+);
+
 // POST /monitoring/domains/:id/check
 monitoringRouter.post(
   '/domains/:id/check',
