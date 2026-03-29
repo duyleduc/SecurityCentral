@@ -1,0 +1,16 @@
+node_modules
+.git
+*.log
+logs/
+.pids/
+.env
+.env.local
+dashboard/dist
+go/
+docs/
+scripts/
+.claude/
+*.md
+!package.json
+!platform-api/package.json
+!dashboard/package.json

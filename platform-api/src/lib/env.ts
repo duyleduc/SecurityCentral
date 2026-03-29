@@ -8,7 +8,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   DATABASE_URL: z.string().default('postgresql://securitycentral:securitycentral@localhost:5432/securitycentral'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
-  ELASTICSEARCH_URL: z.string().default('http://localhost:9200'),
+  ELASTICSEARCH_URL: z.string().default(''),
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
   JWT_SECRET: z.string().default('change-me-in-production'),
   JWT_REFRESH_SECRET: z.string().default('change-me-refresh-in-production'),

@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
 import { prisma } from '../../lib/prisma.js';
-import { getEsClient, FINDINGS_INDEX } from '../../lib/elasticsearch.js';
+import { isEsEnabled, getEsClient, FINDINGS_INDEX } from '../../lib/elasticsearch.js';
 import { AppError } from '../../middleware/errors.js';
 import { enqueueFindingSync } from './sync.js';
 import type { ListFindingsQuery, TrendsQuery } from './findings.validation.js';
@@ -35,8 +35,8 @@ export async function listFindings(
   const { page, per_page } = query;
   const skip = (page - 1) * per_page;
 
-  // Route to ES when full-text search is present
-  if (query.q) {
+  // Route to ES when full-text search is present and ES is available
+  if (query.q && isEsEnabled()) {
     return listFindingsFromEs(orgId, query, skip);
   }
 
@@ -73,6 +73,12 @@ async function listFindingsFromPg(
   }
   if (query.project_id) {
     where.repository = { projectId: query.project_id };
+  }
+  if (query.q) {
+    where.OR = [
+      { title: { contains: query.q, mode: 'insensitive' } },
+      { cveId: { contains: query.q, mode: 'insensitive' } },
+    ];
   }
 
   const isSeveritySort = query.sort === 'severity';
@@ -250,6 +256,9 @@ export async function updateFindingStatus(
 // ---------------------------------------------------------------------------
 
 export async function getStats(orgId: string, source?: string) {
+  if (!isEsEnabled()) {
+    return { total: 0, by_severity: {}, by_status: {}, by_source: {} };
+  }
   const client = getEsClient();
 
   const must: Record<string, unknown>[] = [{ term: { org_id: orgId } }];
@@ -286,6 +295,9 @@ export async function getStats(orgId: string, source?: string) {
 // ---------------------------------------------------------------------------
 
 export async function getTrends(orgId: string, query: TrendsQuery) {
+  if (!isEsEnabled()) {
+    return { interval: query.interval, days: query.days, new_findings: [], resolved_findings: [] };
+  }
   const client = getEsClient();
   const { interval, days } = query;
 

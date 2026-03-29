@@ -1,5 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
-import { getEsClient, FINDINGS_INDEX } from '../../lib/elasticsearch.js';
+import { isEsEnabled, getEsClient, FINDINGS_INDEX } from '../../lib/elasticsearch.js';
 import { getRedisConnection } from '../../lib/redis.js';
 
 const SUMMARY_TTL = 30;    // seconds
@@ -61,29 +61,47 @@ export async function getSummary(orgId: string): Promise<DashboardSummary> {
   const cached = await getCache<DashboardSummary>(cacheKey);
   if (cached) return cached;
 
-  // Findings from ES aggregation
-  const client = getEsClient();
-  const { body } = await client.search({
-    index: FINDINGS_INDEX,
-    body: {
-      size: 0,
-      query: { term: { org_id: orgId } },
-      aggs: {
-        by_severity: { terms: { field: 'severity', size: 10 } },
-        by_status: { terms: { field: 'status', size: 10 } },
+  // Findings aggregation — use ES when available, fall back to Prisma
+  let total = 0;
+  let by_severity: Record<string, number> = {};
+  let open = 0;
+  let resolved = 0;
+
+  if (isEsEnabled()) {
+    const client = getEsClient();
+    const { body } = await client.search({
+      index: FINDINGS_INDEX,
+      body: {
+        size: 0,
+        query: { term: { org_id: orgId } },
+        aggs: {
+          by_severity: { terms: { field: 'severity', size: 10 } },
+          by_status: { terms: { field: 'status', size: 10 } },
+        },
       },
-    },
-  });
+    });
 
-  const total = typeof body.hits.total === 'number' ? body.hits.total : body.hits.total.value;
-  const severityBuckets = body.aggregations.by_severity.buckets as Array<{ key: string; doc_count: number }>;
-  const statusBuckets = body.aggregations.by_status.buckets as Array<{ key: string; doc_count: number }>;
+    total = typeof body.hits.total === 'number' ? body.hits.total : body.hits.total.value;
+    const severityBuckets = body.aggregations.by_severity.buckets as Array<{ key: string; doc_count: number }>;
+    const statusBuckets = body.aggregations.by_status.buckets as Array<{ key: string; doc_count: number }>;
 
-  const by_severity = Object.fromEntries(severityBuckets.map((b) => [b.key, b.doc_count]));
-  const statusMap = Object.fromEntries(statusBuckets.map((b) => [b.key, b.doc_count]));
+    by_severity = Object.fromEntries(severityBuckets.map((b) => [b.key, b.doc_count]));
+    const statusMap = Object.fromEntries(statusBuckets.map((b) => [b.key, b.doc_count]));
 
-  const open = (statusMap['open'] ?? 0) + (statusMap['in_progress'] ?? 0);
-  const resolved = (statusMap['resolved'] ?? 0) + (statusMap['suppressed'] ?? 0) + (statusMap['false_positive'] ?? 0);
+    open = (statusMap['open'] ?? 0) + (statusMap['in_progress'] ?? 0);
+    resolved = (statusMap['resolved'] ?? 0) + (statusMap['suppressed'] ?? 0) + (statusMap['false_positive'] ?? 0);
+  } else {
+    // Fallback: aggregate from PostgreSQL
+    const [severityCounts, statusCounts] = await Promise.all([
+      prisma.finding.groupBy({ by: ['severity'], where: { orgId }, _count: { id: true } }),
+      prisma.finding.groupBy({ by: ['status'], where: { orgId }, _count: { id: true } }),
+    ]);
+    by_severity = Object.fromEntries(severityCounts.map((r) => [r.severity, r._count.id]));
+    const statusMap = Object.fromEntries(statusCounts.map((r) => [r.status, r._count.id]));
+    total = Object.values(statusMap).reduce((a, b) => a + b, 0);
+    open = (statusMap['open'] ?? 0) + (statusMap['in_progress'] ?? 0);
+    resolved = (statusMap['resolved'] ?? 0) + (statusMap['suppressed'] ?? 0) + (statusMap['false_positive'] ?? 0);
+  }
 
   // Asset counts from PG
   const [repositories, servers, certificates] = await Promise.all([

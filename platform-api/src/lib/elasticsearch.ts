@@ -38,8 +38,17 @@ const FINDINGS_MAPPING = {
 
 let clientInstance: Client | null = null;
 
+/** Returns true if Elasticsearch is configured (URL is set). */
+export function isEsEnabled(): boolean {
+  return !!env.ELASTICSEARCH_URL;
+}
+
 export function getEsClient(): Client {
   if (clientInstance) return clientInstance;
+
+  if (!env.ELASTICSEARCH_URL) {
+    throw new Error('Elasticsearch is not configured (ELASTICSEARCH_URL is empty)');
+  }
 
   clientInstance = new Client({
     node: env.ELASTICSEARCH_URL,

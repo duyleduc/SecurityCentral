@@ -2,7 +2,7 @@ import { Job } from 'bullmq';
 
 import { prisma } from '../lib/prisma.js';
 import { jobLogger } from '../lib/logger.js';
-import { upsertFinding, type FindingDocument } from '../lib/elasticsearch.js';
+import { isEsEnabled, upsertFinding, type FindingDocument } from '../lib/elasticsearch.js';
 import type { JobContext } from './context.js';
 
 export interface EsSyncJobData extends JobContext {
@@ -15,6 +15,8 @@ export interface EsSyncJobData extends JobContext {
 export async function processFindingSync(job: Job<EsSyncJobData>): Promise<void> {
   const { findingId, request_id } = job.data;
   const log = jobLogger(job.queueName, job.id ?? 'unknown', request_id);
+
+  if (!isEsEnabled()) return; // Skip when ES is not configured
 
   const finding = await prisma.finding.findUnique({
     where: { id: findingId },
