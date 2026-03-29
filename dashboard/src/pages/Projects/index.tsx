@@ -10,7 +10,8 @@ import BugReportIcon from '@mui/icons-material/BugReport';
 import DnsIcon from '@mui/icons-material/Dns';
 import CodeIcon from '@mui/icons-material/Code';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { useProjects, useCreateProject, useDeleteProject, type Project } from '../../api/hooks.js';
+import EditIcon from '@mui/icons-material/Edit';
+import { useProjects, useCreateProject, useDeleteProject, useUpdateProject, type Project } from '../../api/hooks.js';
 import { SEVERITY_COLORS } from '../../theme/theme.js';
 import { ProjectDetail } from './ProjectDetail.js';
 
@@ -26,6 +27,7 @@ function ProjectList() {
   const projects = useProjects();
   const data = (projects.data?.data ?? []) as Project[];
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Project | null>(null);
   const navigate = useNavigate();
 
   return (
@@ -62,13 +64,14 @@ function ProjectList() {
         <Grid container spacing={2}>
           {data.map((project) => (
             <Grid item xs={12} sm={6} md={4} key={project.id}>
-              <ProjectCard project={project} onClick={() => navigate(`/projects/${project.id}`)} />
+              <ProjectCard project={project} onClick={() => navigate(`/projects/${project.id}`)} onEdit={() => setEditTarget(project)} />
             </Grid>
           ))}
         </Grid>
       )}
 
       <CreateProjectDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <EditProjectDialog project={editTarget} onClose={() => setEditTarget(null)} />
     </Box>
   );
 }
@@ -77,7 +80,7 @@ function ProjectList() {
 // Project Card
 // ---------------------------------------------------------------------------
 
-function ProjectCard({ project, onClick }: { project: Project; onClick: () => void }) {
+function ProjectCard({ project, onClick, onEdit }: { project: Project; onClick: () => void; onEdit: () => void }) {
   const deleteMutation = useDeleteProject();
 
   return (
@@ -117,7 +120,16 @@ function ProjectCard({ project, onClick }: { project: Project; onClick: () => vo
         </CardContent>
       </CardActionArea>
 
-      <Box sx={{ px: 2, pb: 1.5, display: 'flex', justifyContent: 'flex-end' }}>
+      <Box sx={{ px: 2, pb: 1.5, display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+        <Tooltip title="Edit project">
+          <IconButton
+            size="small"
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            sx={{ color: 'text.disabled', '&:hover': { color: 'primary.main' } }}
+          >
+            <EditIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
         <Tooltip title="Delete project">
           <IconButton
             size="small"
@@ -135,6 +147,49 @@ function ProjectCard({ project, onClick }: { project: Project; onClick: () => vo
 // ---------------------------------------------------------------------------
 // Create Project Dialog
 // ---------------------------------------------------------------------------
+
+function EditProjectDialog({ project, onClose }: { project: Project | null; onClose: () => void }) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const updateMutation = useUpdateProject();
+
+  const handleOpen = () => {
+    if (project) {
+      setName(project.name);
+      setDescription(project.description ?? '');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!project || !name.trim()) return;
+    await updateMutation.mutateAsync({ id: project.id, name: name.trim(), description: description || undefined });
+    onClose();
+  };
+
+  return (
+    <Dialog open={project !== null} onClose={onClose} maxWidth="sm" fullWidth TransitionProps={{ onEnter: handleOpen }}>
+      <DialogTitle>Edit Project</DialogTitle>
+      <DialogContent>
+        <TextField
+          label="Project Name" fullWidth required autoFocus
+          value={name} onChange={(e) => setName(e.target.value)}
+          sx={{ mt: 1, mb: 2 }} size="small"
+        />
+        <TextField
+          label="Description (optional)" fullWidth multiline rows={2}
+          value={description} onChange={(e) => setDescription(e.target.value)}
+          size="small"
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={handleSave} disabled={!name.trim() || updateMutation.isPending}>
+          {updateMutation.isPending ? 'Saving...' : 'Save'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
 
 function CreateProjectDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [name, setName] = useState('');

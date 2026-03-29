@@ -32,7 +32,7 @@ import DnsIcon from '@mui/icons-material/Dns';
 import HttpsIcon from '@mui/icons-material/Https';
 import {
   useProject, useProjectSummary, useRepositories, useAssignRepoToProject, useRemoveRepoFromProject,
-  useDeleteProject, useTriggerScan, useProjectScans, useCancelScan, useDeleteScan,
+  useDeleteProject, useUpdateProject, useTriggerScan, useProjectScans, useCancelScan, useDeleteScan,
   useClearProjectScanHistory, useMonitoredEndpoints, useAddEndpoints, useRemoveEndpoint,
   useTriggerEndpointCheck, useUpdateEndpoint, useFindings,
   type Repository, type Project, type Scan, type ScanTypeOption, type MonitoredEndpoint,
@@ -79,6 +79,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
   const [addRepoOpen, setAddRepoOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const data = project.data?.data as (Project & { repositories: Repository[] }) | undefined;
   const repos = data?.repositories ?? [];
@@ -126,11 +127,18 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>{data.description}</Typography>
           )}
         </Box>
-        <Tooltip title="Delete project">
-          <IconButton color="error" onClick={handleDelete}>
-            <DeleteIcon />
-          </IconButton>
-        </Tooltip>
+        <Stack direction="row" spacing={0.5}>
+          <Tooltip title="Edit project">
+            <IconButton onClick={() => setEditOpen(true)}>
+              <EditIcon />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete project">
+            <IconButton color="error" onClick={handleDelete}>
+              <DeleteIcon />
+            </IconButton>
+          </Tooltip>
+        </Stack>
       </Stack>
 
       {/* Summary Cards */}
@@ -174,6 +182,12 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         projectId={projectId}
         existingRepoIds={new Set(repoIds)}
         onClose={() => setAddRepoOpen(false)}
+      />
+
+      <EditProjectDialog
+        open={editOpen}
+        project={data}
+        onClose={() => setEditOpen(false)}
       />
     </Box>
   );
@@ -571,6 +585,55 @@ function FindingsTab({ projectId }: { projectId: string }) {
         </Stack>
       )}
     </Box>
+  );
+}
+
+// ===========================================================================
+// Edit project dialog
+// ===========================================================================
+
+function EditProjectDialog({ open, project, onClose }: {
+  open: boolean; project: Project | undefined; onClose: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const updateMutation = useUpdateProject();
+
+  const handleOpen = () => {
+    if (project) {
+      setName(project.name);
+      setDescription(project.description ?? '');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!project || !name.trim()) return;
+    await updateMutation.mutateAsync({ id: project.id, name: name.trim(), description: description || undefined });
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth TransitionProps={{ onEnter: handleOpen }}>
+      <DialogTitle>Edit Project</DialogTitle>
+      <DialogContent>
+        <TextField
+          label="Project Name" fullWidth required autoFocus
+          value={name} onChange={(e) => setName(e.target.value)}
+          sx={{ mt: 1, mb: 2 }} size="small"
+        />
+        <TextField
+          label="Description (optional)" fullWidth multiline rows={2}
+          value={description} onChange={(e) => setDescription(e.target.value)}
+          size="small"
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" onClick={handleSave} disabled={!name.trim() || updateMutation.isPending}>
+          {updateMutation.isPending ? 'Saving...' : 'Save'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
