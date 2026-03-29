@@ -75,9 +75,10 @@ async function listFindingsFromPg(
     where.repository = { projectId: query.project_id };
   }
 
+  const isSeveritySort = query.sort === 'severity';
   const orderBy = buildPrismaSort(query.sort, query.order);
 
-  const [data, total] = await Promise.all([
+  const [rawData, total] = await Promise.all([
     prisma.finding.findMany({
       where,
       skip,
@@ -91,6 +92,14 @@ async function listFindingsFromPg(
     }),
     prisma.finding.count({ where }),
   ]);
+
+  // Prisma can't sort enums by custom order, so sort severity in-memory
+  const data = isSeveritySort
+    ? [...rawData].sort((a, b) => {
+        const dir = (query.order ?? 'desc') === 'asc' ? 1 : -1;
+        return dir * ((SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99));
+      })
+    : rawData;
 
   return { data, meta: { page: query.page, per_page: query.per_page, total } };
 }

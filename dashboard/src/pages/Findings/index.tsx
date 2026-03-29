@@ -33,8 +33,8 @@ export function FindingsPage() {
   const [status, setStatus] = useState('');
   const [projectId, setProjectId] = useState('');
   const [q, setQ] = useState('');
-  const [sort, setSort] = useState('created_at');
-  const [order, setOrder] = useState<'asc' | 'desc'>('desc');
+  const [sort, setSort] = useState('severity');
+  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
 
   const projectsQuery = useProjects();
   const projects = (projectsQuery.data?.data ?? []) as Project[];

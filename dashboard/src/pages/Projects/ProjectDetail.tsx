@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Button, Chip, Stack, Paper, Skeleton,
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
-  IconButton, Tooltip, Alert,
+  IconButton, Tooltip, Alert, Tabs, Tab,
   Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, InputAdornment, CircularProgress, LinearProgress,
 } from '@mui/material';
@@ -28,24 +28,25 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import LanguageIcon from '@mui/icons-material/Language';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import EditIcon from '@mui/icons-material/Edit';
+import DnsIcon from '@mui/icons-material/Dns';
+import HttpsIcon from '@mui/icons-material/Https';
 import {
-  useProject, useRepositories, useAssignRepoToProject, useRemoveRepoFromProject,
+  useProject, useProjectSummary, useRepositories, useAssignRepoToProject, useRemoveRepoFromProject,
   useDeleteProject, useTriggerScan, useProjectScans, useCancelScan, useDeleteScan,
   useClearProjectScanHistory, useMonitoredEndpoints, useAddEndpoints, useRemoveEndpoint,
-  useTriggerEndpointCheck, useUpdateEndpoint,
+  useTriggerEndpointCheck, useUpdateEndpoint, useFindings,
   type Repository, type Project, type Scan, type ScanTypeOption, type MonitoredEndpoint,
+  type ProjectSummary, type Finding,
 } from '../../api/hooks.js';
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { SEVERITY_COLORS, STATUS_COLORS } from '../../theme/theme.js';
 
 // ---------------------------------------------------------------------------
 // Status helpers
 // ---------------------------------------------------------------------------
 
 const STATUS_COLOR: Record<string, 'success' | 'error' | 'warning' | 'info' | 'default'> = {
-  completed: 'success',
-  failed: 'error',
-  running: 'warning',
-  pending: 'info',
-  cancelled: 'default',
+  completed: 'success', failed: 'error', running: 'warning', pending: 'info', cancelled: 'default',
 };
 
 function formatDuration(ms?: number | null): string {
@@ -73,13 +74,16 @@ function timeAgo(dateStr?: string | null): string {
 
 export function ProjectDetail({ projectId }: { projectId: string }) {
   const project = useProject(projectId);
+  const summary = useProjectSummary(projectId);
   const deleteMutation = useDeleteProject();
   const navigate = useNavigate();
+  const [tab, setTab] = useState(0);
   const [addRepoOpen, setAddRepoOpen] = useState(false);
 
   const data = project.data?.data as (Project & { repositories: Repository[] }) | undefined;
   const repos = data?.repositories ?? [];
   const repoIds = repos.map((r) => r.id);
+  const stats = summary.data?.data as ProjectSummary | undefined;
 
   const handleDelete = () => {
     if (confirm(`Delete "${data?.name}"? Assets won't be deleted.`)) {
@@ -91,6 +95,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     return (
       <Box>
         <Skeleton variant="text" width={200} height={40} sx={{ mb: 2 }} />
+        <Skeleton variant="rounded" height={100} sx={{ mb: 2 }} />
         <Skeleton variant="rounded" height={300} />
       </Box>
     );
@@ -128,44 +133,41 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         </Tooltip>
       </Stack>
 
-      {/* Repositories section */}
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <CodeIcon color="action" />
-          <Typography variant="h6">Repositories</Typography>
-          <Chip label={repos.length} size="small" />
-        </Stack>
-        <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setAddRepoOpen(true)}>
-          Add Repository
-        </Button>
-      </Stack>
+      {/* Summary Cards */}
+      <SummaryCards stats={stats} loading={summary.isLoading} projectId={projectId} />
 
-      {repos.length === 0 ? (
-        <Paper sx={{ py: 5, textAlign: 'center' }}>
-          <CodeIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
-          <Typography color="text.secondary" sx={{ mb: 1 }}>No repositories in this project yet</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Add a repository to start scanning for vulnerabilities
-          </Typography>
-          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAddRepoOpen(true)}>
-            Add Repository
-          </Button>
-        </Paper>
-      ) : (
-        <RepoTable repos={repos} projectId={projectId} />
-      )}
+      {/* Tabs */}
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
+        <Tab label="Overview" />
+        <Tab label={`Repositories (${repos.length})`} />
+        <Tab label="Scans" />
+        <Tab label="Domains" />
+        <Tab label="Findings" />
+      </Tabs>
 
-      {/* Scan history section */}
-      {repos.length > 0 && (
-        <Box sx={{ mt: 4 }}>
-          <ScanHistory projectId={projectId} repoIds={repoIds} />
+      {/* Tab content */}
+      {tab === 0 && <OverviewTab stats={stats} loading={summary.isLoading} projectId={projectId} repos={repos} repoIds={repoIds} />}
+      {tab === 1 && (
+        <Box>
+          <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
+            <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setAddRepoOpen(true)}>
+              Add Repository
+            </Button>
+          </Stack>
+          {repos.length === 0 ? (
+            <Paper sx={{ py: 5, textAlign: 'center' }}>
+              <CodeIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
+              <Typography color="text.secondary" sx={{ mb: 2 }}>No repositories in this project yet</Typography>
+              <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAddRepoOpen(true)}>Add Repository</Button>
+            </Paper>
+          ) : (
+            <RepoTable repos={repos} projectId={projectId} />
+          )}
         </Box>
       )}
-
-      {/* Domain monitoring section */}
-      <Box sx={{ mt: 4 }}>
-        <DomainMonitoringSection projectId={projectId} />
-      </Box>
+      {tab === 2 && <ScanHistory projectId={projectId} repoIds={repoIds} />}
+      {tab === 3 && <DomainMonitoringSection projectId={projectId} />}
+      {tab === 4 && <FindingsTab projectId={projectId} />}
 
       <AddRepoDialog
         open={addRepoOpen}
@@ -173,6 +175,401 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         existingRepoIds={new Set(repoIds)}
         onClose={() => setAddRepoOpen(false)}
       />
+    </Box>
+  );
+}
+
+// ===========================================================================
+// Summary cards
+// ===========================================================================
+
+function SummaryCards({ stats, loading, projectId }: { stats?: ProjectSummary; loading: boolean; projectId: string }) {
+  if (loading || !stats) {
+    return (
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 2, mb: 3 }}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} variant="rounded" height={90} />
+        ))}
+      </Box>
+    );
+  }
+
+  const { severity, totalOpenFindings, assets, lastScan, activeScans } = stats;
+  const hasCritical = (severity.critical ?? 0) > 0;
+
+  return (
+    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 2, mb: 3 }}>
+      {/* Open Issues */}
+      <Paper variant="outlined" sx={{ p: 2, borderColor: hasCritical ? '#d32f2f' : undefined }}>
+        <Typography variant="caption" color="text.secondary">Open Issues</Typography>
+        <Typography variant="h4" sx={{ fontWeight: 700, color: hasCritical ? '#d32f2f' : totalOpenFindings > 0 ? '#f57c00' : '#16a34a' }}>
+          {totalOpenFindings}
+        </Typography>
+        {activeScans > 0 && (
+          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.5 }}>
+            <CircularProgress size={12} />
+            <Typography variant="caption" color="text.secondary">{activeScans} scan{activeScans > 1 ? 's' : ''} running</Typography>
+          </Stack>
+        )}
+      </Paper>
+
+      {/* Severity Breakdown — Pie Chart */}
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Typography variant="caption" color="text.secondary">By Severity</Typography>
+        {totalOpenFindings === 0 ? (
+          <Box sx={{ py: 2, textAlign: 'center' }}>
+            <Typography variant="body2" color="text.secondary">No open issues</Typography>
+          </Box>
+        ) : (
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Box sx={{ width: 80, height: 80, flexShrink: 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={(['critical', 'high', 'medium', 'low'] as const)
+                      .map((s) => ({ name: s, value: severity[s] ?? 0 }))
+                      .filter((d) => d.value > 0)}
+                    dataKey="value"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={18}
+                    outerRadius={36}
+                    strokeWidth={1}
+                  >
+                    {(['critical', 'high', 'medium', 'low'] as const)
+                      .filter((s) => (severity[s] ?? 0) > 0)
+                      .map((s) => (
+                        <Cell key={s} fill={SEVERITY_COLORS[s]} />
+                      ))}
+                  </Pie>
+                  <RechartsTooltip formatter={(value: number, name: string) => {
+                    const pct = totalOpenFindings > 0 ? ((value / totalOpenFindings) * 100).toFixed(1) : '0';
+                    return [`${value} (${pct}%)`, name.charAt(0).toUpperCase() + name.slice(1)];
+                  }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </Box>
+            <Stack spacing={0.25} sx={{ flex: 1 }}>
+              {(['critical', 'high', 'medium', 'low'] as const).map((s) => {
+                const count = severity[s] ?? 0;
+                if (count === 0) return null;
+                return (
+                  <Stack key={s} direction="row" spacing={0.75} alignItems="center">
+                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: SEVERITY_COLORS[s], flexShrink: 0 }} />
+                    <Typography variant="caption" sx={{ textTransform: 'capitalize', flex: 1 }}>{s}</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700 }}>{count}</Typography>
+                  </Stack>
+                );
+              })}
+            </Stack>
+          </Stack>
+        )}
+      </Paper>
+
+      {/* Assets */}
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Typography variant="caption" color="text.secondary">Assets</Typography>
+        <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <CodeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+            <Typography variant="body2">{assets.repositories} Repositories</Typography>
+          </Stack>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <DnsIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+            <Typography variant="body2">{assets.servers} Servers</Typography>
+          </Stack>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <LanguageIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+            <Typography variant="body2">{assets.endpoints} Endpoints</Typography>
+          </Stack>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <HttpsIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+            <Typography variant="body2">{assets.certificates} Certificates</Typography>
+          </Stack>
+        </Stack>
+      </Paper>
+
+      {/* Last Scan */}
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Typography variant="caption" color="text.secondary">Last Scan</Typography>
+        {lastScan ? (
+          <>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>{timeAgo(lastScan.completedAt)}</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {lastScan.scanType.replace(/_/g, ' ')} &middot; {lastScan.findingsTotal} findings
+            </Typography>
+          </>
+        ) : (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>No scans yet</Typography>
+        )}
+      </Paper>
+    </Box>
+  );
+}
+
+// ===========================================================================
+// Overview tab
+// ===========================================================================
+
+function OverviewTab({ stats, loading, projectId, repos, repoIds }: {
+  stats?: ProjectSummary; loading: boolean; projectId: string; repos: Repository[]; repoIds: string[];
+}) {
+  const navigate = useNavigate();
+  const scansQuery = useProjectScans(projectId, repoIds);
+  const scans = ((scansQuery.data?.data ?? []) as Scan[]);
+  const activeScans = scans.filter((s) => s.status === 'pending' || s.status === 'running');
+  const recentScans = scans.filter((s) => s.status !== 'pending' && s.status !== 'running').slice(0, 5);
+
+  return (
+    <Box>
+      {/* Active scans */}
+      {activeScans.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+            <CircularProgress size={18} />
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Active Scans</Typography>
+            <Chip label={activeScans.length} size="small" color="warning" />
+          </Stack>
+          <Stack spacing={1}>
+            {activeScans.map((scan) => (
+              <Paper key={scan.id} variant="outlined" sx={{ p: 2 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Box sx={{ flex: 1 }}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography variant="subtitle2">
+                        {scan.repository ? `${scan.repository.owner}/${scan.repository.name}` : 'Unknown'}
+                      </Typography>
+                      <Chip label={scan.status} size="small" color={STATUS_COLOR[scan.status] ?? 'default'} />
+                      <Chip label={scan.scanType.replace(/_/g, ' ')} size="small" variant="outlined" />
+                    </Stack>
+                    {scan.status === 'running' && <LinearProgress sx={{ mt: 1, borderRadius: 1 }} />}
+                  </Box>
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+        </Box>
+      )}
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
+        {/* Recent critical/high findings */}
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Critical & High Findings</Typography>
+            {(stats?.recentFindings?.length ?? 0) > 0 && (
+              <Chip label={stats?.recentFindings.length} size="small" color="error" />
+            )}
+          </Stack>
+          {loading ? (
+            <Skeleton variant="rounded" height={120} />
+          ) : !stats?.recentFindings?.length ? (
+            <Box sx={{ py: 3, textAlign: 'center' }}>
+              <CheckCircleIcon sx={{ fontSize: 32, color: 'success.main', mb: 1 }} />
+              <Typography variant="body2" color="text.secondary">No critical or high findings</Typography>
+            </Box>
+          ) : (
+            <Stack spacing={0.5}>
+              {stats.recentFindings.map((f) => (
+                <Stack
+                  key={f.id}
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  sx={{ py: 0.75, px: 1, borderRadius: 1, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+                  onClick={() => navigate(`/findings/${f.id}`)}
+                >
+                  <Chip
+                    label={f.severity}
+                    size="small"
+                    sx={{ bgcolor: SEVERITY_COLORS[f.severity] ?? '#9e9e9e', color: '#fff', fontWeight: 600, minWidth: 56, fontSize: '0.7rem' }}
+                  />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>{f.title}</Typography>
+                    {f.repository ? (
+                      <Typography variant="caption" color="text.secondary">{f.repository.owner}/{f.repository.name}</Typography>
+                    ) : f.certificate ? (
+                      <Typography variant="caption" color="text.secondary">{f.certificate.subjectCn}</Typography>
+                    ) : null}
+                  </Box>
+                </Stack>
+              ))}
+            </Stack>
+          )}
+        </Paper>
+
+        {/* Recent scans */}
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1.5 }}>Recent Scans</Typography>
+          {scansQuery.isLoading ? (
+            <Skeleton variant="rounded" height={120} />
+          ) : recentScans.length === 0 ? (
+            <Box sx={{ py: 3, textAlign: 'center' }}>
+              <HistoryIcon sx={{ fontSize: 32, color: 'text.disabled', mb: 1 }} />
+              <Typography variant="body2" color="text.secondary">No scan history yet</Typography>
+            </Box>
+          ) : (
+            <Stack spacing={0.5}>
+              {recentScans.map((scan) => (
+                <Stack
+                  key={scan.id}
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  sx={{ py: 0.75, px: 1, borderRadius: 1, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+                  onClick={() => navigate(`/scans/${scan.id}`)}
+                >
+                  <Chip label={scan.status} size="small" color={STATUS_COLOR[scan.status] ?? 'default'} sx={{ minWidth: 72 }} />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
+                      {scan.repository ? `${scan.repository.owner}/${scan.repository.name}` : '--'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {scan.scanType.replace(/_/g, ' ')} &middot; {timeAgo(scan.startedAt ?? scan.createdAt)}
+                    </Typography>
+                  </Box>
+                  {scan.status === 'completed' && (
+                    <Chip label={`${scan.findingsTotal}`} size="small" variant="outlined" />
+                  )}
+                </Stack>
+              ))}
+            </Stack>
+          )}
+        </Paper>
+
+        {/* Certificates */}
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Certificates</Typography>
+            {(stats?.certificates?.length ?? 0) > 0 && (
+              <Chip label={stats?.certificates.length} size="small" />
+            )}
+          </Stack>
+          {loading ? (
+            <Skeleton variant="rounded" height={120} />
+          ) : !stats?.certificates?.length ? (
+            <Box sx={{ py: 3, textAlign: 'center' }}>
+              <HttpsIcon sx={{ fontSize: 32, color: 'text.disabled', mb: 1 }} />
+              <Typography variant="body2" color="text.secondary">No certificates linked to this project</Typography>
+            </Box>
+          ) : (
+            <Stack spacing={0.5}>
+              {stats.certificates.map((cert) => {
+                const days = Math.floor((new Date(cert.notAfter).getTime() - Date.now()) / 86400000);
+                const expiryColor = days <= 0 ? '#dc2626' : days <= 30 ? '#dc2626' : days <= 90 ? '#f59e0b' : '#16a34a';
+                return (
+                  <Stack
+                    key={cert.id}
+                    direction="row"
+                    spacing={1}
+                    alignItems="center"
+                    sx={{ py: 0.75, px: 1, borderRadius: 1, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+                    onClick={() => navigate(`/assets/certificates/${cert.id}`)}
+                  >
+                    <HttpsIcon sx={{ fontSize: 16, color: expiryColor }} />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>{cert.subjectCn}</Typography>
+                      <Typography variant="caption" color="text.secondary">{cert.issuerCn}</Typography>
+                    </Box>
+                    <Typography variant="caption" sx={{ color: expiryColor, fontWeight: 600 }}>
+                      {days <= 0 ? 'Expired' : `${days}d`}
+                    </Typography>
+                  </Stack>
+                );
+              })}
+            </Stack>
+          )}
+        </Paper>
+      </Box>
+    </Box>
+  );
+}
+
+// ===========================================================================
+// Findings tab
+// ===========================================================================
+
+const SEVERITY_LABEL: Record<string, string> = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low', info: 'Info' };
+const STATUS_LABEL: Record<string, string> = { open: 'Open', in_progress: 'In Progress', resolved: 'Resolved', suppressed: 'Suppressed', false_positive: 'False Positive' };
+
+function FindingsTab({ projectId }: { projectId: string }) {
+  const navigate = useNavigate();
+  const [page, setPage] = useState(1);
+  const [severity, setSeverity] = useState('');
+
+  const params: Record<string, string | number> = { page, per_page: 20, project_id: projectId, sort: 'severity', order: 'asc' };
+  if (severity) params.severity = severity;
+
+  const findings = useFindings(params);
+  const data = findings.data?.data as Finding[] | undefined;
+  const meta = findings.data?.meta;
+
+  return (
+    <Box>
+      <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
+        {['', 'critical', 'high', 'medium', 'low'].map((s) => (
+          <Chip
+            key={s}
+            label={s ? SEVERITY_LABEL[s] : 'All'}
+            size="small"
+            variant={severity === s ? 'filled' : 'outlined'}
+            color={severity === s ? 'primary' : 'default'}
+            onClick={() => { setSeverity(s); setPage(1); }}
+            sx={{ cursor: 'pointer' }}
+          />
+        ))}
+      </Stack>
+
+      <TableContainer component={Paper}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Severity</TableCell>
+              <TableCell>Title</TableCell>
+              <TableCell>Repository</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>First Seen</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {findings.isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>{Array.from({ length: 5 }).map((__, j) => <TableCell key={j}><Skeleton variant="text" /></TableCell>)}</TableRow>
+              ))
+            ) : !data?.length ? (
+              <TableRow>
+                <TableCell colSpan={5} sx={{ py: 5, textAlign: 'center', color: 'text.secondary' }}>No findings</TableCell>
+              </TableRow>
+            ) : data.map((f) => (
+              <TableRow key={f.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/findings/${f.id}`)}>
+                <TableCell>
+                  <Chip label={f.severity} size="small" sx={{ bgcolor: SEVERITY_COLORS[f.severity] ?? '#9e9e9e', color: '#fff', textTransform: 'uppercase' }} />
+                </TableCell>
+                <TableCell>{f.title.length > 60 ? f.title.slice(0, 57) + '...' : f.title}</TableCell>
+                <TableCell>
+                  {f.repository ? (
+                    <Typography variant="body2" color="text.secondary">{f.repository.owner}/{f.repository.name}</Typography>
+                  ) : '--'}
+                </TableCell>
+                <TableCell>
+                  <Chip label={STATUS_LABEL[f.status] ?? f.status} size="small" variant="outlined"
+                    sx={{ borderColor: STATUS_COLORS[f.status], color: STATUS_COLORS[f.status] }} />
+                </TableCell>
+                <TableCell sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>{new Date(f.firstSeenAt).toLocaleDateString()}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      {meta && meta.total > 20 && (
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1.5 }}>
+          <Typography variant="body2" color="text.secondary">Page {meta.page} of {Math.ceil(meta.total / 20)}</Typography>
+          <Stack direction="row" spacing={1}>
+            <Button size="small" variant="outlined" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
+            <Button size="small" variant="outlined" disabled={page * 20 >= meta.total} onClick={() => setPage(page + 1)}>Next</Button>
+          </Stack>
+        </Stack>
+      )}
     </Box>
   );
 }
@@ -197,16 +594,13 @@ function RepoTable({ repos, projectId }: { repos: Repository[]; projectId: strin
       const label = scanType === 'full' ? 'Full scan' : scanType === 'code_secrets' ? 'Secret scan' : 'Dependency scan';
       setScanMsg({ type: 'success', text: `${label} queued for ${repo.owner}/${repo.name}` });
     } catch (err: unknown) {
-      const msg = (err as { message?: string })?.message ?? 'Failed to trigger scan';
-      setScanMsg({ type: 'error', text: `${repo.owner}/${repo.name}: ${msg}` });
+      setScanMsg({ type: 'error', text: `${repo.owner}/${repo.name}: ${(err as { message?: string })?.message ?? 'Failed'}` });
     }
   };
 
   return (
     <Box>
-      {scanMsg && (
-        <Alert severity={scanMsg.type} sx={{ mb: 2 }} onClose={() => setScanMsg(null)}>{scanMsg.text}</Alert>
-      )}
+      {scanMsg && <Alert severity={scanMsg.type} sx={{ mb: 2 }} onClose={() => setScanMsg(null)}>{scanMsg.text}</Alert>}
       <TableContainer component={Paper}>
         <Table size="small">
           <TableHead>
@@ -247,12 +641,8 @@ function RepoTable({ repos, projectId }: { repos: Repository[]; projectId: strin
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="Remove from project">
-                      <IconButton
-                        size="small"
-                        onClick={() => removeMutation.mutate({ repoId: repo.id, projectId })}
-                        disabled={removeMutation.isPending}
-                        sx={{ color: 'text.disabled', '&:hover': { color: 'error.main' } }}
-                      >
+                      <IconButton size="small" onClick={() => removeMutation.mutate({ repoId: repo.id, projectId })} disabled={removeMutation.isPending}
+                        sx={{ color: 'text.disabled', '&:hover': { color: 'error.main' } }}>
                         <LinkOffIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
@@ -263,13 +653,7 @@ function RepoTable({ repos, projectId }: { repos: Repository[]; projectId: strin
           </TableBody>
         </Table>
       </TableContainer>
-
-      {/* Scan type picker */}
-      <ScanTypeDialog
-        repo={scanTarget}
-        onConfirm={handleScanConfirm}
-        onClose={() => setScanTarget(null)}
-      />
+      <ScanTypeDialog repo={scanTarget} onConfirm={handleScanConfirm} onClose={() => setScanTarget(null)} />
     </Box>
   );
 }
@@ -279,18 +663,15 @@ function RepoTable({ repos, projectId }: { repos: Repository[]; projectId: strin
 // ===========================================================================
 
 const SCAN_OPTIONS: Array<{ value: ScanTypeOption; label: string; description: string; icon: React.ReactNode }> = [
-  { value: 'full', label: 'Full Scan', description: 'Dependencies + SAST + Secrets — complete security analysis', icon: <SecurityIcon /> },
-  { value: 'code_dependencies', label: 'Dependency Scan', description: 'npm audit, pip-audit, composer audit, bundle-audit — find vulnerable packages', icon: <BugReportIcon /> },
-  { value: 'code_secrets', label: 'Secret Scan', description: 'Detect hardcoded API keys, tokens, passwords, and private keys', icon: <VpnKeyIcon /> },
+  { value: 'full', label: 'Full Scan', description: 'Dependencies + SAST + Secrets', icon: <SecurityIcon /> },
+  { value: 'code_dependencies', label: 'Dependency Scan', description: 'Find vulnerable packages', icon: <BugReportIcon /> },
+  { value: 'code_secrets', label: 'Secret Scan', description: 'Detect hardcoded credentials', icon: <VpnKeyIcon /> },
 ];
 
 function ScanTypeDialog({ repo, onConfirm, onClose }: {
-  repo: Repository | null;
-  onConfirm: (scanType: ScanTypeOption) => void;
-  onClose: () => void;
+  repo: Repository | null; onConfirm: (scanType: ScanTypeOption) => void; onClose: () => void;
 }) {
   const [selected, setSelected] = useState<ScanTypeOption>('full');
-
   return (
     <Dialog open={repo !== null} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
@@ -300,27 +681,12 @@ function ScanTypeDialog({ repo, onConfirm, onClose }: {
         </Stack>
       </DialogTitle>
       <DialogContent>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          {repo?.language ? `Detected language: ${repo.language}. ` : ''}Choose what to scan:
-        </Typography>
-
-        <Stack spacing={1}>
+        <Stack spacing={1} sx={{ mt: 1 }}>
           {SCAN_OPTIONS.map((opt) => (
-            <Paper
-              key={opt.value}
-              variant="outlined"
-              onClick={() => setSelected(opt.value)}
-              sx={{
-                p: 2, cursor: 'pointer',
-                borderColor: selected === opt.value ? 'primary.main' : 'divider',
-                bgcolor: selected === opt.value ? 'action.selected' : 'transparent',
-                '&:hover': { bgcolor: 'action.hover' },
-              }}
-            >
+            <Paper key={opt.value} variant="outlined" onClick={() => setSelected(opt.value)}
+              sx={{ p: 2, cursor: 'pointer', borderColor: selected === opt.value ? 'primary.main' : 'divider', bgcolor: selected === opt.value ? 'action.selected' : 'transparent', '&:hover': { bgcolor: 'action.hover' } }}>
               <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                <Box sx={{ color: selected === opt.value ? 'primary.main' : 'text.secondary', mt: 0.25 }}>
-                  {opt.icon}
-                </Box>
+                <Box sx={{ color: selected === opt.value ? 'primary.main' : 'text.secondary', mt: 0.25 }}>{opt.icon}</Box>
                 <Box>
                   <Typography variant="subtitle2">{opt.label}</Typography>
                   <Typography variant="body2" color="text.secondary">{opt.description}</Typography>
@@ -332,9 +698,7 @@ function ScanTypeDialog({ repo, onConfirm, onClose }: {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" startIcon={<PlayArrowIcon />} onClick={() => onConfirm(selected)}>
-          Start Scan
-        </Button>
+        <Button variant="contained" startIcon={<PlayArrowIcon />} onClick={() => onConfirm(selected)}>Start Scan</Button>
       </DialogActions>
     </Dialog>
   );
@@ -356,11 +720,6 @@ function ScanHistory({ projectId, repoIds }: { projectId: string; repoIds: strin
   const activeScans = scans.filter((s) => s.status === 'pending' || s.status === 'running');
   const historyScans = scans.filter((s) => s.status !== 'pending' && s.status !== 'running');
 
-  const handleClearHistory = async () => {
-    await clearHistory.mutateAsync(projectId);
-    setConfirmClear(false);
-  };
-
   return (
     <>
       {/* Active scans */}
@@ -368,37 +727,24 @@ function ScanHistory({ projectId, repoIds }: { projectId: string; repoIds: strin
         <Box sx={{ mb: 3 }}>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
             <CircularProgress size={18} />
-            <Typography variant="h6">Active Scans</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Active Scans</Typography>
             <Chip label={activeScans.length} size="small" color="warning" />
           </Stack>
-
           <Stack spacing={1.5}>
             {activeScans.map((scan) => (
               <Paper key={scan.id} variant="outlined" sx={{ p: 2 }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Box sx={{ flex: 1 }}>
                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
-                      <Typography variant="subtitle2">
-                        {scan.repository ? `${scan.repository.owner}/${scan.repository.name}` : 'Unknown'}
-                      </Typography>
+                      <Typography variant="subtitle2">{scan.repository ? `${scan.repository.owner}/${scan.repository.name}` : 'Unknown'}</Typography>
                       <Chip label={scan.status} size="small" color={STATUS_COLOR[scan.status] ?? 'default'} />
                       <Chip label={scan.scanType.replace(/_/g, ' ')} size="small" variant="outlined" />
                     </Stack>
-                    <Typography variant="caption" color="text.secondary">
-                      Started {timeAgo(scan.startedAt ?? scan.createdAt)}
-                    </Typography>
-                    {scan.status === 'running' && (
-                      <LinearProgress sx={{ mt: 1, borderRadius: 1 }} />
-                    )}
+                    <Typography variant="caption" color="text.secondary">Started {timeAgo(scan.startedAt ?? scan.createdAt)}</Typography>
+                    {scan.status === 'running' && <LinearProgress sx={{ mt: 1, borderRadius: 1 }} />}
                   </Box>
                   <Tooltip title="Cancel scan">
-                    <IconButton
-                      color="error"
-                      onClick={() => cancelScan.mutate(scan.id)}
-                      disabled={cancelScan.isPending}
-                    >
-                      <StopIcon />
-                    </IconButton>
+                    <IconButton color="error" onClick={() => cancelScan.mutate(scan.id)} disabled={cancelScan.isPending}><StopIcon /></IconButton>
                   </Tooltip>
                 </Stack>
               </Paper>
@@ -407,22 +753,11 @@ function ScanHistory({ projectId, repoIds }: { projectId: string; repoIds: strin
         </Box>
       )}
 
-      {/* Scan history */}
+      {/* History */}
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <HistoryIcon color="action" />
-          <Typography variant="h6">Scan History</Typography>
-          {historyScans.length > 0 && <Chip label={historyScans.length} size="small" />}
-        </Stack>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Scan History</Typography>
         {historyScans.length > 0 && (
-          <Button
-            size="small"
-            color="error"
-            startIcon={<DeleteSweepIcon />}
-            onClick={() => setConfirmClear(true)}
-          >
-            Clear History
-          </Button>
+          <Button size="small" color="error" startIcon={<DeleteSweepIcon />} onClick={() => setConfirmClear(true)}>Clear</Button>
         )}
       </Stack>
 
@@ -440,7 +775,6 @@ function ScanHistory({ projectId, repoIds }: { projectId: string; repoIds: strin
               <TableRow>
                 <TableCell>Repository</TableCell>
                 <TableCell>Type</TableCell>
-                <TableCell>Ecosystems</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Started</TableCell>
                 <TableCell>Duration</TableCell>
@@ -451,64 +785,27 @@ function ScanHistory({ projectId, repoIds }: { projectId: string; repoIds: strin
             <TableBody>
               {historyScans.map((scan) => (
                 <TableRow key={scan.id} hover sx={{ cursor: 'pointer' }} onClick={() => nav(`/scans/${scan.id}`)}>
-                  <TableCell sx={{ fontWeight: 500 }}>
-                    {scan.repository ? `${scan.repository.owner}/${scan.repository.name}` : '--'}
-                  </TableCell>
+                  <TableCell sx={{ fontWeight: 500 }}>{scan.repository ? `${scan.repository.owner}/${scan.repository.name}` : '--'}</TableCell>
+                  <TableCell><Typography variant="body2">{scan.scanType.replace(/_/g, ' ')}</Typography></TableCell>
                   <TableCell>
-                    <Typography variant="body2">{scan.scanType.replace(/_/g, ' ')}</Typography>
+                    <Chip label={scan.status} size="small" color={STATUS_COLOR[scan.status] ?? 'default'}
+                      icon={scan.status === 'completed' ? <CheckCircleIcon /> : scan.status === 'failed' ? <ErrorIcon /> : scan.status === 'cancelled' ? <CancelIcon /> : undefined} />
                   </TableCell>
-                  <TableCell>
-                    {scan.metadata?.ecosystems?.length ? (
-                      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-                        {scan.metadata.ecosystems.map((eco, idx) => (
-                          <Chip key={`${eco.name}-${idx}`} label={eco.subdir ? `${eco.language} (${eco.subdir})` : eco.language} size="small" variant="outlined" />
-                        ))}
-                      </Stack>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">--</Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={scan.status}
-                      size="small"
-                      color={STATUS_COLOR[scan.status] ?? 'default'}
-                      icon={scan.status === 'completed' ? <CheckCircleIcon /> : scan.status === 'failed' ? <ErrorIcon /> : scan.status === 'cancelled' ? <CancelIcon /> : undefined}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" color="text.secondary">{timeAgo(scan.startedAt ?? scan.createdAt)}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" color="text.secondary">{formatDuration(scan.durationMs)}</Typography>
-                  </TableCell>
+                  <TableCell><Typography variant="body2" color="text.secondary">{timeAgo(scan.startedAt ?? scan.createdAt)}</Typography></TableCell>
+                  <TableCell><Typography variant="body2" color="text.secondary">{formatDuration(scan.durationMs)}</Typography></TableCell>
                   <TableCell align="center">
                     {scan.status === 'completed' ? (
-                      <Stack direction="row" spacing={1} justifyContent="center" alignItems="center">
+                      <Stack direction="row" spacing={1} justifyContent="center">
                         <Chip label={`${scan.findingsTotal} total`} size="small" variant="outlined" />
                         {scan.findingsNew > 0 && <Chip label={`+${scan.findingsNew}`} size="small" color="error" />}
                         {scan.findingsResolved > 0 && <Chip label={`-${scan.findingsResolved}`} size="small" color="success" />}
-                        {scan.metadata?.scannersSkipped?.length > 0 && (
-                          <Tooltip title={`${scan.metadata.scannersSkipped.length} scanner(s) skipped — click for details`}>
-                            <WarningAmberIcon fontSize="small" color="warning" />
-                          </Tooltip>
-                        )}
                       </Stack>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">--</Typography>
-                    )}
+                    ) : '--'}
                   </TableCell>
                   <TableCell align="right">
                     <Tooltip title="Delete scan">
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm('Delete this scan and its findings?')) deleteScan.mutate(scan.id);
-                        }}
-                        disabled={deleteScan.isPending}
-                        sx={{ color: 'text.disabled', '&:hover': { color: 'error.main' } }}
-                      >
+                      <IconButton size="small" onClick={(e) => { e.stopPropagation(); if (confirm('Delete this scan?')) deleteScan.mutate(scan.id); }}
+                        disabled={deleteScan.isPending} sx={{ color: 'text.disabled', '&:hover': { color: 'error.main' } }}>
                         <DeleteIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
@@ -520,27 +817,16 @@ function ScanHistory({ projectId, repoIds }: { projectId: string; repoIds: strin
         </TableContainer>
       )}
 
-      {/* Clear history confirmation */}
       <Dialog open={confirmClear} onClose={() => setConfirmClear(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Clear Scan History</DialogTitle>
         <DialogContent>
-          <Typography>
-            Delete all completed, failed, and cancelled scans for this project?
-            Active scans will not be affected.
-          </Typography>
-          <Typography variant="body2" color="error" sx={{ mt: 1 }}>
-            This will also delete findings associated with these scans. This action cannot be undone.
-          </Typography>
+          <Typography>Delete all completed/failed/cancelled scans for this project?</Typography>
+          <Typography variant="body2" color="error" sx={{ mt: 1 }}>This will also delete associated findings.</Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmClear(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleClearHistory}
-            disabled={clearHistory.isPending}
-            startIcon={clearHistory.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteSweepIcon />}
-          >
+          <Button variant="contained" color="error" onClick={async () => { await clearHistory.mutateAsync(projectId); setConfirmClear(false); }}
+            disabled={clearHistory.isPending} startIcon={clearHistory.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteSweepIcon />}>
             {clearHistory.isPending ? 'Clearing...' : 'Clear All'}
           </Button>
         </DialogActions>
@@ -549,116 +835,11 @@ function ScanHistory({ projectId, repoIds }: { projectId: string; repoIds: strin
   );
 }
 
-// Keep STATUS_COLOR for scan history table
-const SEVERITY_COLOR: Record<string, string> = { critical: '#d32f2f', high: '#f44336', medium: '#ff9800', low: '#2196f3', info: '#9e9e9e' };
-
-// ===========================================================================
-// Add repo dialog
-// ===========================================================================
-
-function AddRepoDialog({ open, projectId, existingRepoIds, onClose }: {
-  open: boolean;
-  projectId: string;
-  existingRepoIds: Set<string>;
-  onClose: () => void;
-}) {
-  const allRepos = useRepositories();
-  const assignMutation = useAssignRepoToProject();
-  const [search, setSearch] = useState('');
-
-  const repos = ((allRepos.data?.data ?? []) as Repository[])
-    .filter((r) => !existingRepoIds.has(r.id))
-    .filter((r) => {
-      if (!search) return true;
-      const q = search.toLowerCase();
-      return `${r.owner}/${r.name}`.toLowerCase().includes(q);
-    });
-
-  const handleAssign = async (repoId: string) => {
-    await assignMutation.mutateAsync({ repoId, projectId });
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Add Repository to Project</DialogTitle>
-      <DialogContent>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Select a repository to add. A first scan will be triggered automatically for repos that haven't been scanned yet.
-        </Typography>
-        <TextField
-          size="small"
-          fullWidth
-          placeholder="Search repositories..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          sx={{ mb: 2 }}
-          InputProps={{
-            startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
-          }}
-        />
-
-        {allRepos.isLoading ? (
-          <Box sx={{ py: 3, textAlign: 'center' }}>
-            <Skeleton variant="text" width="60%" sx={{ mx: 'auto' }} />
-            <Skeleton variant="text" width="40%" sx={{ mx: 'auto' }} />
-          </Box>
-        ) : repos.length === 0 ? (
-          <Box sx={{ py: 3, textAlign: 'center' }}>
-            <Typography color="text.secondary">
-              {search ? 'No matching repositories found' : 'All synced repositories are already in this project'}
-            </Typography>
-          </Box>
-        ) : (
-          <TableContainer sx={{ maxHeight: 400 }}>
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Repository</TableCell>
-                  <TableCell>Provider</TableCell>
-                  <TableCell>Language</TableCell>
-                  <TableCell sx={{ width: 80 }} />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {repos.map((repo) => (
-                  <TableRow key={repo.id} hover>
-                    <TableCell sx={{ fontWeight: 500 }}>{repo.owner}/{repo.name}</TableCell>
-                    <TableCell><Chip label={repo.provider} size="small" variant="outlined" /></TableCell>
-                    <TableCell>{repo.language || '--'}</TableCell>
-                    <TableCell align="right">
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<AddIcon />}
-                        onClick={() => handleAssign(repo.id)}
-                        disabled={assignMutation.isPending}
-                      >
-                        Add
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
 // ===========================================================================
 // Domain monitoring section
 // ===========================================================================
 
-const ENDPOINT_STATUS_COLOR: Record<string, string> = {
-  healthy: '#16a34a',
-  unhealthy: '#dc2626',
-  unreachable: '#dc2626',
-};
+const ENDPOINT_STATUS_COLOR: Record<string, string> = { healthy: '#16a34a', unhealthy: '#dc2626', unreachable: '#dc2626' };
 
 function DomainMonitoringSection({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
@@ -671,7 +852,6 @@ function DomainMonitoringSection({ projectId }: { projectId: string }) {
   const endpoints = (endpointsQuery.data?.data ?? []) as MonitoredEndpoint[];
   const hasPending = endpoints.some((e) => !e.lastStatus);
 
-  // Auto-refresh every 5s when any endpoint has no status yet (check in progress)
   useEffect(() => {
     if (!hasPending) return;
     const id = window.setInterval(() => endpointsQuery.refetch(), 5000);
@@ -680,27 +860,15 @@ function DomainMonitoringSection({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <LanguageIcon color="action" />
-          <Typography variant="h6">Domain Monitoring</Typography>
-          <Chip label={endpoints.length} size="small" />
-        </Stack>
-        <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
-          Add Domain
-        </Button>
+      <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
+        <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>Add Domain</Button>
       </Stack>
 
       {endpoints.length === 0 ? (
         <Paper sx={{ py: 5, textAlign: 'center' }}>
           <LanguageIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
-          <Typography color="text.secondary" sx={{ mb: 1 }}>No domains monitored in this project</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Add domains to monitor TLS certificates and endpoint health
-          </Typography>
-          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
-            Add Domain
-          </Button>
+          <Typography color="text.secondary" sx={{ mb: 2 }}>No domains monitored in this project</Typography>
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>Add Domain</Button>
         </Paper>
       ) : (
         <TableContainer component={Paper}>
@@ -720,23 +888,12 @@ function DomainMonitoringSection({ projectId }: { projectId: string }) {
               {endpoints.map((ep) => (
                 <TableRow key={ep.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/monitoring/domains/${ep.id}`)}>
                   <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {ep.host}{ep.port !== 443 ? `:${ep.port}` : ''}
-                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{ep.host}{ep.port !== 443 ? `:${ep.port}` : ''}</Typography>
                     {ep.label && <Typography variant="caption" color="text.secondary">{ep.label}</Typography>}
                   </TableCell>
                   <TableCell>
                     {ep.lastStatus ? (
-                      <Chip
-                        label={ep.lastStatus}
-                        size="small"
-                        sx={{
-                          bgcolor: ENDPOINT_STATUS_COLOR[ep.lastStatus] ?? '#9e9e9e',
-                          color: '#fff',
-                          fontWeight: 600,
-                          fontSize: '0.7rem',
-                        }}
-                      />
+                      <Chip label={ep.lastStatus} size="small" sx={{ bgcolor: ENDPOINT_STATUS_COLOR[ep.lastStatus] ?? '#9e9e9e', color: '#fff', fontWeight: 600, fontSize: '0.7rem' }} />
                     ) : (
                       <Chip label="pending" size="small" variant="outlined" />
                     )}
@@ -748,37 +905,16 @@ function DomainMonitoringSection({ projectId }: { projectId: string }) {
                       ))}
                     </Stack>
                   </TableCell>
-                  <TableCell>
-                    <Typography variant="caption">{ep.checkInterval}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="caption" color="text.secondary">
-                      {timeAgo(ep.lastCheckedAt)}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="caption" color="text.secondary">
-                      {ep.lastResponseMs != null ? `${ep.lastResponseMs}ms` : '--'}
-                    </Typography>
-                  </TableCell>
+                  <TableCell><Typography variant="caption">{ep.checkInterval}</Typography></TableCell>
+                  <TableCell><Typography variant="caption" color="text.secondary">{timeAgo(ep.lastCheckedAt)}</Typography></TableCell>
+                  <TableCell><Typography variant="caption" color="text.secondary">{ep.lastResponseMs != null ? `${ep.lastResponseMs}ms` : '--'}</Typography></TableCell>
                   <TableCell align="right">
                     <Stack direction="row" spacing={0.5} justifyContent="flex-end" onClick={(e) => e.stopPropagation()}>
-                      <Tooltip title="Edit tags">
-                        <IconButton size="small" onClick={() => setEditId(ep.id)}>
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Check now">
-                        <IconButton size="small" onClick={() => triggerCheck.mutate(ep.id)}>
-                          <RefreshIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      <Tooltip title="Edit tags"><IconButton size="small" onClick={() => setEditId(ep.id)}><EditIcon fontSize="small" /></IconButton></Tooltip>
+                      <Tooltip title="Check now"><IconButton size="small" onClick={() => triggerCheck.mutate(ep.id)}><RefreshIcon fontSize="small" /></IconButton></Tooltip>
                       <Tooltip title="Remove">
-                        <IconButton
-                          size="small"
-                          onClick={() => { if (confirm(`Remove ${ep.host}?`)) removeEndpoint.mutate(ep.id); }}
-                          sx={{ color: 'text.disabled', '&:hover': { color: 'error.main' } }}
-                        >
+                        <IconButton size="small" onClick={() => { if (confirm(`Remove ${ep.host}?`)) removeEndpoint.mutate(ep.id); }}
+                          sx={{ color: 'text.disabled', '&:hover': { color: 'error.main' } }}>
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
@@ -792,13 +928,71 @@ function DomainMonitoringSection({ projectId }: { projectId: string }) {
       )}
 
       <AddDomainDialog open={addOpen} projectId={projectId} onClose={() => setAddOpen(false)} />
-      {editId && (
-        <EditTagsDialog
-          endpoint={endpoints.find((e) => e.id === editId)!}
-          onClose={() => setEditId(null)}
-        />
-      )}
+      {editId && <EditTagsDialog endpoint={endpoints.find((e) => e.id === editId)!} onClose={() => setEditId(null)} />}
     </>
+  );
+}
+
+// ===========================================================================
+// Add repo dialog
+// ===========================================================================
+
+function AddRepoDialog({ open, projectId, existingRepoIds, onClose }: {
+  open: boolean; projectId: string; existingRepoIds: Set<string>; onClose: () => void;
+}) {
+  const allRepos = useRepositories();
+  const assignMutation = useAssignRepoToProject();
+  const [search, setSearch] = useState('');
+
+  const repos = ((allRepos.data?.data ?? []) as Repository[])
+    .filter((r) => !existingRepoIds.has(r.id))
+    .filter((r) => !search || `${r.owner}/${r.name}`.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Add Repository to Project</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Select a repository. A first scan will be triggered automatically for repos not yet scanned.
+        </Typography>
+        <TextField size="small" fullWidth placeholder="Search repositories..." value={search} onChange={(e) => setSearch(e.target.value)} sx={{ mb: 2 }}
+          InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }} />
+        {allRepos.isLoading ? (
+          <Box sx={{ py: 3, textAlign: 'center' }}><Skeleton variant="text" width="60%" sx={{ mx: 'auto' }} /></Box>
+        ) : repos.length === 0 ? (
+          <Box sx={{ py: 3, textAlign: 'center' }}>
+            <Typography color="text.secondary">{search ? 'No matching repositories' : 'All repositories are already in this project'}</Typography>
+          </Box>
+        ) : (
+          <TableContainer sx={{ maxHeight: 400 }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Repository</TableCell>
+                  <TableCell>Provider</TableCell>
+                  <TableCell>Language</TableCell>
+                  <TableCell sx={{ width: 80 }} />
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {repos.map((repo) => (
+                  <TableRow key={repo.id} hover>
+                    <TableCell sx={{ fontWeight: 500 }}>{repo.owner}/{repo.name}</TableCell>
+                    <TableCell><Chip label={repo.provider} size="small" variant="outlined" /></TableCell>
+                    <TableCell>{repo.language || '--'}</TableCell>
+                    <TableCell align="right">
+                      <Button size="small" variant="outlined" startIcon={<AddIcon />}
+                        onClick={() => assignMutation.mutateAsync({ repoId: repo.id, projectId })} disabled={assignMutation.isPending}>Add</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </DialogContent>
+      <DialogActions><Button onClick={onClose}>Close</Button></DialogActions>
+    </Dialog>
   );
 }
 
@@ -806,11 +1000,7 @@ function DomainMonitoringSection({ projectId }: { projectId: string }) {
 // Add domain dialog
 // ===========================================================================
 
-function AddDomainDialog({ open, projectId, onClose }: {
-  open: boolean;
-  projectId: string;
-  onClose: () => void;
-}) {
+function AddDomainDialog({ open, projectId, onClose }: { open: boolean; projectId: string; onClose: () => void }) {
   const addMutation = useAddEndpoints();
   const [host, setHost] = useState('');
   const [port, setPort] = useState('443');
@@ -821,31 +1011,17 @@ function AddDomainDialog({ open, projectId, onClose }: {
 
   const handleAddTag = () => {
     const k = newTagKey.trim();
-    const v = newTagValue.trim();
-    if (!k) return;
-    if (tagEntries.some((t) => t.key === k)) return;
-    setTagEntries([...tagEntries, { key: k, value: v }]);
-    setNewTagKey('');
-    setNewTagValue('');
-  };
-
-  const handleRemoveTag = (key: string) => {
-    setTagEntries(tagEntries.filter((t) => t.key !== key));
+    if (!k || tagEntries.some((t) => t.key === k)) return;
+    setTagEntries([...tagEntries, { key: k, value: newTagValue.trim() }]);
+    setNewTagKey(''); setNewTagValue('');
   };
 
   const handleSubmit = async () => {
     if (!host.trim()) return;
     const tags: Record<string, string> = {};
     for (const t of tagEntries) { tags[t.key] = t.value; }
-
-    await addMutation.mutateAsync({
-      endpoints: [{ host: host.trim(), port: parseInt(port, 10) || 443, tags }],
-      checkInterval: interval,
-      projectId,
-    });
-    setHost('');
-    setPort('443');
-    setTagEntries([]);
+    await addMutation.mutateAsync({ endpoints: [{ host: host.trim(), port: parseInt(port, 10) || 443, tags }], checkInterval: interval, projectId });
+    setHost(''); setPort('443'); setTagEntries([]);
     onClose();
   };
 
@@ -855,87 +1031,31 @@ function AddDomainDialog({ open, projectId, onClose }: {
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Stack direction="row" spacing={2}>
-            <TextField
-              label="Host"
-              placeholder="example.com"
-              value={host}
-              onChange={(e) => setHost(e.target.value)}
-              fullWidth
-              size="small"
-            />
-            <TextField
-              label="Port"
-              value={port}
-              onChange={(e) => setPort(e.target.value)}
-              sx={{ width: 100 }}
-              size="small"
-            />
+            <TextField label="Host" placeholder="example.com" value={host} onChange={(e) => setHost(e.target.value)} fullWidth size="small" />
+            <TextField label="Port" value={port} onChange={(e) => setPort(e.target.value)} sx={{ width: 100 }} size="small" />
           </Stack>
-
-          <TextField
-            label="Check Interval"
-            select
-            value={interval}
-            onChange={(e) => setInterval(e.target.value)}
-            size="small"
-            SelectProps={{ native: true }}
-          >
-            <option value="30s">Every 30 seconds</option>
-            <option value="1m">Every minute</option>
-            <option value="5m">Every 5 minutes</option>
-            <option value="15m">Every 15 minutes</option>
-            <option value="30m">Every 30 minutes</option>
-            <option value="1h">Every hour</option>
-            <option value="6h">Every 6 hours</option>
-            <option value="24h">Every 24 hours</option>
+          <TextField label="Check Interval" select value={interval} onChange={(e) => setInterval(e.target.value)} size="small" SelectProps={{ native: true }}>
+            <option value="30s">Every 30s</option><option value="1m">Every 1m</option><option value="5m">Every 5m</option>
+            <option value="15m">Every 15m</option><option value="1h">Every 1h</option><option value="24h">Every 24h</option>
           </TextField>
-
-          {/* Tags */}
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>Tags</Typography>
             <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
-              {tagEntries.map((t) => (
-                <Chip
-                  key={t.key}
-                  label={`${t.key}: ${t.value}`}
-                  size="small"
-                  onDelete={() => handleRemoveTag(t.key)}
-                />
-              ))}
+              {tagEntries.map((t) => <Chip key={t.key} label={`${t.key}: ${t.value}`} size="small" onDelete={() => setTagEntries(tagEntries.filter((x) => x.key !== t.key))} />)}
             </Stack>
             <Stack direction="row" spacing={1} alignItems="flex-end">
-              <TextField
-                label="Key"
-                placeholder="env"
-                value={newTagKey}
-                onChange={(e) => setNewTagKey(e.target.value)}
-                size="small"
-                sx={{ flex: 1 }}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
-              />
-              <TextField
-                label="Value"
-                placeholder="prod"
-                value={newTagValue}
-                onChange={(e) => setNewTagValue(e.target.value)}
-                size="small"
-                sx={{ flex: 1 }}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
-              />
-              <Button variant="outlined" size="small" onClick={handleAddTag} disabled={!newTagKey.trim()}>
-                Add
-              </Button>
+              <TextField label="Key" placeholder="env" value={newTagKey} onChange={(e) => setNewTagKey(e.target.value)} size="small" sx={{ flex: 1 }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }} />
+              <TextField label="Value" placeholder="prod" value={newTagValue} onChange={(e) => setNewTagValue(e.target.value)} size="small" sx={{ flex: 1 }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }} />
+              <Button variant="outlined" size="small" onClick={handleAddTag} disabled={!newTagKey.trim()}>Add</Button>
             </Stack>
           </Box>
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button
-          variant="contained"
-          onClick={handleSubmit}
-          disabled={!host.trim() || addMutation.isPending}
-        >
+        <Button variant="contained" onClick={handleSubmit} disabled={!host.trim() || addMutation.isPending}>
           {addMutation.isPending ? 'Adding...' : 'Add Domain'}
         </Button>
       </DialogActions>
@@ -947,10 +1067,7 @@ function AddDomainDialog({ open, projectId, onClose }: {
 // Edit tags dialog
 // ===========================================================================
 
-function EditTagsDialog({ endpoint, onClose }: {
-  endpoint: MonitoredEndpoint;
-  onClose: () => void;
-}) {
+function EditTagsDialog({ endpoint, onClose }: { endpoint: MonitoredEndpoint; onClose: () => void }) {
   const updateMutation = useUpdateEndpoint();
   const [tagEntries, setTagEntries] = useState<Array<{ key: string; value: string }>>(
     Object.entries(endpoint.tags ?? {}).map(([key, value]) => ({ key, value })),
@@ -960,16 +1077,9 @@ function EditTagsDialog({ endpoint, onClose }: {
 
   const handleAddTag = () => {
     const k = newTagKey.trim();
-    const v = newTagValue.trim();
-    if (!k) return;
-    if (tagEntries.some((t) => t.key === k)) return;
-    setTagEntries([...tagEntries, { key: k, value: v }]);
-    setNewTagKey('');
-    setNewTagValue('');
-  };
-
-  const handleRemoveTag = (key: string) => {
-    setTagEntries(tagEntries.filter((t) => t.key !== key));
+    if (!k || tagEntries.some((t) => t.key === k)) return;
+    setTagEntries([...tagEntries, { key: k, value: newTagValue.trim() }]);
+    setNewTagKey(''); setNewTagValue('');
   };
 
   const handleSave = async () => {
@@ -981,46 +1091,19 @@ function EditTagsDialog({ endpoint, onClose }: {
 
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        Edit Tags — {endpoint.host}{endpoint.port !== 443 ? `:${endpoint.port}` : ''}
-      </DialogTitle>
+      <DialogTitle>Edit Tags — {endpoint.host}{endpoint.port !== 443 ? `:${endpoint.port}` : ''}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-            {tagEntries.map((t) => (
-              <Chip
-                key={t.key}
-                label={`${t.key}: ${t.value}`}
-                size="small"
-                onDelete={() => handleRemoveTag(t.key)}
-              />
-            ))}
-            {tagEntries.length === 0 && (
-              <Typography variant="body2" color="text.secondary">No tags yet</Typography>
-            )}
+            {tagEntries.map((t) => <Chip key={t.key} label={`${t.key}: ${t.value}`} size="small" onDelete={() => setTagEntries(tagEntries.filter((x) => x.key !== t.key))} />)}
+            {tagEntries.length === 0 && <Typography variant="body2" color="text.secondary">No tags yet</Typography>}
           </Stack>
           <Stack direction="row" spacing={1} alignItems="flex-end">
-            <TextField
-              label="Key"
-              placeholder="env"
-              value={newTagKey}
-              onChange={(e) => setNewTagKey(e.target.value)}
-              size="small"
-              sx={{ flex: 1 }}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
-            />
-            <TextField
-              label="Value"
-              placeholder="prod"
-              value={newTagValue}
-              onChange={(e) => setNewTagValue(e.target.value)}
-              size="small"
-              sx={{ flex: 1 }}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }}
-            />
-            <Button variant="outlined" size="small" onClick={handleAddTag} disabled={!newTagKey.trim()}>
-              Add
-            </Button>
+            <TextField label="Key" placeholder="env" value={newTagKey} onChange={(e) => setNewTagKey(e.target.value)} size="small" sx={{ flex: 1 }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }} />
+            <TextField label="Value" placeholder="prod" value={newTagValue} onChange={(e) => setNewTagValue(e.target.value)} size="small" sx={{ flex: 1 }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } }} />
+            <Button variant="outlined" size="small" onClick={handleAddTag} disabled={!newTagKey.trim()}>Add</Button>
           </Stack>
         </Stack>
       </DialogContent>

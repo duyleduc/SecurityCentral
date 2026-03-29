@@ -142,7 +142,7 @@ function toStringParams(params?: PaginatedParams): Record<string, string> | unde
 // Findings
 // ---------------------------------------------------------------------------
 
-export function useFindings(params?: PaginatedParams & { severity?: string; status?: string; q?: string }) {
+export function useFindings(params?: PaginatedParams & { severity?: string; status?: string; q?: string; project_id?: string }) {
   return useQuery({
     queryKey: ['findings', params],
     queryFn: () => apiGet<Finding[]>('/findings', toStringParams(params)),
@@ -631,6 +631,30 @@ export function useProject(id: string) {
     queryFn: () => apiGet<Project>(`/projects/${id}`),
     enabled: !!id,
   });
+}
+
+export function useProjectSummary(id: string) {
+  return useQuery({
+    queryKey: ['projects', id, 'summary'],
+    queryFn: () => apiGet<ProjectSummary>(`/projects/${id}/summary`),
+    enabled: !!id,
+  });
+}
+
+export interface ProjectSummary {
+  totalOpenFindings: number;
+  severity: Record<string, number>;
+  assets: { repositories: number; servers: number; endpoints: number; certificates: number };
+  lastScan: { id: string; completedAt: string; scanType: string; findingsTotal: number } | null;
+  activeScans: number;
+  recentFindings: Array<{
+    id: string; title: string; severity: string; status: string; cveId: string | null; firstSeenAt: string;
+    repository: { name: string; owner: string } | null;
+    certificate: { subjectCn: string } | null;
+  }>;
+  certificates: Array<{
+    id: string; subjectCn: string; issuerCn: string; notAfter: string; status: string; keyAlgorithm: string;
+  }>;
 }
 
 export function useCreateProject() {

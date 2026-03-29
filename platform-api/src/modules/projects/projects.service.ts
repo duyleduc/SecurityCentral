@@ -85,6 +85,133 @@ export async function deleteProject(orgId: string, projectId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Project summary (dashboard stats)
+// ---------------------------------------------------------------------------
+
+export async function getProjectSummary(orgId: string, projectId: string) {
+  const project = await prisma.project.findFirst({ where: { id: projectId, orgId } });
+  if (!project) throw new AppError('RESOURCE_NOT_FOUND', 'Project not found');
+
+  const repoIds = (await prisma.repository.findMany({
+    where: { projectId },
+    select: { id: true },
+  })).map((r) => r.id);
+
+  const serverIds = (await prisma.server.findMany({
+    where: { projectId },
+    select: { id: true },
+  })).map((s) => s.id);
+
+  const hasRepos = repoIds.length > 0;
+  const hasServers = serverIds.length > 0;
+
+  // Resolve certificates linked to this project's endpoints
+  const endpoints = await prisma.monitoredEndpoint.findMany({
+    where: { projectId },
+    select: { host: true, port: true },
+  });
+  const discoveredFromValues = endpoints.map((ep) => `probe:${ep.host}:${ep.port}`);
+  const certIds = discoveredFromValues.length > 0
+    ? (await prisma.certificate.findMany({
+        where: { orgId, discoveredFrom: { in: discoveredFromValues } },
+        select: { id: true },
+      })).map((c) => c.id)
+    : [];
+  const hasCerts = certIds.length > 0;
+
+  // Build OR condition for findings linked to project assets
+  const findingAssetFilter: Record<string, unknown>[] = [];
+  if (hasRepos) findingAssetFilter.push({ repositoryId: { in: repoIds } });
+  if (hasServers) findingAssetFilter.push({ serverId: { in: serverIds } });
+  if (hasCerts) findingAssetFilter.push({ certificateId: { in: certIds } });
+
+  const openFindingWhere = findingAssetFilter.length > 0
+    ? { orgId, status: { in: ['open', 'in_progress'] } as any, OR: findingAssetFilter }
+    : null;
+
+  const [
+    repoCount,
+    serverCount,
+    endpointCount,
+    severityCounts,
+    recentFindings,
+    lastScan,
+    activeScans,
+    certificates,
+  ] = await Promise.all([
+    prisma.repository.count({ where: { projectId } }),
+    prisma.server.count({ where: { projectId } }),
+    prisma.monitoredEndpoint.count({ where: { projectId } }),
+    // Severity breakdown for open findings (includes repo, server, cert findings)
+    openFindingWhere
+      ? prisma.finding.groupBy({
+          by: ['severity'],
+          where: openFindingWhere as any,
+          _count: { id: true },
+        })
+      : Promise.resolve([]),
+    // Recent critical/high findings (from all asset types)
+    findingAssetFilter.length > 0
+      ? prisma.finding.findMany({
+          where: {
+            orgId,
+            status: { in: ['open', 'in_progress'] },
+            severity: { in: ['critical', 'high'] },
+            OR: findingAssetFilter,
+          } as any,
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: {
+            id: true, title: true, severity: true, status: true, cveId: true, firstSeenAt: true,
+            repository: { select: { name: true, owner: true } },
+            certificate: { select: { subjectCn: true } },
+          },
+        })
+      : Promise.resolve([]),
+    // Last completed scan
+    hasRepos
+      ? prisma.scan.findFirst({
+          where: { orgId, repositoryId: { in: repoIds }, status: 'completed' },
+          orderBy: { completedAt: 'desc' },
+          select: { id: true, completedAt: true, scanType: true, findingsTotal: true },
+        })
+      : Promise.resolve(null),
+    // Active scans count
+    hasRepos
+      ? prisma.scan.count({
+          where: { orgId, repositoryId: { in: repoIds }, status: { in: ['pending', 'running'] } },
+        })
+      : Promise.resolve(0),
+    // Certificates linked to project endpoints
+    hasCerts
+      ? prisma.certificate.findMany({
+          where: { orgId, id: { in: certIds } },
+          orderBy: { notAfter: 'asc' },
+          select: {
+            id: true, subjectCn: true, issuerCn: true, notAfter: true, status: true, keyAlgorithm: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const severity: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  for (const row of severityCounts) {
+    severity[row.severity] = row._count.id;
+  }
+  const totalOpen = Object.values(severity).reduce((a, b) => a + b, 0);
+
+  return {
+    totalOpenFindings: totalOpen,
+    severity,
+    assets: { repositories: repoCount, servers: serverCount, endpoints: endpointCount, certificates: certIds.length },
+    lastScan,
+    activeScans,
+    recentFindings,
+    certificates,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Assign assets to project
 // ---------------------------------------------------------------------------
 

@@ -43,6 +43,14 @@ projectsRouter.post('/', requirePermission('manage_integrations'), validate({ bo
   } catch (err) { next(err); }
 });
 
+// GET /projects/:id/summary — MUST be before /:id
+projectsRouter.get('/:id/summary', requirePermission('view_findings'), validate({ params: IdParam }), async (req, res, next) => {
+  try {
+    const summary = await projectsService.getProjectSummary(req.auth!.orgId, req.params.id);
+    res.json(successEnvelope(summary));
+  } catch (err) { next(err); }
+});
+
 // GET /projects/:id
 projectsRouter.get('/:id', requirePermission('view_findings'), validate({ params: IdParam }), async (req, res, next) => {
   try {

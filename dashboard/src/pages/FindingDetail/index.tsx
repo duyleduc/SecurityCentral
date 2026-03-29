@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Card, CardContent, Grid, Chip, Button, Alert, Skeleton, Stack, Divider,
 } from '@mui/material';
@@ -17,8 +17,17 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
 const STATUS_LABEL: Record<string, string> = { open: 'Open', in_progress: 'In Progress', resolved: 'Resolved', suppressed: 'Suppressed', false_positive: 'False Positive' };
 
 export function FindingDetail({ findingId }: { findingId: string }) {
+  const navigate = useNavigate();
   const { data: envelope, isLoading } = useFinding(findingId);
   const updateMutation = useUpdateFinding();
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/findings');
+    }
+  };
   const finding = envelope?.data as Record<string, unknown> | undefined;
 
   if (isLoading) {
@@ -50,13 +59,12 @@ export function FindingDetail({ findingId }: { findingId: string }) {
   return (
     <Box>
       <Button
-        component={Link}
-        to="/findings"
+        onClick={handleBack}
         startIcon={<ArrowBackIcon />}
         size="small"
         sx={{ mb: 2 }}
       >
-        Back to Findings
+        Back
       </Button>
 
       <Card>
