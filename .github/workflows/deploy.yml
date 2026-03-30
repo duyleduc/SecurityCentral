@@ -7,6 +7,7 @@ on:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   REGION: us-central1
+  REGISTRY: us-central1-docker.pkg.dev
   API_SERVICE: sc-api
   WORKER_SERVICE: sc-worker
   DASHBOARD_BUCKET: ${{ secrets.DASHBOARD_BUCKET }}
@@ -31,19 +32,19 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure Docker for GCR
-        run: gcloud auth configure-docker --quiet
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${REGISTRY}" --quiet
 
       - name: Build API image
-        run: docker build --target api -t gcr.io/$PROJECT_ID/$API_SERVICE:${{ github.sha }} .
+        run: docker build --target api -t "${REGISTRY}/${PROJECT_ID}/docker/${API_SERVICE}:${{ github.sha }}" .
 
       - name: Build Worker image
-        run: docker build --target worker -t gcr.io/$PROJECT_ID/$WORKER_SERVICE:${{ github.sha }} .
+        run: docker build --target worker -t "${REGISTRY}/${PROJECT_ID}/docker/${WORKER_SERVICE}:${{ github.sha }}" .
 
       - name: Push images
         run: |
-          docker push gcr.io/$PROJECT_ID/$API_SERVICE:${{ github.sha }}
-          docker push gcr.io/$PROJECT_ID/$WORKER_SERVICE:${{ github.sha }}
+          docker push "${REGISTRY}/${PROJECT_ID}/docker/${API_SERVICE}:${{ github.sha }}"
+          docker push "${REGISTRY}/${PROJECT_ID}/docker/${WORKER_SERVICE}:${{ github.sha }}"
 
     outputs:
       image_tag: ${{ github.sha }}
@@ -97,7 +98,7 @@ jobs:
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ env.API_SERVICE }}
-          image: gcr.io/${{ env.PROJECT_ID }}/${{ env.API_SERVICE }}:${{ needs.build.outputs.image_tag }}
+          image: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/docker/${{ env.API_SERVICE }}:${{ needs.build.outputs.image_tag }}
           region: ${{ env.REGION }}
           flags: |
             --port=3000
@@ -136,7 +137,7 @@ jobs:
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: ${{ env.WORKER_SERVICE }}
-          image: gcr.io/${{ env.PROJECT_ID }}/${{ env.WORKER_SERVICE }}:${{ needs.build.outputs.image_tag }}
+          image: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/docker/${{ env.WORKER_SERVICE }}:${{ needs.build.outputs.image_tag }}
           region: ${{ env.REGION }}
           flags: |
             --port=3001
