@@ -7,7 +7,7 @@ import { getRedisConnection } from './lib/redis.js';
 import { processors } from './jobs/processors.js';
 import { scheduleEndpointChecks } from './jobs/domain-monitoring.processor.js';
 
-const WORKER_PORT = env.PORT + 1; // worker health on a separate port
+const WORKER_PORT = env.PORT; // Cloud Run provides the PORT to listen on
 
 const workers: Worker[] = [];
 const workerLog = logger.child({ component: 'worker' });
