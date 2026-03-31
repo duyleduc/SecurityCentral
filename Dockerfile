@@ -23,14 +23,14 @@ FROM prisma AS api
 WORKDIR /app/platform-api
 ENV NODE_ENV=production
 EXPOSE 3000
-CMD ["node", "--import", "tsx/esm", "src/server.ts"]
+CMD ["npx", "tsx", "src/server.ts"]
 
 # ── Worker ──────────────────────────────────────────
 FROM prisma AS worker
 WORKDIR /app/platform-api
 ENV NODE_ENV=production
 EXPOSE 3001
-CMD ["node", "--import", "tsx/esm", "src/worker.ts"]
+CMD ["npx", "tsx", "src/worker.ts"]
 
 # ── Dashboard Build ─────────────────────────────────
 FROM base AS dashboard-build
