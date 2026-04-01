@@ -89,7 +89,7 @@ export function OnboardingWizard() {
           {STEPS.map((step) => {
             const done = status?.steps[step.key] ?? false;
             return (
-              <Grid item xs={12} md={4} key={step.key}>
+              <Grid size={{ xs: 12, md: 4 }} key={step.key}>
                 <Card sx={{
                   height: '100%',
                   border: done ? '2px solid' : '2px solid transparent',

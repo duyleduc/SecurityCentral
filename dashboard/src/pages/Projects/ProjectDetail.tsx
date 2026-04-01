@@ -256,9 +256,11 @@ function SummaryCards({ stats, loading, projectId }: { stats?: ProjectSummary; l
                         <Cell key={s} fill={SEVERITY_COLORS[s]} />
                       ))}
                   </Pie>
-                  <RechartsTooltip formatter={(value: number, name: string) => {
-                    const pct = totalOpenFindings > 0 ? ((value / totalOpenFindings) * 100).toFixed(1) : '0';
-                    return [`${value} (${pct}%)`, name.charAt(0).toUpperCase() + name.slice(1)];
+                  <RechartsTooltip formatter={(value: unknown, name: unknown) => {
+                    const v = Number(value);
+                    const n = String(name);
+                    const pct = totalOpenFindings > 0 ? ((v / totalOpenFindings) * 100).toFixed(1) : '0';
+                    return [`${v} (${pct}%)`, n.charAt(0).toUpperCase() + n.slice(1)];
                   }} />
                 </PieChart>
               </ResponsiveContainer>
@@ -575,12 +577,12 @@ function FindingsTab({ projectId }: { projectId: string }) {
         </Table>
       </TableContainer>
 
-      {meta && meta.total > 20 && (
+      {meta && (meta.total ?? 0) > 20 && (
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1.5 }}>
-          <Typography variant="body2" color="text.secondary">Page {meta.page} of {Math.ceil(meta.total / 20)}</Typography>
+          <Typography variant="body2" color="text.secondary">Page {meta.page} of {Math.ceil((meta.total ?? 0) / 20)}</Typography>
           <Stack direction="row" spacing={1}>
             <Button size="small" variant="outlined" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
-            <Button size="small" variant="outlined" disabled={page * 20 >= meta.total} onClick={() => setPage(page + 1)}>Next</Button>
+            <Button size="small" variant="outlined" disabled={page * 20 >= (meta.total ?? 0)} onClick={() => setPage(page + 1)}>Next</Button>
           </Stack>
         </Stack>
       )}

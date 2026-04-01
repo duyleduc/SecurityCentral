@@ -111,13 +111,13 @@ function RepositoryDetail({ id, onBack }: { id: string; onBack: () => void }) {
               <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
                 <Chip label={repo.provider as string} size="small" variant="outlined" />
                 <Chip label={`branch: ${repo.defaultBranch as string}`} size="small" variant="outlined" />
-                {repo.language && <Chip label={repo.language as string} size="small" variant="outlined" />}
+                {!!repo.language && <Chip label={repo.language as string} size="small" variant="outlined" />}
               </Stack>
             </Box>
             <Button
               variant="contained"
               startIcon={<PlayArrowIcon />}
-              onClick={() => triggerScan.mutate(id)}
+              onClick={() => triggerScan.mutate({ repoId: id })}
               disabled={triggerScan.isPending}
             >
               {triggerScan.isPending ? 'Scanning...' : 'Trigger Scan'}
@@ -151,7 +151,7 @@ function RepositoryDetail({ id, onBack }: { id: string; onBack: () => void }) {
                 <Typography variant="body2" fontWeight={500}>Last scan:</Typography>
                 <Chip label={latestScan.status as string} size="small" color={latestScan.status === 'completed' ? 'success' : latestScan.status === 'failed' ? 'error' : 'default'} />
                 <Typography variant="body2" color="text.secondary">{latestScan.scanType as string}</Typography>
-                {latestScan.completedAt && (
+                {!!latestScan.completedAt && (
                   <Typography variant="body2" color="text.secondary">{new Date(latestScan.completedAt as string).toLocaleString()}</Typography>
                 )}
               </Stack>

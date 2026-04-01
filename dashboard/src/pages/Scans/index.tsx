@@ -178,19 +178,19 @@ function ScanDetail({ scanId, onBack }: { scanId: string; onBack: () => void }) 
           </Stack>
 
           <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={4}>
+            <Grid size={4}>
               <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
                 Trigger
               </Typography>
               <Typography variant="body2">{scan.trigger as string}</Typography>
             </Grid>
-            <Grid item xs={4}>
+            <Grid size={4}>
               <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
                 Started
               </Typography>
               <Typography variant="body2">{scan.startedAt ? new Date(scan.startedAt as string).toLocaleString() : '-'}</Typography>
             </Grid>
-            <Grid item xs={4}>
+            <Grid size={4}>
               <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
                 Completed
               </Typography>
@@ -204,7 +204,7 @@ function ScanDetail({ scanId, onBack }: { scanId: string; onBack: () => void }) 
             <StatBox label="Resolved" value={scan.findingsResolved as number} color="success.main" />
           </Stack>
 
-          {scan.errorMessage && (
+          {!!scan.errorMessage && (
             <Alert severity="error">
               <strong>Error:</strong> {scan.errorMessage as string}
             </Alert>

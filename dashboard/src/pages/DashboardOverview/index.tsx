@@ -53,7 +53,7 @@ export function DashboardOverview() {
       {/* Severity Cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {severities.map((sev) => (
-          <Grid item xs={3} key={sev}>
+          <Grid size={3} key={sev}>
             {summary.isLoading ? (
               <Skeleton variant="rounded" height={100} />
             ) : (
@@ -84,7 +84,7 @@ export function DashboardOverview() {
       {/* Assets Overview + Trends */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {/* Assets */}
-        <Grid item xs={6}>
+        <Grid size={6}>
           <Card>
             <CardContent>
               <Typography variant="h6" sx={{ mb: 2 }}>Assets Overview</Typography>
@@ -124,7 +124,7 @@ export function DashboardOverview() {
         </Grid>
 
         {/* Trends */}
-        <Grid item xs={6}>
+        <Grid size={6}>
           <Card>
             <CardContent>
               <Typography variant="h6" sx={{ mb: 2 }}>Findings Trend (30d)</Typography>

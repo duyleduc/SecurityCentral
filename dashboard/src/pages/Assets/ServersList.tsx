@@ -134,7 +134,7 @@ function ServerDetail({ id, onBack }: { id: string; onBack: () => void }) {
               ['Region', (server.cloudRegion as string) ?? '-'],
               ['Heartbeat', relativeTime(server.lastHeartbeat as string)],
             ] as const).map(([label, value]) => (
-              <Grid item xs={4} key={label}>
+              <Grid size={4} key={label}>
                 <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
                   {label}
                 </Typography>

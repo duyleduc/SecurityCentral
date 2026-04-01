@@ -158,14 +158,14 @@ export function DomainMonitoringPage() {
       </TableContainer>
 
       {/* Pagination */}
-      {meta && meta.total > 50 && (
+      {meta && (meta.total ?? 0) > 50 && (
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1.5 }}>
           <Typography variant="body2" color="text.secondary">
-            Page {meta.page} of {Math.ceil(meta.total / 50)}
+            Page {meta.page} of {Math.ceil((meta.total ?? 0) / 50)}
           </Typography>
           <Stack direction="row" spacing={1}>
             <Button size="small" variant="outlined" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
-            <Button size="small" variant="outlined" disabled={page * 50 >= meta.total} onClick={() => setPage(page + 1)}>Next</Button>
+            <Button size="small" variant="outlined" disabled={page * 50 >= (meta.total ?? 0)} onClick={() => setPage(page + 1)}>Next</Button>
           </Stack>
         </Stack>
       )}

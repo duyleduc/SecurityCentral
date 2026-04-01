@@ -49,13 +49,13 @@ function OrgInfo() {
       <CardContent>
         <Typography variant="h6" sx={{ mb: 1.5 }}>Organization</Typography>
         <Grid container spacing={2}>
-          <Grid item xs={6}>
+          <Grid size={6}>
             <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
               Role
             </Typography>
             <Typography variant="body2">{user?.role ?? '-'}</Typography>
           </Grid>
-          <Grid item xs={6}>
+          <Grid size={6}>
             <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
               User ID
             </Typography>

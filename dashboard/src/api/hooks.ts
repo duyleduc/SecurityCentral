@@ -103,7 +103,7 @@ export interface DashboardSummary {
 }
 
 export interface TopRisk extends Finding {
-  repository?: { name: string };
+  repository?: { name: string; owner: string };
   server?: { hostname: string };
   certificate?: { subjectCn: string };
 }

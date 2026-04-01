@@ -120,8 +120,8 @@ export function FindingDetail({ findingId }: { findingId: string }) {
             <InfoItem label="First Seen" value={finding.firstSeenAt ? new Date(finding.firstSeenAt as string).toLocaleString() : 'N/A'} />
             <InfoItem label="Resolved At" value={finding.resolvedAt ? new Date(finding.resolvedAt as string).toLocaleString() : '-'} />
             <InfoItem label="Auto-fixable" value={(finding.autoFixable as boolean) ? 'Yes' : 'No'} />
-            {finding.fixPrUrl && (
-              <Grid item xs={6}>
+            {!!finding.fixPrUrl && (
+              <Grid size={6}>
                 <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
                   Fix PR
                 </Typography>
@@ -141,7 +141,7 @@ export function FindingDetail({ findingId }: { findingId: string }) {
           <Divider sx={{ mb: 3 }} />
 
           {/* Description */}
-          {finding.description && (
+          {!!finding.description && (
             <Box sx={{ mb: 3 }}>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>Description</Typography>
               <Typography variant="body2" sx={{ lineHeight: 1.6 }}>{finding.description as string}</Typography>
@@ -149,7 +149,7 @@ export function FindingDetail({ findingId }: { findingId: string }) {
           )}
 
           {/* Remediation */}
-          {finding.remediation && (
+          {!!finding.remediation && (
             <Alert severity="success" sx={{ mb: 3 }}>
               <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Remediation</Typography>
               <Typography variant="body2">{finding.remediation as string}</Typography>
@@ -178,7 +178,7 @@ export function FindingDetail({ findingId }: { findingId: string }) {
 
 function InfoItem({ label, value, mono }: { label: string; value?: string | null; mono?: boolean }) {
   return (
-    <Grid item xs={6}>
+    <Grid size={6}>
       <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
         {label}
       </Typography>

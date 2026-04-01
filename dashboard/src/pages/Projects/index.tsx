@@ -42,7 +42,7 @@ function ProjectList() {
       {projects.isLoading ? (
         <Grid container spacing={2}>
           {Array.from({ length: 6 }).map((_, i) => (
-            <Grid item xs={12} sm={6} md={4} key={i}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={i}>
               <Skeleton variant="rounded" height={180} />
             </Grid>
           ))}
@@ -63,7 +63,7 @@ function ProjectList() {
       ) : (
         <Grid container spacing={2}>
           {data.map((project) => (
-            <Grid item xs={12} sm={6} md={4} key={project.id}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={project.id}>
               <ProjectCard project={project} onClick={() => navigate(`/projects/${project.id}`)} onEdit={() => setEditTarget(project)} />
             </Grid>
           ))}
