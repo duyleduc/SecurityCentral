@@ -181,6 +181,7 @@ jobs:
         working-directory: dashboard
         env:
           VITE_API_URL: ${{ secrets.API_URL }}
+          VITE_AUTH_URL: ${{ secrets.AUTH_URL }}
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
