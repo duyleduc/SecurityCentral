@@ -1,168 +1,174 @@
-# SecurityCentral Infrastructure Agent
+# Installing the SecurityCentral Agent on a Server
 
-The SecurityCentral agent runs on target servers to continuously monitor for OS vulnerabilities, compliance violations, and infrastructure misconfigurations. It communicates with the platform via mTLS.
+Live platform:
 
-## What It Monitors
-
-### OS Package Vulnerabilities
-
-Scans installed packages against the vulnerability database.
-
-| OS Family | Detection Method |
-|-----------|-----------------|
-| Ubuntu / Debian | `dpkg-query` |
-| CentOS / RHEL / Rocky / Alma | `rpm` |
-| Alpine Linux | `/lib/apk/db/installed` or `apk` |
-
-Findings include package name, installed version, fixed version, CVSS score, and whether a fix is auto-applicable.
-
-### CIS Compliance Benchmarks (30+ checks)
-
-**SSH Hardening (CIS 5.2.x):**
-- Root login disabled, empty passwords blocked
-- MaxAuthTries <= 4, Protocol 2 only
-- X11 forwarding disabled, approved ciphers/MACs only
-- Login grace time, client alive settings
-
-**Filesystem Security (CIS 1.x):**
-- Disabled modules: cramfs, squashfs, udf
-- `/tmp` mount options: nodev, nosuid, noexec
-- Sticky bit on world-writable directories
-
-**Network Security (CIS 3.x):**
-- IP forwarding disabled, ICMP redirects rejected
-- TCP SYN cookies enabled, source-routed packets rejected
-- IPv6 router advertisements disabled
-
-**Process/Kernel Security (CIS 1.5.x):**
-- ASLR enabled, ptrace scope restricted
-- Core dumps restricted, SUID dumpable disabled
-
-**User/Password Policy (CIS 5.4.x, 6.2.x):**
-- Password max/min days, warning age
-- Inactive account lock, default umask
-- No duplicate UIDs/GIDs, root-only UID 0
-
-### Resource Metrics (via heartbeat)
-
-Sent every 60 seconds:
-- CPU utilization (%)
-- Memory utilization (%)
-- Disk utilization (%)
-- OS family/version, hostname, agent version
+| Service | URL |
+|---------|-----|
+| API | `https://sc-api-360466791412.us-central1.run.app` |
+| Dashboard | Your GCS bucket URL |
 
 ---
 
 ## Prerequisites
 
-- Linux server (Ubuntu, Debian, CentOS, RHEL, Alpine)
+- Linux server (Ubuntu, Debian, CentOS/RHEL/Rocky/Alma, Alpine)
 - Architecture: amd64 or arm64
-- Root access (for package scanning and compliance checks)
-- Network access to the platform API
-- An **API key** with `scan:write` scope
+- Root access
+- `openssl` and `curl` installed
+- Outbound HTTPS access to the API
 
-## Creating an API Key
+---
 
-In the SecurityCentral dashboard:
+## Step 1: Create an API Key
 
-1. Go to **Settings** > **API Keys**
-2. Click **Create API Key**
-3. Name it (e.g., "Agent Registration")
-4. Select scope: `scan:write`
-5. Copy the key — it is shown only once
+You need an API key with `scan:write` scope. Two ways to get one:
 
-Or via API:
+### Option A: Via the Dashboard
+
+1. Log in to the dashboard
+2. Go to **Settings > API Keys**
+3. Click **Create API Key**
+4. Name: `Agent - prod-server-01` (or whatever identifies the server)
+5. Scope: `scan:write`
+6. Copy the key (starts with `sc_live_...`) — shown only once
+
+### Option B: Via curl
+
+First, log in to get a JWT:
 
 ```bash
-curl -X POST https://<platform>/api/v1/auth/api-keys \
-  -H "Authorization: Bearer <your-jwt>" \
+TOKEN=$(curl -s -X POST https://sc-api-360466791412.us-central1.run.app/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"your@email.com","password":"yourpassword"}' \
+  | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['data']['accessToken'])")
+
+echo $TOKEN
+```
+
+Then create the key:
+
+```bash
+curl -s -X POST https://sc-api-360466791412.us-central1.run.app/auth/api-keys \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Agent Registration",
+    "name": "Agent - prod-server-01",
     "scopes": ["scan:write"]
   }'
 ```
 
+Response:
+
+```json
+{
+  "data": {
+    "id": "uuid",
+    "rawKey": "sc_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "keyPrefix": "xxxxxxxx",
+    "name": "Agent - prod-server-01",
+    "scopes": ["scan:write"],
+    "expiresAt": null
+  }
+}
+```
+
+Save `rawKey` — it won't be shown again.
+
 ---
 
-## Installation (Recommended)
+## Step 2: Install the Agent
 
-Use the install script for automated setup:
+### Option A: One-line Install (Recommended)
+
+SSH into the target server and run:
 
 ```bash
-curl -fsSL https://install.securitycentral.io | bash -s -- \
-  --api-key YOUR_API_KEY \
-  --api-url https://<platform-api-host> \
+curl -fsSL https://raw.githubusercontent.com/<your-org>/SecurityCentral/main/scripts/install-agent.sh | sudo bash -s -- \
+  --api-key sc_live_YOUR_KEY_HERE \
+  --api-url https://sc-api-360466791412.us-central1.run.app \
   --environment production
 ```
 
-### What the script does:
-
+What this does:
 1. Detects OS and architecture
 2. Downloads the `sc-agent` binary
 3. Generates an ECDSA P-256 key pair
-4. Registers with the platform (sends CSR, receives signed certificate)
-5. Saves certificates to `/etc/securitycentral/certs/`
+4. Registers with the API (sends CSR, receives signed certificate)
+5. Saves certs to `/etc/securitycentral/certs/`
 6. Creates config at `/etc/securitycentral/agent.yml`
 7. Installs and starts a systemd service
 
-### Script options:
+Install script flags:
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
-| `--api-key` | Yes | — | API key for registration |
-| `--api-url` | No | `https://api.securitycentral.io` | Platform API URL |
-| `--environment` | No | `production` | Environment label (production/staging/development) |
+| `--api-key` | Yes | — | API key with `scan:write` scope |
+| `--api-url` | Yes (for our deploy) | `https://api.securitycentral.io` | Use `https://sc-api-360466791412.us-central1.run.app` |
+| `--environment` | No | `production` | `production`, `staging`, or `development` |
 | `--version` | No | `latest` | Agent version to install |
 
----
+### Option B: Manual Install
 
-## Manual Installation
+If you can't pipe to bash, or need more control:
 
-### 1. Build the agent
+#### 2a. Build the agent binary
+
+On your build machine:
 
 ```bash
 cd go
-go build -o sc-agent ./cmd/sc-agent/
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o sc-agent ./cmd/sc-agent/
 ```
 
-### 2. Generate a key pair and CSR
+Copy `sc-agent` to the target server:
+
+```bash
+scp sc-agent root@target-server:/usr/local/bin/sc-agent
+ssh root@target-server chmod +x /usr/local/bin/sc-agent
+```
+
+#### 2b. Generate key pair and CSR (on the target server)
 
 ```bash
 sudo mkdir -p /etc/securitycentral/certs
 
 # Generate ECDSA P-256 private key
-openssl ecparam -genkey -name prime256v1 -noout \
+sudo openssl ecparam -genkey -name prime256v1 -noout \
   -out /etc/securitycentral/certs/agent.key
+sudo chmod 600 /etc/securitycentral/certs/agent.key
 
 # Generate CSR
 openssl req -new \
   -key /etc/securitycentral/certs/agent.key \
   -subj "/CN=$(hostname)" \
   -out /tmp/agent.csr
-
-sudo chmod 600 /etc/securitycentral/certs/agent.key
 ```
 
-### 3. Register with the platform
+#### 2c. Register the agent
 
 ```bash
-CSR=$(cat /tmp/agent.csr)
+API_URL="https://sc-api-360466791412.us-central1.run.app"
+API_KEY="sc_live_YOUR_KEY_HERE"
 
-curl -X POST https://<platform>/api/v1/agents/register \
-  -H "X-API-Key: YOUR_API_KEY" \
+CSR_JSON=$(python3 -c "import sys,json; print(json.dumps(open('/tmp/agent.csr').read()))")
+
+RESPONSE=$(curl -fsSL -X POST "${API_URL}/v1/agents/register" \
+  -H "Authorization: Bearer unused" \
+  -H "X-API-Key: ${API_KEY}" \
   -H "Content-Type: application/json" \
   -d "{
     \"hostname\": \"$(hostname)\",
-    \"osFamily\": \"ubuntu\",
-    \"osVersion\": \"22.04\",
+    \"osFamily\": \"$(. /etc/os-release && echo $ID)\",
+    \"osVersion\": \"$(. /etc/os-release && echo $VERSION_ID)\",
     \"arch\": \"$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/')\",
     \"environment\": \"production\",
-    \"csr\": \"$(echo "$CSR" | sed ':a;N;$!ba;s/\n/\\\\n/g')\"
-  }"
+    \"csr\": ${CSR_JSON}
+  }")
+
+echo "$RESPONSE" | python3 -m json.tool
 ```
 
-The response contains:
+Expected response:
 
 ```json
 {
@@ -174,23 +180,24 @@ The response contains:
 }
 ```
 
-Save the certificates:
+#### 2d. Save certificates
 
 ```bash
-# Save signed cert (from response signedCert field)
-echo "<signedCert>" > /etc/securitycentral/certs/agent.crt
+AGENT_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['data']['agentId'])")
+echo "$RESPONSE" | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['data']['signedCert'])" \
+  | sudo tee /etc/securitycentral/certs/agent.crt > /dev/null
+echo "$RESPONSE" | python3 -c "import sys,json; print(json.loads(sys.stdin.read())['data']['caCert'])" \
+  | sudo tee /etc/securitycentral/certs/ca.crt > /dev/null
 
-# Save CA cert (from response caCert field)
-echo "<caCert>" > /etc/securitycentral/certs/ca.crt
+echo "Agent ID: $AGENT_ID"
 ```
 
-### 4. Create configuration
+#### 2e. Create configuration
 
-Create `/etc/securitycentral/agent.yml`:
-
-```yaml
-agent_id: "<agentId from registration>"
-api_url: "https://<platform-api-host>/api/v1"
+```bash
+sudo tee /etc/securitycentral/agent.yml > /dev/null <<EOF
+agent_id: "${AGENT_ID}"
+api_url: "https://sc-api-360466791412.us-central1.run.app"
 
 tls:
   cert: "/etc/securitycentral/certs/agent.crt"
@@ -198,31 +205,26 @@ tls:
   ca: "/etc/securitycentral/certs/ca.crt"
 
 scan:
-  on_startup: true       # Run a scan immediately on start
-  interval: 6h           # Scan every 6 hours
-  packages: true         # OS package vulnerability scanning
-  compliance: true       # CIS benchmark compliance checks
+  on_startup: true
+  interval: "6h"
+  packages: true
+  compliance: true
 
 heartbeat:
-  interval: 60s          # Send heartbeat every 60 seconds
+  interval: "60s"
 
-environment: production  # production | staging | development
+environment: "production"
+EOF
 ```
 
-### 5. Create data directory
+#### 2f. Create systemd service
 
 ```bash
 sudo mkdir -p /var/lib/securitycentral/queue
-```
 
-### 6. Install as systemd service
-
-Create `/etc/systemd/system/securitycentral-agent.service`:
-
-```ini
+sudo tee /etc/systemd/system/securitycentral-agent.service > /dev/null <<'EOF'
 [Unit]
 Description=SecurityCentral Infrastructure Agent
-Documentation=https://docs.securitycentral.io/agent
 After=network-online.target
 Wants=network-online.target
 
@@ -241,89 +243,96 @@ ReadWritePaths=/var/lib/securitycentral /etc/securitycentral
 
 [Install]
 WantedBy=multi-user.target
-```
+EOF
 
-```bash
-sudo cp sc-agent /usr/local/bin/
 sudo systemctl daemon-reload
 sudo systemctl enable --now securitycentral-agent
 ```
 
 ---
 
-## How It Works
+## Step 3: Verify
 
-### Authentication
+```bash
+# Check service is running
+sudo systemctl status securitycentral-agent
 
-The agent uses a **three-step authentication model**:
+# Watch logs
+sudo journalctl -u securitycentral-agent -f
+```
+
+You should see:
+
+```
+Started with heartbeat interval 60s
+Running initial scan (on_startup=true)
+Heartbeat sent: status=200
+Scan completed: 12 packages scanned, 3 findings
+Findings submitted: created=3, updated=0, resolved=0
+```
+
+In the dashboard, the server should appear under **Infrastructure > Servers** within 60 seconds.
+
+---
+
+## How it Works After Installation
+
+```
+                    Every 60s                 Every 6h (or on-demand)
+                   ┌─────────┐               ┌──────────────┐
+  sc-agent ──mTLS──▶ heartbeat ──────────────▶ package scan  │
+  (on server)      │ POST /v1/agents/heartbeat│ compliance   │
+                   └────┬────┘               │ checks       │
+                        │                    └──────┬───────┘
+                   commands back:                    │
+                   • scan_now                        ▼
+                   • update_agent           POST /v1/agents/findings
+                   • update_vulndb          (mTLS, auto-dedup)
+```
+
+**Authentication model:**
 
 | Step | Method | When |
 |------|--------|------|
 | Registration | API Key (`X-API-Key` header) | Once, during install |
-| Heartbeat | mTLS (client certificate) | Every 60s |
-| Finding submission | mTLS (client certificate) | After each scan |
+| All subsequent calls | mTLS (client certificate) | Every heartbeat + scan |
 
-The certificate CN follows the format `ag_<agentId>.agents.securitycentral.io`.
-
-### Heartbeat Loop
-
-Every 60 seconds the agent sends:
-- Agent version, hostname, OS info
-- Resource usage (CPU, memory, disk %)
-
-The platform responds with **commands**:
-
-| Command | Trigger | Action |
-|---------|---------|--------|
-| `scan_now` | Manual trigger from dashboard | Execute immediate scan |
-| `update_agent` | New agent version available | Download, verify, replace binary, restart |
-| `update_vulndb` | New vulnerability data available | Download and apply database update |
-
-### Scan Cycle
-
-1. Agent runs package scan (detects installed packages per OS)
-2. Agent runs compliance checks (CIS benchmarks)
-3. Findings are deduplicated against existing open findings
-4. New findings are submitted to `POST /api/v1/agents/findings` via mTLS
-5. Platform auto-resolves findings no longer present (vulnerability fixed)
-
-### Offline Queue
-
-If the platform is unreachable, findings are queued locally:
-- Location: `/var/lib/securitycentral/queue/`
-- Max queue size: 100 entries
-- Retry: exponential backoff (1s to 5m)
-- Entries are replayed when connectivity is restored
+The certificate is valid for **1 year** from registration. CN format: `ag_<agentId>.agents.securitycentral.io`.
 
 ---
 
-## Managing the Agent
+## What Gets Scanned
 
-```bash
-# Check status
-sudo systemctl status securitycentral-agent
+### OS Package Vulnerabilities
 
-# View logs
-sudo journalctl -u securitycentral-agent -f
+| OS | Detection Method |
+|----|-----------------|
+| Ubuntu / Debian | `dpkg-query` |
+| CentOS / RHEL / Rocky / Alma | `rpm` |
+| Alpine | `/lib/apk/db/installed` or `apk` |
 
-# Restart
-sudo systemctl restart securitycentral-agent
+Each finding includes: package name, installed version, fixed version, CVE ID, CVSS score, severity, and whether a fix is auto-applicable.
 
-# Stop
-sudo systemctl stop securitycentral-agent
+### CIS Compliance Benchmarks (30+ checks)
 
-# Trigger an immediate scan (from the platform dashboard)
-# Go to the server detail page and click "Scan Now"
-```
+- **SSH Hardening** (CIS 5.2.x): root login, MaxAuthTries, ciphers, X11 forwarding
+- **Filesystem** (CIS 1.x): cramfs/squashfs disabled, /tmp mount options, sticky bits
+- **Network** (CIS 3.x): IP forwarding, ICMP redirects, SYN cookies
+- **Kernel** (CIS 1.5.x): ASLR, ptrace scope, core dumps
+- **User/Password** (CIS 5.4.x, 6.2.x): password aging, umask, duplicate UIDs
 
-### Triggering a scan via API
+### Resource Metrics (via heartbeat)
 
-```bash
-curl -X POST https://<platform>/api/v1/agents/<agentId>/scan \
-  -H "Authorization: Bearer <jwt>"
-```
+Sent every 60 seconds: CPU %, memory %, disk %, OS info, hostname, agent version.
 
-Or from the dashboard: navigate to the server and click the scan button.
+Severity mapping:
+
+| CVSS Score | Severity |
+|------------|----------|
+| 9.0 - 10.0 | Critical |
+| 7.0 - 8.9 | High |
+| 4.0 - 6.9 | Medium |
+| 0.1 - 3.9 | Low |
 
 ---
 
@@ -336,53 +345,101 @@ Or from the dashboard: navigate to the server and click the scan button.
 /etc/securitycentral/
   agent.yml                         # Configuration
   certs/
-    agent.key                       # Private key (0600)
-    agent.crt                       # Signed certificate
+    agent.key                       # Private key (mode 0600)
+    agent.crt                       # Signed certificate (1 year)
     ca.crt                          # Platform CA certificate
 
 /var/lib/securitycentral/
   vulndb.json                       # Vulnerability database cache
   vulndb.json.version               # Database version tracker
-  queue/                            # Offline finding queue
-
-/etc/systemd/system/
-  securitycentral-agent.service     # Systemd unit file
+  queue/                            # Offline finding queue (max 100 entries)
 ```
+
+If the platform is unreachable, findings are queued locally in `/var/lib/securitycentral/queue/` with exponential backoff (1s → 5m). They replay when connectivity is restored.
 
 ---
 
-## Severity Mapping
+## Managing the Agent
 
-CVSS scores from the vulnerability database are mapped to severity levels:
+```bash
+# Status
+sudo systemctl status securitycentral-agent
 
-| CVSS Score | Severity |
-|------------|----------|
-| 9.0 - 10.0 | Critical |
-| 7.0 - 8.9 | High |
-| 4.0 - 6.9 | Medium |
-| 0.1 - 3.9 | Low |
-| 0 | Info |
+# Logs (live)
+sudo journalctl -u securitycentral-agent -f
+
+# Logs (last 100 lines)
+sudo journalctl -u securitycentral-agent -n 100
+
+# Restart
+sudo systemctl restart securitycentral-agent
+
+# Stop
+sudo systemctl stop securitycentral-agent
+
+# Uninstall
+sudo systemctl stop securitycentral-agent
+sudo systemctl disable securitycentral-agent
+sudo rm /etc/systemd/system/securitycentral-agent.service
+sudo rm /usr/local/bin/sc-agent
+sudo rm -rf /etc/securitycentral /var/lib/securitycentral
+sudo systemctl daemon-reload
+```
+
+### Trigger a scan from the API
+
+```bash
+# Get your JWT
+TOKEN="your-access-token"
+
+# Trigger scan for a specific agent
+curl -X POST https://sc-api-360466791412.us-central1.run.app/api/v1/agents/<agentId>/scan \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Or from the dashboard: go to the server detail page and click **Scan Now**.
 
 ---
 
 ## Troubleshooting
 
-**Agent not appearing in dashboard:**
-- Check the agent is running: `systemctl status securitycentral-agent`
-- Check logs: `journalctl -u securitycentral-agent -f`
-- Verify network connectivity to the platform API
-- Verify certificates are valid and not expired
+| Symptom | Check | Fix |
+|---------|-------|-----|
+| `Failed to register agent` during install | `curl -s https://sc-api-360466791412.us-central1.run.app/health` | Verify API is up; check API key has `scan:write` scope |
+| Agent starts but no heartbeat | `journalctl -u securitycentral-agent -f` | Check certificate files exist and match; verify outbound HTTPS to API |
+| Server not appearing in dashboard | Wait 60s for first heartbeat | Check agent logs for `Heartbeat sent: status=200` |
+| `tls: certificate signed by unknown authority` | CA mismatch | Re-register the agent to get fresh certs |
+| `403` or `401` on heartbeat | Certificate expired or invalid | Certificate lasts 1 year; re-register to renew |
+| Scans produce no findings | Agent runs as non-root | Agent needs root to read package databases and check CIS benchmarks |
+| Agent offline in dashboard (> 5 min) | Network issue or agent crashed | Check `systemctl status`; platform marks inactive after 5 min without heartbeat |
+| Findings not syncing | Check worker health | Worker must be running (`min-instances=1`) to process `finding-ingestion` queue |
+| `openssl: command not found` during install | Missing dependency | `apt install openssl` or `yum install openssl` |
 
-**Heartbeat not updating:**
-- Check mTLS certificates exist at the configured paths
-- Verify the CA certificate matches the platform CA
-- Check firewall rules allow outbound HTTPS
+---
 
-**Scans not producing findings:**
-- Check `scan.packages` and `scan.compliance` are `true` in config
-- Verify the vulnerability database exists at `/var/lib/securitycentral/vulndb.json`
-- Check agent logs for scan errors
+## Installing on Multiple Servers
 
-**Agent offline (> 5 minutes without heartbeat):**
-- The platform marks the server as inactive after 5 minutes
-- Restart the agent and check logs for connectivity issues
+For fleet deployment, script it:
+
+```bash
+#!/bin/bash
+# deploy-agents.sh
+API_KEY="sc_live_YOUR_KEY_HERE"
+API_URL="https://sc-api-360466791412.us-central1.run.app"
+SERVERS=(
+  "root@web-01"
+  "root@web-02"
+  "root@db-01"
+  "root@worker-01"
+)
+
+for SERVER in "${SERVERS[@]}"; do
+  echo "==> Installing agent on $SERVER"
+  ssh "$SERVER" "curl -fsSL https://raw.githubusercontent.com/<your-org>/SecurityCentral/main/scripts/install-agent.sh | sudo bash -s -- \
+    --api-key $API_KEY \
+    --api-url $API_URL \
+    --environment production"
+done
+```
+
+Or use Ansible/Terraform — the install script is idempotent (re-running re-registers with a new agent ID and fresh certificates).
