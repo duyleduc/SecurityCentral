@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
-# SecurityCentral Agent Installer
+# ┌──────────────────────────────────────────────────────────────────────────┐
+# │  DEPRECATED: Use the dashboard "Add Server" flow instead.              │
+# │  The agent binary now handles installation directly:                    │
+# │    sudo ./sc-agent install --token <TOKEN> --api-url <URL>             │
+# │  See docs/AGENT.md for details.                                        │
+# └──────────────────────────────────────────────────────────────────────────┘
+#
+# Legacy SecurityCentral Agent Installer (kept for backward compatibility)
 # Usage: curl -fsSL https://install.securitycentral.io | bash -s -- --api-key <key> [options]
 set -euo pipefail
 

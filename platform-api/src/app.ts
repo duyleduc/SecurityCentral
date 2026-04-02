@@ -10,7 +10,7 @@ import { repositoriesRouter, serversRouter, certificatesRouter } from './modules
 import { scansRouter } from './modules/scans/index.js';
 import { dashboardRouter } from './modules/dashboard/index.js';
 import { auditRouter } from './modules/audit/index.js';
-import { agentsRouter } from './modules/agents/index.js';
+import { agentsRouter, installTokensRouter } from './modules/agents/index.js';
 import { integrationsRouter } from './modules/integrations/index.js';
 import { notificationsRouter } from './modules/notifications/index.js';
 import { monitoringRouter } from './modules/monitoring/index.js';
@@ -66,6 +66,7 @@ app.use('/api/v1/organizations', organizationsRouter);
 
 // --- Agent routes (separate rate limit) ---
 app.use('/v1/agents', agentRateLimit, agentsRouter);
+app.use('/api/v1/install-tokens', installTokensRouter);
 
 // API routes placeholder
 app.get('/api/v1', (_req, res) => {

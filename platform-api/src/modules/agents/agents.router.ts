@@ -6,6 +6,8 @@ import { requireAuth, requireScope } from '../../middleware/auth.js';
 import { requireMtls } from '../../middleware/mtls.js';
 import * as agentsService from './agents.service.js';
 import { RegisterAgentSchema, HeartbeatSchema, SubmitFindingsSchema } from './agents.validation.js';
+import { EnrollAgentSchema } from './install-tokens.validation.js';
+import { redeemInstallToken } from './install-tokens.service.js';
 import { ingestFindings } from './findings-ingestion.service.js';
 import * as vulndbService from './vulndb.service.js';
 
@@ -22,6 +24,22 @@ agentsRouter.post(
   async (req, res, next) => {
     try {
       const result = await agentsService.registerAgent(req.auth!.orgId, req.body);
+      res.status(201).json(successEnvelope(result));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// POST /agents/enroll — authenticated via one-time install token
+// ---------------------------------------------------------------------------
+agentsRouter.post(
+  '/enroll',
+  validate({ body: EnrollAgentSchema }),
+  async (req, res, next) => {
+    try {
+      const result = await redeemInstallToken(req.body);
       res.status(201).json(successEnvelope(result));
     } catch (err) {
       next(err);
@@ -88,6 +106,16 @@ agentsRouter.post(
 // ---------------------------------------------------------------------------
 agentsRouter.get('/version', (_req, res) => {
   res.json(successEnvelope(agentsService.getLatestVersion()));
+});
+
+// ---------------------------------------------------------------------------
+// GET /agents/download — redirect to binary (no auth)
+// ---------------------------------------------------------------------------
+agentsRouter.get('/download', (req, res) => {
+  const { version, platforms } = agentsService.getLatestVersion();
+  const arch = req.query.arch === 'arm64' ? 'arm64' : 'amd64';
+  const url = platforms[`linux/${arch}` as keyof typeof platforms];
+  res.redirect(302, url);
 });
 
 // ---------------------------------------------------------------------------

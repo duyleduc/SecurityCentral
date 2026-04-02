@@ -485,6 +485,29 @@ export function useTriggerDiscovery() {
 }
 
 // ---------------------------------------------------------------------------
+// Install Tokens
+// ---------------------------------------------------------------------------
+
+export interface InstallToken {
+  id: string;
+  token: string;
+  tokenPrefix: string;
+  expiresAt: string;
+  config: Record<string, unknown>;
+}
+
+export function useCreateInstallToken() {
+  return useMutation({
+    mutationFn: (data: {
+      environment?: string;
+      labels?: Record<string, string>;
+      scan?: { packages?: boolean; compliance?: boolean; interval?: string; onStartup?: boolean };
+      expiresInMinutes?: number;
+    }) => apiPost<InstallToken>('/install-tokens', data),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Domain Monitoring
 // ---------------------------------------------------------------------------
 

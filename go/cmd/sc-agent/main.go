@@ -3,14 +3,16 @@
 package main
 
 import (
-	"flag"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/spf13/cobra"
+
 	"github.com/security-central/security-central/internal/agent"
 	"github.com/security-central/security-central/internal/config"
+	"github.com/security-central/security-central/internal/install"
 	"github.com/security-central/security-central/internal/logging"
 	"github.com/security-central/security-central/internal/platform"
 	"github.com/security-central/security-central/internal/scanner/packages"
@@ -18,15 +20,38 @@ import (
 
 var version = "dev"
 
-func main() {
+// ---------------------------------------------------------------------------
+// Root command (defaults to "run" if no subcommand given)
+// ---------------------------------------------------------------------------
+
+var rootCmd = &cobra.Command{
+	Use:   "sc-agent",
+	Short: "SecurityCentral Infrastructure Agent",
+	// When invoked without a subcommand (e.g. sc-agent --config ...),
+	// behave the same as "sc-agent run".
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runAgent(cmd, args)
+	},
+	SilenceUsage: true,
+}
+
+// ---------------------------------------------------------------------------
+// Run command — normal agent operation
+// ---------------------------------------------------------------------------
+
+var configPath string
+
+var runCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Run the agent (default)",
+	RunE:  runAgent,
+}
+
+func runAgent(_ *cobra.Command, _ []string) error {
 	logging.Init("sc-agent")
+	slog.Info("starting agent", "version", version, "config", configPath)
 
-	configPath := flag.String("config", "/etc/securitycentral/agent.yml", "Path to agent config file")
-	flag.Parse()
-
-	slog.Info("starting agent", "version", version, "config", *configPath)
-
-	cfg, err := config.LoadAgentConfig(*configPath)
+	cfg, err := config.LoadAgentConfig(configPath)
 	if err != nil {
 		slog.Error("failed to load config", "error", err)
 		os.Exit(2)
@@ -59,4 +84,46 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 	sig := <-sigCh
 	slog.Info("shutting down", "signal", sig.String())
+
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Install command — one-time agent setup using install token
+// ---------------------------------------------------------------------------
+
+var (
+	installToken  string
+	installAPIURL string
+)
+
+var installCmd = &cobra.Command{
+	Use:   "install",
+	Short: "Install and register this agent using a one-time token",
+	RunE: func(_ *cobra.Command, _ []string) error {
+		logging.Init("sc-agent-install")
+		return install.Run(installToken, installAPIURL)
+	},
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+
+func init() {
+	// Flags shared between root and run (for backward compat: sc-agent --config ...)
+	rootCmd.PersistentFlags().StringVar(&configPath, "config", "/etc/securitycentral/agent.yml", "Path to agent config file")
+	runCmd.Flags().StringVar(&configPath, "config", "/etc/securitycentral/agent.yml", "Path to agent config file")
+
+	installCmd.Flags().StringVar(&installToken, "token", "", "One-time install token from dashboard")
+	installCmd.Flags().StringVar(&installAPIURL, "api-url", "https://api.securitycentral.io", "Platform API URL")
+	_ = installCmd.MarkFlagRequired("token")
+
+	rootCmd.AddCommand(runCmd, installCmd)
+}
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }

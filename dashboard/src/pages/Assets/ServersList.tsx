@@ -4,11 +4,13 @@ import {
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
   Paper, Skeleton, Button,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import { useServers, useServer, type Server } from '../../api/hooks.js';
 import { Pagination } from './RepositoriesList.js';
 import { SEVERITY_COLORS } from '../../theme/theme.js';
+import AddServerDialog from '../../components/AddServerDialog.js';
 
 const ENV_COLOR: Record<string, 'error' | 'warning' | 'primary'> = {
   production: 'error',
@@ -32,6 +34,7 @@ function relativeTime(dateStr?: string): string {
 export function ServersList() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [showAddDialog, setShowAddDialog] = useState(false);
   const servers = useServers({ page, per_page: 25 });
   const data = servers.data?.data as (Server & { openFindingCount?: number })[] | undefined;
   const meta = servers.data?.meta;
@@ -40,7 +43,13 @@ export function ServersList() {
 
   return (
     <Box>
-      <Typography variant="h5" sx={{ mb: 2 }}>Servers</Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+        <Typography variant="h5">Servers</Typography>
+        <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setShowAddDialog(true)}>
+          Add Server
+        </Button>
+      </Stack>
+      <AddServerDialog open={showAddDialog} onClose={() => setShowAddDialog(false)} />
       <TableContainer component={Paper}>
         <Table size="small">
           <TableHead>

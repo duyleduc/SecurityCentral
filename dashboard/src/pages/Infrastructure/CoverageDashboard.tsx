@@ -7,10 +7,9 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import CheckIcon from '@mui/icons-material/Check';
 import CloudIcon from '@mui/icons-material/Cloud';
 import { useCoverageStats, useUnmonitoredServers, useTriggerDiscovery, type CloudResource, type CoverageStats } from '../../api/hooks.js';
+import AddServerDialog from '../../components/AddServerDialog.js';
 
 const PROVIDER_LABEL: Record<string, string> = { aws: 'AWS', azure: 'Azure', gcp: 'GCP', proxmox: 'Proxmox' };
 
@@ -30,17 +29,10 @@ export function InfrastructureCoveragePage() {
   const stats = useCoverageStats();
   const unmonitored = useUnmonitoredServers();
   const triggerDiscovery = useTriggerDiscovery();
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showAddDialog, setShowAddDialog] = useState(false);
 
   const coverageData = stats.data?.data as CoverageStats | undefined;
   const unmonitoredData = (unmonitored.data?.data ?? []) as CloudResource[];
-
-  const copyInstallCmd = (resource: CloudResource) => {
-    const cmd = `curl -fsSL https://install.securitycentral.io | bash -s -- --api-key YOUR_API_KEY --environment production`;
-    navigator.clipboard.writeText(cmd);
-    setCopiedId(resource.id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
 
   return (
     <Box>
@@ -189,10 +181,10 @@ export function InfrastructureCoveragePage() {
                         <Button
                           size="small"
                           variant="contained"
-                          startIcon={copiedId === r.id ? <CheckIcon /> : <ContentCopyIcon />}
-                          onClick={() => copyInstallCmd(r)}
+                          startIcon={<AddIcon />}
+                          onClick={() => setShowAddDialog(true)}
                         >
-                          {copiedId === r.id ? 'Copied' : 'Install Agent'}
+                          Install Agent
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -203,6 +195,7 @@ export function InfrastructureCoveragePage() {
           </CardContent>
         </Card>
       )}
+      <AddServerDialog open={showAddDialog} onClose={() => setShowAddDialog(false)} />
     </Box>
   );
 }

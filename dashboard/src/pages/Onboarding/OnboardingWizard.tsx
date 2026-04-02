@@ -5,13 +5,13 @@ import {
   Box, Typography, Card, CardContent, Grid, Button, Stack, Chip,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import CheckIcon from '@mui/icons-material/Check';
+import AddIcon from '@mui/icons-material/Add';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import CodeIcon from '@mui/icons-material/Code';
 import DnsIcon from '@mui/icons-material/Dns';
 import HttpsIcon from '@mui/icons-material/Https';
 import { apiGet, apiPost } from '../../api/client.js';
+import AddServerDialog from '../../components/AddServerDialog.js';
 
 interface OnboardingStatus {
   completed: boolean;
@@ -48,7 +48,7 @@ const STEPS = [
 
 export function OnboardingWizard() {
   const navigate = useNavigate();
-  const [copiedCmd, setCopiedCmd] = useState(false);
+  const [showAddServer, setShowAddServer] = useState(false);
 
   const { data: envelope } = useQuery({
     queryKey: ['onboarding-status'],
@@ -63,12 +63,6 @@ export function OnboardingWizard() {
 
   const handleSkip = () => {
     completeMutation.mutate();
-  };
-
-  const handleCopyInstall = () => {
-    navigator.clipboard.writeText('curl -fsSL https://install.securitycentral.io | bash -s -- --api-key YOUR_API_KEY --environment production');
-    setCopiedCmd(true);
-    setTimeout(() => setCopiedCmd(false), 2000);
   };
 
   const allDone = status?.steps.code && status?.steps.infrastructure && status?.steps.ssl;
@@ -120,10 +114,10 @@ export function OnboardingWizard() {
                           <Button
                             variant="outlined"
                             fullWidth
-                            startIcon={copiedCmd ? <CheckIcon /> : <ContentCopyIcon />}
-                            onClick={handleCopyInstall}
+                            startIcon={<AddIcon />}
+                            onClick={() => setShowAddServer(true)}
                           >
-                            {copiedCmd ? 'Copied!' : 'Copy Install Command'}
+                            Add Server
                           </Button>
                         )}
                       </Stack>
@@ -160,6 +154,7 @@ export function OnboardingWizard() {
           )}
         </Box>
       </Box>
+      <AddServerDialog open={showAddServer} onClose={() => setShowAddServer(false)} />
     </Box>
   );
 }
