@@ -39,8 +39,12 @@ export function ServersList() {
   const [page, setPage] = useState(1);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const servers = useServers({ page, per_page: 25 });
-  const data = servers.data?.data as (Server & { openFindingCount?: number })[] | undefined;
+  const { data: versionInfo } = useAgentVersion();
+  const data = servers.data?.data as (Server & { openFindingCount?: number; agentVersion?: string })[] | undefined;
   const meta = servers.data?.meta;
+
+  const latestVersion = versionInfo?.version ?? '';
+  const outdatedCount = data?.filter((s) => s.agentVersion && s.agentVersion !== latestVersion).length ?? 0;
 
   if (selectedId) return <ServerDetail id={selectedId} onBack={() => setSelectedId(null)} />;
 
@@ -53,6 +57,12 @@ export function ServersList() {
         </Button>
       </Stack>
       <AddServerDialog open={showAddDialog} onClose={() => setShowAddDialog(false)} />
+      {outdatedCount > 0 && latestVersion && (
+        <Alert severity="warning" icon={<SystemUpdateAltIcon fontSize="small" />} sx={{ mb: 2 }}>
+          {outdatedCount} {outdatedCount === 1 ? 'server has' : 'servers have'} an outdated agent.
+          Latest version: <strong>v{latestVersion}</strong>. Click a server to update.
+        </Alert>
+      )}
       <TableContainer component={Paper}>
         <Table size="small">
           <TableHead>
@@ -60,6 +70,7 @@ export function ServersList() {
               <TableCell>Status</TableCell>
               <TableCell>Hostname</TableCell>
               <TableCell>OS</TableCell>
+              <TableCell>Agent</TableCell>
               <TableCell>Environment</TableCell>
               <TableCell>Last Heartbeat</TableCell>
               <TableCell align="right">Findings</TableCell>
@@ -69,29 +80,40 @@ export function ServersList() {
             {servers.isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 6 }).map((__, j) => (
+                  {Array.from({ length: 7 }).map((__, j) => (
                     <TableCell key={j}><Skeleton variant="text" /></TableCell>
                   ))}
                 </TableRow>
               ))
             ) : !data?.length ? (
               <TableRow>
-                <TableCell colSpan={6} sx={{ py: 5, textAlign: 'center', color: 'text.secondary' }}>No servers</TableCell>
+                <TableCell colSpan={7} sx={{ py: 5, textAlign: 'center', color: 'text.secondary' }}>No servers</TableCell>
               </TableRow>
-            ) : data.map((s) => (
-              <TableRow key={s.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelectedId(s.id)}>
-                <TableCell>
-                  <FiberManualRecordIcon sx={{ fontSize: 10, color: STATUS_DOT[s.status] ?? '#6b7280' }} />
-                </TableCell>
-                <TableCell sx={{ fontWeight: 500 }}>{s.hostname}</TableCell>
-                <TableCell sx={{ color: 'text.secondary' }}>{s.osFamily} {s.osVersion}</TableCell>
-                <TableCell>
-                  <Chip label={s.environment} size="small" color={ENV_COLOR[s.environment] ?? 'default'} />
-                </TableCell>
-                <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{relativeTime(s.lastHeartbeat)}</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 500 }}>{s.openFindingCount ?? 0}</TableCell>
-              </TableRow>
-            ))}
+            ) : data.map((s) => {
+              const isOutdated = latestVersion && s.agentVersion && s.agentVersion !== latestVersion;
+              return (
+                <TableRow key={s.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelectedId(s.id)}>
+                  <TableCell>
+                    <FiberManualRecordIcon sx={{ fontSize: 10, color: STATUS_DOT[s.status] ?? '#6b7280' }} />
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 500 }}>{s.hostname}</TableCell>
+                  <TableCell sx={{ color: 'text.secondary' }}>{s.osFamily} {s.osVersion}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={s.agentVersion ? `v${s.agentVersion}` : '—'}
+                      size="small"
+                      color={isOutdated ? 'warning' : 'default'}
+                      variant={isOutdated ? 'filled' : 'outlined'}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={s.environment} size="small" color={ENV_COLOR[s.environment] ?? 'default'} />
+                  </TableCell>
+                  <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{relativeTime(s.lastHeartbeat)}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 500 }}>{s.openFindingCount ?? 0}</TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </TableContainer>

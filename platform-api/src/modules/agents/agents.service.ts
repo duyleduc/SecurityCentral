@@ -114,16 +114,8 @@ export async function processHeartbeat(agentId: string, input: HeartbeatInput) {
     },
   });
 
-  // Build commands
+  // Build commands (only user-initiated actions, never auto-update)
   const commands: HeartbeatCommand[] = [];
-
-  // Check if agent needs update
-  if (input.agentVersion !== readAgentVersion()) {
-    commands.push({
-      type: 'update_agent',
-      payload: { version: readAgentVersion() },
-    });
-  }
 
   // Check for pending scans
   const pendingScan = await prisma.scan.findFirst({
