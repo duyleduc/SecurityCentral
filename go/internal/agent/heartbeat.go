@@ -8,25 +8,20 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"runtime"
 	"strings"
 	"time"
+
+	"github.com/security-central/security-central/internal/sysinfo"
 )
 
 // HeartbeatPayload is sent to the platform every heartbeat interval.
 type HeartbeatPayload struct {
-	AgentVersion  string         `json:"agentVersion"`
-	Hostname      string         `json:"hostname,omitempty"`
-	OSFamily      string         `json:"osFamily,omitempty"`
-	OSVersion     string         `json:"osVersion,omitempty"`
-	ResourceUsage *ResourceUsage `json:"resourceUsage,omitempty"`
-}
-
-// ResourceUsage reports host resource utilization.
-type ResourceUsage struct {
-	CPUPercent    float64 `json:"cpuPercent,omitempty"`
-	MemoryPercent float64 `json:"memoryPercent,omitempty"`
-	DiskPercent   float64 `json:"diskPercent,omitempty"`
+	AgentVersion  string                  `json:"agentVersion"`
+	Hostname      string                  `json:"hostname,omitempty"`
+	OSFamily      string                  `json:"osFamily,omitempty"`
+	OSVersion     string                  `json:"osVersion,omitempty"`
+	ResourceUsage *sysinfo.ResourceUsage  `json:"resourceUsage,omitempty"`
+	SystemInfo    *sysinfo.SystemInfo     `json:"systemInfo,omitempty"`
 }
 
 // HeartbeatResponse from the platform.
@@ -44,27 +39,32 @@ type Command struct {
 
 // HeartbeatLoop sends heartbeats at the configured interval and processes commands.
 func HeartbeatLoop(client *http.Client, baseURL, agentID, version string, interval time.Duration, cmdCh chan<- Command) {
+	// Collect static system info once at startup
+	sys := sysinfo.Collect()
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
-		sendHeartbeat(client, baseURL, agentID, version, cmdCh)
+		sendHeartbeat(client, baseURL, agentID, version, &sys, cmdCh)
 		<-ticker.C
 	}
 }
 
-func sendHeartbeat(client *http.Client, baseURL, agentID, version string, cmdCh chan<- Command) {
+func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *sysinfo.SystemInfo, cmdCh chan<- Command) {
 	hostname, _ := os.Hostname()
 	osFamily, osVersion := detectOS()
 
+	// Measure real system resources (CPU measurement takes ~500ms)
+	resources := sysinfo.MeasureResources()
+
 	payload := HeartbeatPayload{
-		AgentVersion: version,
-		Hostname:     hostname,
-		OSFamily:     osFamily,
-		OSVersion:    osVersion,
-		ResourceUsage: &ResourceUsage{
-			MemoryPercent: memoryUsage(),
-		},
+		AgentVersion:  version,
+		Hostname:      hostname,
+		OSFamily:      osFamily,
+		OSVersion:     osVersion,
+		ResourceUsage: &resources,
+		SystemInfo:    sys,
 	}
 
 	body, err := json.Marshal(payload)
@@ -133,12 +133,4 @@ func parseOSRelease(content string) map[string]string {
 		}
 	}
 	return vars
-}
-
-func memoryUsage() float64 {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	// This is Go process memory, not system memory. Real implementation
-	// would read /proc/meminfo.
-	return float64(m.Alloc) / float64(m.Sys) * 100
 }

@@ -74,6 +74,9 @@ export async function processHeartbeat(agentId: string, input: HeartbeatInput) {
   if (input.resourceUsage) {
     metadata.resourceUsage = input.resourceUsage;
   }
+  if (input.systemInfo) {
+    metadata.systemInfo = input.systemInfo;
+  }
 
   await prisma.server.update({
     where: { id: server.id },

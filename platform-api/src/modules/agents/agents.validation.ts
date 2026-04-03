@@ -24,6 +24,24 @@ export const HeartbeatSchema = z.object({
       cpuPercent: z.number().optional(),
       memoryPercent: z.number().optional(),
       diskPercent: z.number().optional(),
+      loadAvg1: z.number().optional(),
+      loadAvg5: z.number().optional(),
+      loadAvg15: z.number().optional(),
+      memUsedMb: z.number().optional(),
+      memTotalMb: z.number().optional(),
+      diskUsedGb: z.number().optional(),
+      diskTotalGb: z.number().optional(),
+      uptimeSecs: z.number().optional(),
+    })
+    .optional(),
+  systemInfo: z
+    .object({
+      kernel: z.string().optional(),
+      cpuCores: z.number().optional(),
+      cpuModel: z.string().optional(),
+      totalRamMb: z.number().optional(),
+      totalDiskGb: z.number().optional(),
+      ipAddresses: z.array(z.string()).optional(),
     })
     .optional(),
 });

@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/security-central/security-central/internal/sysinfo"
 )
 
 // Paths
@@ -93,6 +95,19 @@ func Run(token, apiURL string) error {
 	arch := runtime.GOARCH
 	slog.Info("detected platform", "hostname", hostname, "os", osFamily, "version", osVersion, "arch", arch)
 
+	// 1b. Detect cloud provider
+	slog.Info("detecting cloud provider...")
+	cloud := sysinfo.DetectCloud()
+	if cloud.Provider != "" {
+		slog.Info("cloud detected", "provider", cloud.Provider, "region", cloud.Region, "instance_id", cloud.InstanceID, "instance_type", cloud.InstanceType)
+	} else {
+		slog.Info("no cloud provider detected (on-prem or bare metal)")
+	}
+
+	// 1c. Collect system info
+	sys := sysinfo.Collect()
+	slog.Info("system info", "kernel", sys.Kernel, "cpu_cores", sys.CPUCores, "cpu_model", sys.CPUModel, "ram_mb", sys.TotalRAMMB, "disk_gb", sys.TotalDiskGB, "ips", sys.IPAddresses)
+
 	// 2. Generate ECDSA P-256 key pair
 	slog.Info("generating ECDSA P-256 key pair")
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -112,7 +127,7 @@ func Run(token, apiURL string) error {
 
 	// 4. Enroll with platform
 	slog.Info("enrolling with platform", "api_url", apiURL)
-	enrollment, err := enroll(apiURL, token, hostname, osFamily, osVersion, arch, string(csrPEM))
+	enrollment, err := enroll(apiURL, token, hostname, osFamily, osVersion, arch, cloud, string(csrPEM))
 	if err != nil {
 		return fmt.Errorf("enrollment failed: %w", err)
 	}
@@ -154,14 +169,17 @@ func Run(token, apiURL string) error {
 // Enrollment API call
 // ---------------------------------------------------------------------------
 
-func enroll(apiURL, token, hostname, osFamily, osVersion, arch, csr string) (*enrollData, error) {
+func enroll(apiURL, token, hostname, osFamily, osVersion, arch string, cloud sysinfo.CloudInfo, csr string) (*enrollData, error) {
 	body := enrollRequest{
-		Token:    token,
-		Hostname: hostname,
-		OsFamily: osFamily,
-		OsVersion: osVersion,
-		Arch:     arch,
-		CSR:      csr,
+		Token:           token,
+		Hostname:        hostname,
+		OsFamily:        osFamily,
+		OsVersion:       osVersion,
+		Arch:            arch,
+		CloudProvider:   cloud.Provider,
+		CloudRegion:     cloud.Region,
+		CloudInstanceId: cloud.InstanceID,
+		CSR:             csr,
 	}
 
 	payload, err := json.Marshal(body)
