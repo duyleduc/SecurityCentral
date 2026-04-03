@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { prisma } from '../../lib/prisma.js';
 import { signCsr } from '../../lib/ca.js';
 import { AppError } from '../../middleware/errors.js';
@@ -8,7 +12,27 @@ import type { RegisterAgentInput, HeartbeatInput } from './agents.validation.js'
 // Constants
 // ---------------------------------------------------------------------------
 
-const LATEST_AGENT_VERSION = '1.0.0';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const VERSION_FILE = path.resolve(__dirname, '..', '..', '..', '..', 'AGENT_VERSION');
+
+let _cachedVersion: string | null = null;
+let _cachedAt = 0;
+const VERSION_CACHE_MS = 60_000; // re-read file every 60s
+
+function readAgentVersion(): string {
+  const now = Date.now();
+  if (_cachedVersion && now - _cachedAt < VERSION_CACHE_MS) {
+    return _cachedVersion;
+  }
+  try {
+    _cachedVersion = fs.readFileSync(VERSION_FILE, 'utf-8').trim();
+  } catch {
+    _cachedVersion = '1.0.0';
+  }
+  _cachedAt = now;
+  return _cachedVersion;
+}
+
 const AGENT_DOWNLOAD_BASE = 'https://releases.securitycentral.io/agent';
 const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -94,10 +118,10 @@ export async function processHeartbeat(agentId: string, input: HeartbeatInput) {
   const commands: HeartbeatCommand[] = [];
 
   // Check if agent needs update
-  if (input.agentVersion !== LATEST_AGENT_VERSION) {
+  if (input.agentVersion !== readAgentVersion()) {
     commands.push({
       type: 'update_agent',
-      payload: { version: LATEST_AGENT_VERSION },
+      payload: { version: readAgentVersion() },
     });
   }
 
@@ -121,10 +145,10 @@ export async function processHeartbeat(agentId: string, input: HeartbeatInput) {
 
 export function getLatestVersion() {
   return {
-    version: LATEST_AGENT_VERSION,
+    version: readAgentVersion(),
     platforms: {
-      'linux/amd64': `${AGENT_DOWNLOAD_BASE}/v${LATEST_AGENT_VERSION}/sc-agent-linux-amd64`,
-      'linux/arm64': `${AGENT_DOWNLOAD_BASE}/v${LATEST_AGENT_VERSION}/sc-agent-linux-arm64`,
+      'linux/amd64': `${AGENT_DOWNLOAD_BASE}/v${readAgentVersion()}/sc-agent-linux-amd64`,
+      'linux/arm64': `${AGENT_DOWNLOAD_BASE}/v${readAgentVersion()}/sc-agent-linux-arm64`,
     },
   };
 }

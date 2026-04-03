@@ -485,6 +485,31 @@ export function useTriggerDiscovery() {
 }
 
 // ---------------------------------------------------------------------------
+// Agent Version
+// ---------------------------------------------------------------------------
+
+export interface AgentVersionInfo {
+  version: string;
+  platforms: Record<string, string>;
+}
+
+export function useAgentVersion() {
+  return useQuery({
+    queryKey: ['agent-version'],
+    queryFn: async (): Promise<AgentVersionInfo> => {
+      // Agent version endpoint is on /v1/agents/version (not /api/v1)
+      const raw = import.meta.env.VITE_API_URL ?? '';
+      let origin = 'http://localhost:3000';
+      if (raw.startsWith('http')) { try { origin = new URL(raw).origin; } catch { /* default */ } }
+      const res = await fetch(`${origin}/v1/agents/version`);
+      const envelope = await res.json();
+      return envelope.data;
+    },
+    staleTime: 60_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Install Tokens
 // ---------------------------------------------------------------------------
 

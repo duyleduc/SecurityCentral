@@ -10,7 +10,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
-import { useServers, useServer, type Server } from '../../api/hooks.js';
+import { useServers, useServer, useAgentVersion, type Server } from '../../api/hooks.js';
 import { Pagination } from './RepositoriesList.js';
 import { SEVERITY_COLORS } from '../../theme/theme.js';
 import AddServerDialog from '../../components/AddServerDialog.js';
@@ -107,8 +107,12 @@ export function ServersList() {
 function UpdateAgentDialog({ open, onClose, server }: { readonly open: boolean; readonly onClose: () => void; readonly server: Record<string, unknown> }) {
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<'simple' | 'manual'>('simple');
+  const { data: versionInfo } = useAgentVersion();
 
   const arch = (server.arch as string) ?? 'amd64';
+  const currentVersion = (server.agentVersion as string) ?? 'unknown';
+  const latestVersion = versionInfo?.version ?? '...';
+  const isUpToDate = currentVersion === latestVersion;
 
   // Derive API origin same as AddServerDialog
   const raw = import.meta.env.VITE_API_URL ?? '';
@@ -138,8 +142,14 @@ function UpdateAgentDialog({ open, onClose, server }: { readonly open: boolean; 
       <DialogTitle>Update Agent</DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
-          <Alert severity="info">
-            Current version: <strong>{(server.agentVersion as string) ?? 'unknown'}</strong> on <strong>{server.hostname as string}</strong>
+          <Alert severity={isUpToDate ? 'success' : 'warning'}>
+            {isUpToDate ? (
+              <>Agent on <strong>{server.hostname as string}</strong> is up to date (<strong>v{currentVersion}</strong>)</>
+            ) : (
+              <>
+                <strong>{server.hostname as string}</strong>: v{currentVersion} → <strong>v{latestVersion}</strong> available
+              </>
+            )}
           </Alert>
 
           <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 36 }}>
@@ -195,6 +205,7 @@ function UpdateAgentDialog({ open, onClose, server }: { readonly open: boolean; 
 function ServerDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const { data: envelope, isLoading } = useServer(id);
   const server = envelope?.data as Record<string, unknown> | undefined;
+  const { data: versionInfo } = useAgentVersion();
   const [showUpdate, setShowUpdate] = useState(false);
 
   if (isLoading) {
@@ -216,6 +227,9 @@ function ServerDetail({ id, onBack }: { id: string; onBack: () => void }) {
 
   const findings = (server.recentFindings ?? []) as Array<Record<string, unknown>>;
   const counts = (server.findingCounts ?? {}) as Record<string, number>;
+  const currentVersion = (server.agentVersion as string) ?? '';
+  const latestVersion = versionInfo?.version ?? '';
+  const hasUpdate = latestVersion !== '' && currentVersion !== '' && currentVersion !== latestVersion;
 
   return (
     <Box>
@@ -224,12 +238,13 @@ function ServerDetail({ id, onBack }: { id: string; onBack: () => void }) {
           Back to Servers
         </Button>
         <Button
-          variant="outlined"
+          variant={hasUpdate ? 'contained' : 'outlined'}
+          color={hasUpdate ? 'warning' : 'inherit'}
           size="small"
           startIcon={<SystemUpdateAltIcon />}
           onClick={() => setShowUpdate(true)}
         >
-          Update Agent
+          {hasUpdate ? `Update to v${latestVersion}` : 'Update Agent'}
         </Button>
       </Stack>
       <UpdateAgentDialog open={showUpdate} onClose={() => setShowUpdate(false)} server={server} />

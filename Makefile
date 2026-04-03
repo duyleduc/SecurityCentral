@@ -3,6 +3,8 @@
 ROOT_DIR := $(shell pwd)
 PID_DIR := $(ROOT_DIR)/.pids
 LOG_DIR := $(ROOT_DIR)/logs
+AGENT_VERSION := $(shell cat $(ROOT_DIR)/AGENT_VERSION | tr -d '[:space:]')
+GO_LDFLAGS := -s -w -X main.version=$(AGENT_VERSION)
 API_PID := $(PID_DIR)/api.pid
 WORKER_PID := $(PID_DIR)/worker.pid
 DASHBOARD_PID := $(PID_DIR)/dashboard.pid
@@ -156,9 +158,15 @@ build-dashboard:
 	cd dashboard && npm run build
 
 build-go:
-	cd go && CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/sc-scan ./cmd/sc-scan
-	cd go && CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/sc-agent ./cmd/sc-agent
-	cd go && CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/sc-certmon ./cmd/sc-certmon
+	cd go && CGO_ENABLED=0 go build -ldflags="$(GO_LDFLAGS)" -o bin/sc-scan ./cmd/sc-scan
+	cd go && CGO_ENABLED=0 go build -ldflags="$(GO_LDFLAGS)" -o bin/sc-agent ./cmd/sc-agent
+	cd go && CGO_ENABLED=0 go build -ldflags="$(GO_LDFLAGS)" -o bin/sc-certmon ./cmd/sc-certmon
+
+build-agent:
+	@echo "Building sc-agent v$(AGENT_VERSION) for linux/amd64 + linux/arm64..."
+	cd go && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="$(GO_LDFLAGS)" -o bin/sc-agent-linux-amd64 ./cmd/sc-agent
+	cd go && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="$(GO_LDFLAGS)" -o bin/sc-agent-linux-arm64 ./cmd/sc-agent
+	@echo "Built: go/bin/sc-agent-linux-amd64, go/bin/sc-agent-linux-arm64 (v$(AGENT_VERSION))"
 
 # ── Docker ───────────────────────────────────────────────────
 
