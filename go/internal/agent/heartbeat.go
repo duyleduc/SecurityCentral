@@ -74,7 +74,20 @@ func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *s
 	}
 
 	url := fmt.Sprintf("%s/v1/agents/heartbeat", baseURL)
-	resp, err := client.Post(url, "application/json", bytes.NewReader(body))
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	if err != nil {
+		slog.Error("failed to create heartbeat request", "error", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Dev mode: when API is plain HTTP (no TLS), send agent CN via header
+	if strings.HasPrefix(baseURL, "http://") {
+		req.Header.Set("X-Agent-CN", fmt.Sprintf("ag_%s.agents.securitycentral.io", agentID))
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		slog.Warn("heartbeat failed", "error", err)
 		return

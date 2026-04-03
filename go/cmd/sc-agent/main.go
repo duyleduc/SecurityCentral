@@ -3,10 +3,15 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -57,22 +62,36 @@ func runAgent(_ *cobra.Command, _ []string) error {
 		os.Exit(2)
 	}
 
-	// Set up mTLS client
-	mtlsClient, err := platform.NewMTLSClient(cfg.TLS.Cert, cfg.TLS.Key, cfg.TLS.CA)
-	if err != nil {
-		slog.Error("failed to create mTLS client", "error", err)
-		os.Exit(2)
+	// Set up HTTP client — mTLS for production (https), plain for local dev (http)
+	var httpClient *http.Client
+	var mtlsClient *platform.Client
+
+	if strings.HasPrefix(cfg.APIURL, "https://") {
+		var err2 error
+		mtlsClient, err2 = platform.NewMTLSClient(cfg.TLS.Cert, cfg.TLS.Key, cfg.TLS.CA)
+		if err2 != nil {
+			slog.Error("failed to create mTLS client", "error", err2)
+			os.Exit(2)
+		}
+		httpClient = mtlsClient.HTTPClient()
+	} else {
+		slog.Warn("API URL is HTTP — running without mTLS (dev mode)")
+		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
 
 	// Command channel for heartbeat → scheduler communication
 	cmdCh := make(chan agent.Command, 10)
 
 	// Start heartbeat loop in background
-	go agent.HeartbeatLoop(mtlsClient.HTTPClient(), cfg.APIURL, cfg.AgentID, version, cfg.Heartbeat.Interval, cmdCh)
+	go agent.HeartbeatLoop(httpClient, cfg.APIURL, cfg.AgentID, version, cfg.Heartbeat.Interval, cmdCh)
 
 	// Define scan function
 	scanFn := func() error {
-		return packages.RunScan(mtlsClient, cfg)
+		if mtlsClient != nil {
+			return packages.RunScan(mtlsClient, cfg)
+		}
+		slog.Warn("skipping scan — mTLS client not available in dev mode")
+		return nil
 	}
 
 	// Start scan scheduler in background
@@ -107,6 +126,68 @@ var installCmd = &cobra.Command{
 }
 
 // ---------------------------------------------------------------------------
+// Update command — download latest binary, replace self, restart
+// ---------------------------------------------------------------------------
+
+var updateCmd = &cobra.Command{
+	Use:   "update",
+	Short: "Update the agent binary to the latest version",
+	RunE: func(_ *cobra.Command, _ []string) error {
+		logging.Init("sc-agent-update")
+		slog.Info("checking for updates", "current_version", version, "config", configPath)
+
+		cfg, err := config.LoadAgentConfig(configPath)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+
+		// Build download URL from the API
+		apiURL := strings.TrimRight(cfg.APIURL, "/")
+		arch := "amd64"
+		if strings.Contains(strings.ToLower(os.Getenv("GOARCH")), "arm") {
+			arch = "arm64"
+		}
+		// Use runtime arch detection
+		if runtimeArch := runtime.GOARCH; runtimeArch == "arm64" {
+			arch = "arm64"
+		}
+		downloadURL := fmt.Sprintf("%s/v1/agents/download?arch=%s", apiURL, arch)
+
+		// Create HTTP client (mTLS or plain)
+		var httpClient *http.Client
+		if strings.HasPrefix(cfg.APIURL, "https://") {
+			mtlsClient, err := platform.NewMTLSClient(cfg.TLS.Cert, cfg.TLS.Key, cfg.TLS.CA)
+			if err != nil {
+				return fmt.Errorf("failed to create mTLS client: %w", err)
+			}
+			httpClient = mtlsClient.HTTPClient()
+		} else {
+			httpClient = &http.Client{Timeout: 60 * time.Second}
+		}
+
+		updater := agent.NewSelfUpdater(httpClient, nil)
+		if err := updater.Update(downloadURL); err != nil {
+			return fmt.Errorf("update failed: %w", err)
+		}
+
+		fmt.Println("Agent updated successfully. Service is restarting.")
+		return nil
+	},
+}
+
+// ---------------------------------------------------------------------------
+// Version command — print current version
+// ---------------------------------------------------------------------------
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the agent version",
+	Run: func(_ *cobra.Command, _ []string) {
+		fmt.Printf("sc-agent %s\n", version)
+	},
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 
@@ -119,7 +200,7 @@ func init() {
 	installCmd.Flags().StringVar(&installAPIURL, "api-url", "https://api.securitycentral.io", "Platform API URL")
 	_ = installCmd.MarkFlagRequired("token")
 
-	rootCmd.AddCommand(runCmd, installCmd)
+	rootCmd.AddCommand(runCmd, installCmd, updateCmd, versionCmd)
 }
 
 func main() {

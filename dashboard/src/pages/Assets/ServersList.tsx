@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   Box, Typography, Card, CardContent, Grid, Chip, Stack, Divider,
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
-  Paper, Skeleton, Button,
+  Paper, Skeleton, Button, Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, IconButton, Tabs, Tab, Alert,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import { useServers, useServer, type Server } from '../../api/hooks.js';
 import { Pagination } from './RepositoriesList.js';
@@ -97,9 +100,102 @@ export function ServersList() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Update Agent Dialog
+// ---------------------------------------------------------------------------
+
+function UpdateAgentDialog({ open, onClose, server }: { readonly open: boolean; readonly onClose: () => void; readonly server: Record<string, unknown> }) {
+  const [copied, setCopied] = useState(false);
+  const [tab, setTab] = useState<'simple' | 'manual'>('simple');
+
+  const arch = (server.arch as string) ?? 'amd64';
+
+  // Derive API origin same as AddServerDialog
+  const raw = import.meta.env.VITE_API_URL ?? '';
+  let apiOrigin = 'http://localhost:3000';
+  if (raw.startsWith('http')) {
+    try { apiOrigin = new URL(raw).origin; } catch { /* use default */ }
+  }
+
+  const simpleCmd = 'sudo sc-agent update';
+  const manualCmd = [
+    `curl -fsSL -o /tmp/sc-agent-new ${apiOrigin}/v1/agents/download?arch=${arch}`,
+    'chmod +x /tmp/sc-agent-new',
+    'sudo mv /tmp/sc-agent-new /usr/local/bin/sc-agent',
+    'sudo systemctl restart securitycentral-agent',
+  ].join('\n');
+
+  const activeCmd = tab === 'simple' ? simpleCmd : manualCmd;
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(activeCmd);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [activeCmd]);
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Update Agent</DialogTitle>
+      <DialogContent>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+          <Alert severity="info">
+            Current version: <strong>{(server.agentVersion as string) ?? 'unknown'}</strong> on <strong>{server.hostname as string}</strong>
+          </Alert>
+
+          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 36 }}>
+            <Tab label="Simple (recommended)" value="simple" sx={{ minHeight: 36, py: 0 }} />
+            <Tab label="Manual" value="manual" sx={{ minHeight: 36, py: 0 }} />
+          </Tabs>
+
+          {tab === 'simple' && (
+            <Typography variant="body2" color="text.secondary">
+              Run this on the server. The agent reads its config, downloads the latest binary, replaces itself, and restarts.
+            </Typography>
+          )}
+          {tab === 'manual' && (
+            <Typography variant="body2" color="text.secondary">
+              Download the binary manually, replace it, and restart the service.
+            </Typography>
+          )}
+
+          <Box sx={{ position: 'relative' }}>
+            <TextField
+              multiline
+              fullWidth
+              minRows={tab === 'simple' ? 1 : 4}
+              value={activeCmd}
+              slotProps={{ input: { readOnly: true, sx: { fontFamily: 'monospace', fontSize: 13 } } }}
+            />
+            <IconButton
+              size="small"
+              onClick={handleCopy}
+              sx={{ position: 'absolute', top: 8, right: 8 }}
+              title="Copy to clipboard"
+            >
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          </Box>
+
+          {copied && (
+            <Typography variant="caption" color="success.main">Copied to clipboard</Typography>
+          )}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Done</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Server Detail
+// ---------------------------------------------------------------------------
+
 function ServerDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const { data: envelope, isLoading } = useServer(id);
   const server = envelope?.data as Record<string, unknown> | undefined;
+  const [showUpdate, setShowUpdate] = useState(false);
 
   if (isLoading) {
     return (
@@ -123,9 +219,20 @@ function ServerDetail({ id, onBack }: { id: string; onBack: () => void }) {
 
   return (
     <Box>
-      <Button startIcon={<ArrowBackIcon />} size="small" onClick={onBack} sx={{ mb: 2 }}>
-        Back to Servers
-      </Button>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+        <Button startIcon={<ArrowBackIcon />} size="small" onClick={onBack}>
+          Back to Servers
+        </Button>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<SystemUpdateAltIcon />}
+          onClick={() => setShowUpdate(true)}
+        >
+          Update Agent
+        </Button>
+      </Stack>
+      <UpdateAgentDialog open={showUpdate} onClose={() => setShowUpdate(false)} server={server} />
       <Card>
         <CardContent sx={{ p: 3 }}>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>

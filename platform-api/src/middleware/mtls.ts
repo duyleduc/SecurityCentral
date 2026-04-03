@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { TLSSocket } from 'node:tls';
 
+import { env } from '../lib/env.js';
 import { verifyClientCert } from '../lib/ca.js';
 import { AppError } from './errors.js';
 
@@ -25,6 +26,16 @@ declare global {
  * 2. Proxy header: reads PEM from `X-Client-Cert` header (when behind a TLS-terminating LB)
  */
 export function requireMtls(req: Request, _res: Response, next: NextFunction): void {
+  // Dev mode: accept X-Agent-CN header as a stand-in for mTLS
+  // (local dev runs plain HTTP, so TLS handshake never happens)
+  if (env.NODE_ENV === 'development') {
+    const devCn = req.headers['x-agent-cn'] as string | undefined;
+    if (devCn) {
+      req.agentCn = devCn;
+      return next();
+    }
+  }
+
   // Try direct TLS socket first
   const tlsSocket = req.socket as TLSSocket;
   if (tlsSocket.getPeerCertificate) {

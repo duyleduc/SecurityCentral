@@ -1,3 +1,5 @@
+//go:build linux
+
 package sysinfo
 
 import (
@@ -35,9 +37,9 @@ func MeasureResources() ResourceUsage {
 		LoadAvg5:      loadAvg(1),
 		LoadAvg15:     loadAvg(2),
 		MemUsedMB:     memUsedMB(),
-		MemTotalMB:    totalRAMMB(),
+		MemTotalMB:    readMeminfoField("MemTotal") / 1024,
 		DiskUsedGB:    diskUsedGB(),
-		DiskTotalGB:   totalDiskGB(),
+		DiskTotalGB:   diskTotalGB(),
 		UptimeSecs:    uptimeSeconds(),
 	}
 }
@@ -144,6 +146,15 @@ func diskPercent() float64 {
 	}
 	used := total - free
 	return float64(used) / float64(total) * 100
+}
+
+// diskTotalGB returns total root filesystem size in GB.
+func diskTotalGB() int64 {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs("/", &stat); err != nil {
+		return 0
+	}
+	return int64(stat.Blocks) * int64(stat.Bsize) / (1024 * 1024 * 1024)
 }
 
 // diskUsedGB returns used root disk space in GB.

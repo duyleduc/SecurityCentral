@@ -8,19 +8,17 @@ import (
 	"os"
 	"runtime"
 	"strings"
-	"syscall"
 )
 
 // SystemInfo contains static hardware and OS information collected once at
-// startup or install time. These values rarely change during the agent's
-// lifetime.
+// startup or install time.
 type SystemInfo struct {
-	Kernel     string   `json:"kernel"`              // e.g. "5.15.0-91-generic"
-	CPUCores   int      `json:"cpuCores"`            // logical cores
-	CPUModel   string   `json:"cpuModel,omitempty"`  // e.g. "Intel(R) Xeon(R) CPU @ 2.20GHz"
-	TotalRAMMB int64    `json:"totalRamMb"`          // total physical RAM in MB
-	TotalDiskGB int64   `json:"totalDiskGb"`         // total root filesystem in GB
-	IPAddresses []string `json:"ipAddresses"`        // non-loopback IPv4 addresses
+	Kernel      string   `json:"kernel"`
+	CPUCores    int      `json:"cpuCores"`
+	CPUModel    string   `json:"cpuModel,omitempty"`
+	TotalRAMMB  int64    `json:"totalRamMb"`
+	TotalDiskGB int64    `json:"totalDiskGb"`
+	IPAddresses []string `json:"ipAddresses"`
 }
 
 // Collect gathers static system information from the host.
@@ -29,19 +27,19 @@ func Collect() SystemInfo {
 		Kernel:      kernelVersion(),
 		CPUCores:    runtime.NumCPU(),
 		CPUModel:    cpuModel(),
-		TotalRAMMB:  totalRAMMB(),
-		TotalDiskGB: totalDiskGB(),
+		TotalRAMMB:  readMeminfoField("MemTotal") / 1024,
+		TotalDiskGB: diskTotalGB(),
 		IPAddresses: localIPs(),
 	}
 }
 
-// kernelVersion reads the kernel release via uname syscall.
+// kernelVersion reads /proc/sys/kernel/osrelease on Linux.
 func kernelVersion() string {
-	var uname syscall.Utsname
-	if err := syscall.Uname(&uname); err != nil {
+	data, err := os.ReadFile("/proc/sys/kernel/osrelease")
+	if err != nil {
 		return "unknown"
 	}
-	return charsToString(uname.Release[:])
+	return strings.TrimSpace(string(data))
 }
 
 // cpuModel reads the first "model name" from /proc/cpuinfo.
@@ -65,21 +63,6 @@ func cpuModel() string {
 	return ""
 }
 
-// totalRAMMB reads MemTotal from /proc/meminfo.
-func totalRAMMB() int64 {
-	val := readMeminfoField("MemTotal")
-	return val / 1024 // kB → MB
-}
-
-// totalDiskGB returns root filesystem size.
-func totalDiskGB() int64 {
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs("/", &stat); err != nil {
-		return 0
-	}
-	return int64(stat.Blocks) * int64(stat.Bsize) / (1024 * 1024 * 1024)
-}
-
 // localIPs returns non-loopback IPv4 addresses.
 func localIPs() []string {
 	var ips []string
@@ -88,10 +71,7 @@ func localIPs() []string {
 		return ips
 	}
 	for _, iface := range ifaces {
-		if iface.Flags&net.FlagLoopback != 0 {
-			continue
-		}
-		if iface.Flags&net.FlagUp == 0 {
+		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
 			continue
 		}
 		addrs, err := iface.Addrs()
@@ -100,25 +80,10 @@ func localIPs() []string {
 		}
 		for _, addr := range addrs {
 			ipNet, ok := addr.(*net.IPNet)
-			if !ok {
-				continue
-			}
-			if ipNet.IP.To4() != nil {
+			if ok && ipNet.IP.To4() != nil {
 				ips = append(ips, ipNet.IP.String())
 			}
 		}
 	}
 	return ips
-}
-
-// charsToString converts a syscall byte array to string.
-func charsToString(ca []int8) string {
-	s := make([]byte, 0, len(ca))
-	for _, c := range ca {
-		if c == 0 {
-			break
-		}
-		s = append(s, byte(c))
-	}
-	return string(s)
 }
