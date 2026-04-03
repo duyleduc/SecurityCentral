@@ -8,9 +8,20 @@ import {
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useCreateInstallToken } from '../api/hooks';
 
-const API_URL = import.meta.env.VITE_API_URL
-  ? import.meta.env.VITE_API_URL.replace(/\/api\/v1$/, '')
-  : '';
+// Derive the platform API origin for the install command.
+// VITE_API_URL is something like "https://sc-api-xxx.run.app/api/v1" or "/api/v1" (local).
+// We need the origin (e.g. "https://sc-api-xxx.run.app" or "http://localhost:3000").
+function getPlatformOrigin(): string {
+  const raw = import.meta.env.VITE_API_URL ?? '';
+  // If it's a full URL, strip the path
+  if (raw.startsWith('http')) {
+    try { return new URL(raw).origin; } catch { /* fall through */ }
+  }
+  // Local dev: use the API port (Vite proxies /api, but agent needs direct access)
+  return 'http://localhost:3000';
+}
+
+const API_URL = getPlatformOrigin();
 
 interface Props {
   readonly open: boolean;

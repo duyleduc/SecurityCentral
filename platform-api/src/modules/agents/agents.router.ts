@@ -1,3 +1,6 @@
+import path from 'node:path';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Router } from 'express';
 
 import { validate } from '../../middleware/validate.js';
@@ -109,13 +112,29 @@ agentsRouter.get('/version', (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /agents/download — redirect to binary (no auth)
+// GET /agents/download — serve agent binary (no auth)
 // ---------------------------------------------------------------------------
 agentsRouter.get('/download', (req, res) => {
-  const { version, platforms } = agentsService.getLatestVersion();
   const arch = req.query.arch === 'arm64' ? 'arm64' : 'amd64';
-  const url = platforms[`linux/${arch}` as keyof typeof platforms];
-  res.redirect(302, url);
+
+  // In production, redirect to the release CDN
+  const { platforms } = agentsService.getLatestVersion();
+  const releaseUrl = platforms[`linux/${arch}` as keyof typeof platforms];
+
+  // Check for local binary first (dev + self-hosted)
+  // Build with: cd go && GOOS=linux GOARCH=amd64 go build -o bin/sc-agent-linux-amd64 ./cmd/sc-agent/
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const projectRoot = path.resolve(__dirname, '..', '..', '..', '..');
+  const localBinary = path.join(projectRoot, 'go', 'bin', `sc-agent-linux-${arch}`);
+
+  if (fs.existsSync(localBinary)) {
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="sc-agent"`);
+    return res.sendFile(localBinary);
+  }
+
+  // Fallback to release URL
+  res.redirect(302, releaseUrl);
 });
 
 // ---------------------------------------------------------------------------
