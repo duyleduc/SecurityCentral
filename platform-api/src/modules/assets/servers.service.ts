@@ -60,6 +60,9 @@ export async function listServers(orgId: string, query: ListServersQuery) {
 export async function getServerById(orgId: string, serverId: string) {
   const server = await prisma.server.findFirst({
     where: { id: serverId, orgId },
+    include: {
+      project: { select: { id: true, name: true } },
+    },
   });
 
   if (!server) {

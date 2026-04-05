@@ -32,7 +32,7 @@ import DnsIcon from '@mui/icons-material/Dns';
 import HttpsIcon from '@mui/icons-material/Https';
 import {
   useProject, useProjectSummary, useRepositories, useAssignRepoToProject, useRemoveRepoFromProject,
-  useRemoveServerFromProject, useDecommissionServer,
+  useDecommissionServer,
   useDeleteProject, useUpdateProject, useTriggerScan, useProjectScans, useCancelScan, useDeleteScan,
   useClearProjectScanHistory, useMonitoredEndpoints, useAddEndpoints, useRemoveEndpoint,
   useTriggerEndpointCheck, useUpdateEndpoint, useFindings,
@@ -88,6 +88,8 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const repoIds = repos.map((r) => r.id);
   const projectServers = data?.servers ?? [];
   const stats = summary.data?.data as ProjectSummary | undefined;
+  const scansQuery = useProjectScans(projectId, repoIds);
+  const totalScans = ((scansQuery.data?.data ?? []) as Scan[]).length;
 
   const handleDelete = () => {
     if (confirm(`Delete "${data?.name}"? Assets won't be deleted.`)) {
@@ -152,9 +154,9 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         <Tab label="Overview" />
         <Tab label={`Repositories (${repos.length})`} />
         <Tab label={`Servers (${projectServers.length})`} />
-        <Tab label="Scans" />
-        <Tab label="Domains" />
-        <Tab label="Findings" />
+        <Tab label={`Scans (${totalScans})`} />
+        <Tab label={`Domains (${stats?.assets.endpoints ?? 0})`} />
+        <Tab label={`Findings (${stats?.totalOpenFindings ?? 0})`} />
       </Tabs>
 
       {/* Tab content */}
@@ -1197,7 +1199,6 @@ function ServersSection({ projectId, servers }: { projectId: string; servers: Se
   const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Server | null>(null);
-  const removeMutation = useRemoveServerFromProject();
   const decommissionMutation = useDecommissionServer();
 
   return (
@@ -1240,27 +1241,16 @@ function ServersSection({ projectId, servers }: { projectId: string; servers: Se
                   </TableCell>
                   <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{timeAgo(s.lastHeartbeat)}</TableCell>
                   <TableCell>
-                    <Stack direction="row" spacing={0.5}>
-                      <Tooltip title="Remove from project">
-                        <IconButton
-                          size="small"
-                          onClick={() => removeMutation.mutate({ serverId: s.id, projectId })}
-                          disabled={removeMutation.isPending}
-                        >
-                          <LinkOffIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete server (agent will stop)">
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => setDeleteTarget(s)}
-                          disabled={decommissionMutation.isPending}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Stack>
+                    <Tooltip title="Delete server (agent will stop)">
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(s); }}
+                        disabled={decommissionMutation.isPending}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </TableCell>
                 </TableRow>
               ))}

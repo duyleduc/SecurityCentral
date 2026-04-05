@@ -9,6 +9,7 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteIcon from '@mui/icons-material/Delete';
+import FolderIcon from '@mui/icons-material/Folder';
 import MemoryIcon from '@mui/icons-material/Memory';
 import SettingsIcon from '@mui/icons-material/Settings';
 import StorageIcon from '@mui/icons-material/Storage';
@@ -41,10 +42,16 @@ export function ServerDetailPage() {
   const { data: envelope, isLoading } = useServer(id ?? '');
   const { data: versionInfo } = useAgentVersion();
   const decommission = useDecommissionServer();
+  const updateConfig = useUpdateServerConfig();
   const [showUpdate, setShowUpdate] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
 
   const server = envelope?.data as Record<string, unknown> | undefined;
+  const project = server?.project as { id: string; name: string } | null | undefined;
+
+  // Smart back: go to project if server belongs to one, otherwise servers list
+  const backUrl = project ? `/projects/${project.id}` : '/assets/servers';
+  const backLabel = project ? `Back to ${project.name}` : 'Back to Servers';
 
   if (isLoading) {
     return (
@@ -69,12 +76,14 @@ export function ServerDetailPage() {
   const currentVersion = (server.agentVersion as string) ?? '';
   const latestVersion = versionInfo?.version ?? '';
   const hasUpdate = latestVersion !== '' && currentVersion !== '' && currentVersion !== latestVersion;
+  const tags = (server.tags ?? {}) as Record<string, string>;
 
   return (
     <Box>
+      {/* Header bar */}
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Button component={Link} to="/assets/servers" startIcon={<ArrowBackIcon />} size="small">
-          Back to Servers
+        <Button component={Link} to={backUrl} startIcon={<ArrowBackIcon />} size="small">
+          {backLabel}
         </Button>
         <Stack direction="row" spacing={1}>
           <Button
@@ -86,49 +95,30 @@ export function ServerDetailPage() {
           >
             {hasUpdate ? `Update to v${latestVersion}` : 'Update Agent'}
           </Button>
-          <Button
-            variant="outlined"
-            color="error"
-            size="small"
-            startIcon={<DeleteIcon />}
-            onClick={() => setShowDelete(true)}
-          >
+          <Button variant="outlined" color="error" size="small" startIcon={<DeleteIcon />} onClick={() => setShowDelete(true)}>
             Delete
           </Button>
         </Stack>
       </Stack>
 
       <UpdateAgentDialog open={showUpdate} onClose={() => setShowUpdate(false)} server={server} />
-
-      <Dialog open={showDelete} onClose={() => setShowDelete(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Delete Server</DialogTitle>
-        <DialogContent>
-          <Alert severity="error" sx={{ mb: 2 }}>This action cannot be undone.</Alert>
-          <Typography variant="body2">
-            Are you sure you want to delete <strong>{server.hostname as string}</strong>?
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            The agent will stop sending data and disable itself on the next heartbeat.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowDelete(false)}>Cancel</Button>
-          <Button variant="contained" color="error" disabled={decommission.isPending}
-            onClick={() => decommission.mutate(server.id as string, { onSuccess: () => navigate('/assets/servers') })}>
-            {decommission.isPending ? 'Deleting...' : 'Delete Server'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <DeleteServerDialog open={showDelete} onClose={() => setShowDelete(false)} server={server}
+        onConfirm={() => decommission.mutate(server.id as string, { onSuccess: () => navigate(backUrl) })}
+        isPending={decommission.isPending} />
 
       <Card>
         <CardContent sx={{ p: 3 }}>
+          {/* Title + project + tags */}
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
             <FiberManualRecordIcon sx={{ fontSize: 12, color: STATUS_DOT[server.status as string] ?? '#6b7280' }} />
             <Typography variant="h6">{server.hostname as string}</Typography>
-            {Object.entries((server.tags ?? {}) as Record<string, string>).map(([k, v]) => (
-              <Chip key={k} label={`${k}: ${v}`} size="small" variant="outlined" />
-            ))}
+            {project && (
+              <Chip icon={<FolderIcon />} label={project.name} variant="outlined" component={Link} to={`/projects/${project.id}`} clickable />
+            )}
           </Stack>
+
+          {/* Tags */}
+          <TagsSection tags={tags} serverId={server.id as string} updateConfig={updateConfig} />
 
           <ServerInfoGrid server={server} />
           <ServerResourceUsage metadata={server.metadata as Record<string, unknown> | undefined} />
@@ -150,9 +140,7 @@ export function ServerDetailPage() {
               {findings.map((f) => (
                 <Box key={f.id as string} sx={{ py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
                   <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>{f.title as string}</Typography>
-                  <Typography variant="body2" component="span" color="text.secondary" sx={{ ml: 1 }}>
-                    ({f.severity as string})
-                  </Typography>
+                  <Typography variant="body2" component="span" color="text.secondary" sx={{ ml: 1 }}>({f.severity as string})</Typography>
                 </Box>
               ))}
             </>
@@ -167,7 +155,82 @@ export function ServerDetailPage() {
 }
 
 // ===========================================================================
-// Sub-components
+// Tags Section (editable, same pattern as domains)
+// ===========================================================================
+
+function TagsSection({ tags, serverId, updateConfig }: {
+  readonly tags: Record<string, string>;
+  readonly serverId: string;
+  readonly updateConfig: ReturnType<typeof useUpdateServerConfig>;
+}) {
+  const [tagKey, setTagKey] = useState('');
+  const [tagValue, setTagValue] = useState('');
+
+  const handleAdd = useCallback(() => {
+    const k = tagKey.trim();
+    const v = tagValue.trim();
+    if (!k || !v) return;
+    const updated = { ...tags, [k]: v };
+    updateConfig.mutate({ id: serverId, tags: updated });
+    setTagKey('');
+    setTagValue('');
+  }, [tagKey, tagValue, tags, serverId, updateConfig]);
+
+  const handleRemove = useCallback((key: string) => {
+    const updated = { ...tags };
+    delete updated[key];
+    updateConfig.mutate({ id: serverId, tags: updated });
+  }, [tags, serverId, updateConfig]);
+
+  return (
+    <Box sx={{ mb: 2 }}>
+      <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+        {Object.entries(tags).map(([k, v]) => (
+          <Chip key={k} label={`${k}: ${v}`} size="small" variant="outlined" onDelete={() => handleRemove(k)} />
+        ))}
+      </Stack>
+      <Stack direction="row" spacing={1} alignItems="center">
+        <TextField size="small" placeholder="Key" value={tagKey} onChange={(e) => setTagKey(e.target.value)} sx={{ width: 120 }} />
+        <TextField size="small" placeholder="Value" value={tagValue} onChange={(e) => setTagValue(e.target.value)} sx={{ width: 120 }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); } }} />
+        <Button size="small" variant="outlined" onClick={handleAdd} disabled={!tagKey.trim() || !tagValue.trim() || updateConfig.isPending}>
+          Add Tag
+        </Button>
+      </Stack>
+    </Box>
+  );
+}
+
+// ===========================================================================
+// Delete Dialog
+// ===========================================================================
+
+function DeleteServerDialog({ open, onClose, server, onConfirm, isPending }: {
+  readonly open: boolean; readonly onClose: () => void; readonly server: Record<string, unknown>;
+  readonly onConfirm: () => void; readonly isPending: boolean;
+}) {
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Delete Server</DialogTitle>
+      <DialogContent>
+        <Alert severity="error" sx={{ mb: 2 }}>This action cannot be undone.</Alert>
+        <Typography variant="body2">Are you sure you want to delete <strong>{server.hostname as string}</strong>?</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          The agent will stop sending data and disable itself on the next heartbeat.
+        </Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" color="error" disabled={isPending} onClick={onConfirm}>
+          {isPending ? 'Deleting...' : 'Delete Server'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ===========================================================================
+// Info Grid
 // ===========================================================================
 
 function ServerInfoGrid({ server }: { readonly server: Record<string, unknown> }) {
@@ -202,6 +265,10 @@ function ServerInfoGrid({ server }: { readonly server: Record<string, unknown> }
   );
 }
 
+// ===========================================================================
+// Resource Usage
+// ===========================================================================
+
 function UsageBar({ label, percent, used, total, unit }: { label: string; percent: number; used: number; total: number; unit: string }) {
   const color = percent > 90 ? 'error' : percent > 70 ? 'warning' : 'primary';
   return (
@@ -222,7 +289,6 @@ function ServerResourceUsage({ metadata }: { readonly metadata: Record<string, u
   const days = Math.floor(uptime / 86400);
   const hours = Math.floor((uptime % 86400) / 3600);
   const uptimeStr = days > 0 ? `${days}d ${hours}h` : `${hours}h`;
-
   return (
     <>
       <Divider sx={{ my: 2 }} />
@@ -244,6 +310,10 @@ function ServerResourceUsage({ metadata }: { readonly metadata: Record<string, u
     </>
   );
 }
+
+// ===========================================================================
+// System Info
+// ===========================================================================
 
 function ServerSystemInfo({ metadata }: { readonly metadata: Record<string, unknown> | undefined }) {
   const sys = ((metadata ?? {}).systemInfo ?? {}) as Record<string, unknown>;
@@ -279,6 +349,10 @@ function ServerSystemInfo({ metadata }: { readonly metadata: Record<string, unkn
   );
 }
 
+// ===========================================================================
+// Update Agent Dialog
+// ===========================================================================
+
 function UpdateAgentDialog({ open, onClose, server }: { readonly open: boolean; readonly onClose: () => void; readonly server: Record<string, unknown> }) {
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<'simple' | 'manual'>('simple');
@@ -301,9 +375,7 @@ function UpdateAgentDialog({ open, onClose, server }: { readonly open: boolean; 
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
           <Alert severity={isUpToDate ? 'success' : 'warning'}>
-            {isUpToDate
-              ? <>Agent is up to date (<strong>v{currentVersion}</strong>)</>
-              : <>v{currentVersion} → <strong>v{latestVersion}</strong> available</>}
+            {isUpToDate ? <>Agent is up to date (<strong>v{currentVersion}</strong>)</> : <>v{currentVersion} → <strong>v{latestVersion}</strong> available</>}
           </Alert>
           <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 36 }}>
             <Tab label="Simple (recommended)" value="simple" sx={{ minHeight: 36, py: 0 }} />
@@ -324,6 +396,10 @@ function UpdateAgentDialog({ open, onClose, server }: { readonly open: boolean; 
     </Dialog>
   );
 }
+
+// ===========================================================================
+// Agent Settings
+// ===========================================================================
 
 function AgentSettings({ serverId, metadata }: { readonly serverId: string; readonly metadata: Record<string, unknown> | undefined }) {
   const updateConfig = useUpdateServerConfig();

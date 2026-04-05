@@ -47,11 +47,21 @@ export interface Server {
   hostname: string;
   osFamily: string;
   osVersion: string;
-  environment: string;
+  arch: string;
   status: string;
-  lastHeartbeat?: string;
-  agentVersion?: string;
+  tags: Record<string, string>;
+  cloudProvider?: string | null;
+  cloudRegion?: string | null;
+  cloudInstanceId?: string | null;
+  agentId?: string | null;
+  agentVersion?: string | null;
+  lastHeartbeat?: string | null;
+  lastScanAt?: string | null;
+  projectId?: string | null;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
   openFindingCount?: number;
+  project?: { id: string; name: string } | null;
 }
 
 export interface Certificate {

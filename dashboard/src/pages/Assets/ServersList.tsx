@@ -28,7 +28,7 @@ export function ServersList() {
   const [page, setPage] = useState(1);
   const servers = useServers({ page, per_page: 25 });
   const { data: versionInfo } = useAgentVersion();
-  const data = servers.data?.data as (Server & { openFindingCount?: number; agentVersion?: string })[] | undefined;
+  const data = servers.data?.data as Server[] | undefined;
   const meta = servers.data?.meta;
 
   const latestVersion = versionInfo?.version ?? '';
@@ -88,12 +88,12 @@ export function ServersList() {
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-                      {Object.entries(((s as unknown as Record<string, unknown>).tags ?? {}) as Record<string, string>).map(([k, v]) => (
+                      {Object.entries(s.tags ?? {}).map(([k, v]) => (
                         <Chip key={k} label={`${k}: ${v}`} size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
                       ))}
                     </Stack>
                   </TableCell>
-                  <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{relativeTime(s.lastHeartbeat)}</TableCell>
+                  <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{relativeTime(s.lastHeartbeat ?? undefined)}</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 500 }}>{s.openFindingCount ?? 0}</TableCell>
                 </TableRow>
               );
