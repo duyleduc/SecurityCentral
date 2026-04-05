@@ -16,6 +16,11 @@ go/bin/
 /sc-agent
 /sc-certmon
 
+# Signing keys (NEVER commit private or public keys)
+agent-signing.key
+agent-signing.pub
+*.signing.key
+
 # Environment
 .env
 .env.*

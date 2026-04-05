@@ -4,7 +4,12 @@ ROOT_DIR := $(shell pwd)
 PID_DIR := $(ROOT_DIR)/.pids
 LOG_DIR := $(ROOT_DIR)/logs
 AGENT_VERSION := $(shell cat $(ROOT_DIR)/AGENT_VERSION | tr -d '[:space:]')
+AGENT_SIGNING_KEY ?=
+AGENT_SIGNING_PUBKEY_HEX ?=
 GO_LDFLAGS := -s -w -X main.version=$(AGENT_VERSION)
+ifdef AGENT_SIGNING_PUBKEY_HEX
+GO_LDFLAGS += -X github.com/security-central/security-central/internal/signing.publicKeyHex=$(AGENT_SIGNING_PUBKEY_HEX)
+endif
 API_PID := $(PID_DIR)/api.pid
 WORKER_PID := $(PID_DIR)/worker.pid
 DASHBOARD_PID := $(PID_DIR)/dashboard.pid
@@ -167,6 +172,22 @@ build-agent:
 	cd go && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="$(GO_LDFLAGS)" -o bin/sc-agent-linux-amd64 ./cmd/sc-agent
 	cd go && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="$(GO_LDFLAGS)" -o bin/sc-agent-linux-arm64 ./cmd/sc-agent
 	@echo "Built: go/bin/sc-agent-linux-amd64, go/bin/sc-agent-linux-arm64 (v$(AGENT_VERSION))"
+ifdef AGENT_SIGNING_PUBKEY_HEX
+	@echo "  Signing public key embedded: $(AGENT_SIGNING_PUBKEY_HEX)"
+endif
+
+build-sc-sign:
+	cd tools/sc-sign && go build -o ../../go/bin/sc-sign .
+
+sign-agent: build-sc-sign
+ifndef AGENT_SIGNING_KEY
+	@echo "AGENT_SIGNING_KEY not set — skipping signing"
+else
+	@echo "Signing binaries with Ed25519..."
+	go/bin/sc-sign sign -key $(AGENT_SIGNING_KEY) go/bin/sc-agent-linux-amd64
+	go/bin/sc-sign sign -key $(AGENT_SIGNING_KEY) go/bin/sc-agent-linux-arm64
+	@echo "Signed: go/bin/sc-agent-linux-{amd64,arm64}.{sha256,sig}"
+endif
 
 # ── Docker ───────────────────────────────────────────────────
 
