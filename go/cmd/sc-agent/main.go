@@ -83,8 +83,14 @@ func runAgent(_ *cobra.Command, _ []string) error {
 	cmdCh := make(chan agent.Command, 10)
 	configCh := make(chan agent.ConfigUpdate, 1)
 
+	// TLS paths for cert renewal (nil in dev mode)
+	var tlsPaths *agent.TLSPaths
+	if mtlsClient != nil {
+		tlsPaths = &agent.TLSPaths{Cert: cfg.TLS.Cert, Key: cfg.TLS.Key}
+	}
+
 	// Start heartbeat loop (uses default 60s interval, adjusted by server config)
-	go agent.HeartbeatLoop(httpClient, cfg.APIURL, cfg.AgentID, version, cmdCh, configCh)
+	go agent.HeartbeatLoop(httpClient, cfg.APIURL, cfg.AgentID, version, tlsPaths, cmdCh, configCh)
 
 	// Define scan function
 	scanFn := func() error {

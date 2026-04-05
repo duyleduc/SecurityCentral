@@ -136,7 +136,21 @@ export async function processHeartbeat(agentId: string, input: HeartbeatInput) {
   };
   const agentConfig = (metadata.config as Record<string, unknown>) ?? defaultConfig;
 
-  return { commands, config: agentConfig };
+  // Handle certificate renewal request
+  let renewedCert: string | undefined;
+  if (input.renewCert && input.csr) {
+    try {
+      const agentId = server.agentId ?? server.id;
+      const { certPem } = signCsr({ csrPem: input.csr, agentId });
+      renewedCert = certPem;
+    } catch (err) {
+      // Log but don't fail the heartbeat
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`Failed to renew cert for agent ${server.agentId}: ${message}`);
+    }
+  }
+
+  return { commands, config: agentConfig, ...(renewedCert ? { renewedCert } : {}) };
 }
 
 // ---------------------------------------------------------------------------

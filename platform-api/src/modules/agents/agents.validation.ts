@@ -44,6 +44,8 @@ export const HeartbeatSchema = z.object({
       ipAddresses: z.array(z.string()).optional(),
     })
     .optional(),
+  renewCert: z.boolean().optional(),
+  csr: z.string().optional(),
 });
 
 export type HeartbeatInput = z.infer<typeof HeartbeatSchema>;

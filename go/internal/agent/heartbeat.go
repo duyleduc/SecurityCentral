@@ -14,6 +14,12 @@ import (
 	"github.com/security-central/security-central/internal/sysinfo"
 )
 
+// TLSPaths holds cert/key file paths for expiry checking and renewal.
+type TLSPaths struct {
+	Cert string
+	Key  string
+}
+
 // HeartbeatPayload is sent to the platform every heartbeat interval.
 type HeartbeatPayload struct {
 	AgentVersion  string                 `json:"agentVersion"`
@@ -22,13 +28,16 @@ type HeartbeatPayload struct {
 	OSVersion     string                 `json:"osVersion,omitempty"`
 	ResourceUsage *sysinfo.ResourceUsage `json:"resourceUsage,omitempty"`
 	SystemInfo    *sysinfo.SystemInfo    `json:"systemInfo,omitempty"`
+	RenewCert     bool                   `json:"renewCert,omitempty"`
+	CSR           string                 `json:"csr,omitempty"`
 }
 
 // HeartbeatResponse from the platform.
 type HeartbeatResponse struct {
 	Data struct {
-		Commands []Command     `json:"commands"`
-		Config   *ServerConfig `json:"config,omitempty"`
+		Commands    []Command     `json:"commands"`
+		Config      *ServerConfig `json:"config,omitempty"`
+		RenewedCert string        `json:"renewedCert,omitempty"`
 	} `json:"data"`
 }
 
@@ -44,18 +53,17 @@ type ConfigUpdate struct {
 }
 
 // HeartbeatLoop sends heartbeats at the configured interval, processes
-// commands, and delivers server-managed config updates.
+// commands, delivers server-managed config updates, and handles cert renewal.
 //
-// The interval starts at defaultInterval (60s) and is dynamically adjusted
-// when the server sends a different heartbeat.interval in the config.
-func HeartbeatLoop(client *http.Client, baseURL, agentID, version string, cmdCh chan<- Command, configCh chan<- ConfigUpdate) {
+// tlsPaths may be nil (dev mode) — cert renewal is skipped in that case.
+func HeartbeatLoop(client *http.Client, baseURL, agentID, version string, tlsPaths *TLSPaths, cmdCh chan<- Command, configCh chan<- ConfigUpdate) {
 	sys := sysinfo.Collect()
 	interval := 60 * time.Second
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
-		newInterval := sendHeartbeat(client, baseURL, agentID, version, &sys, cmdCh, configCh)
+		newInterval := sendHeartbeat(client, baseURL, agentID, version, &sys, tlsPaths, cmdCh, configCh)
 		if newInterval > 0 && newInterval != interval {
 			slog.Info("heartbeat interval changed", "old", interval, "new", newInterval)
 			interval = newInterval
@@ -67,7 +75,7 @@ func HeartbeatLoop(client *http.Client, baseURL, agentID, version string, cmdCh 
 
 // sendHeartbeat sends one heartbeat and returns the new heartbeat interval
 // if the server config changed it (0 means no change).
-func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *sysinfo.SystemInfo, cmdCh chan<- Command, configCh chan<- ConfigUpdate) time.Duration {
+func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *sysinfo.SystemInfo, tlsPaths *TLSPaths, cmdCh chan<- Command, configCh chan<- ConfigUpdate) time.Duration {
 	hostname, _ := os.Hostname()
 	osFamily, osVersion := detectOS()
 	resources := sysinfo.MeasureResources()
@@ -79,6 +87,14 @@ func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *s
 		OSVersion:     osVersion,
 		ResourceUsage: &resources,
 		SystemInfo:    sys,
+	}
+
+	// Check cert expiry and request renewal if needed
+	if tlsPaths != nil {
+		if renewal := CheckCertExpiry(tlsPaths.Cert, tlsPaths.Key); renewal != nil {
+			payload.RenewCert = true
+			payload.CSR = renewal.CSR
+		}
 	}
 
 	body, err := json.Marshal(payload)
@@ -134,9 +150,17 @@ func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *s
 		select {
 		case configCh <- ConfigUpdate{Config: *hbResp.Data.Config}:
 		default:
-			// Non-blocking — scheduler will pick up next time
 		}
 		newHeartbeatInterval = hbResp.Data.Config.HeartbeatInterval()
+	}
+
+	// Handle cert renewal response
+	if hbResp.Data.RenewedCert != "" && tlsPaths != nil {
+		if err := WriteRenewedCert(tlsPaths.Cert, hbResp.Data.RenewedCert); err != nil {
+			slog.Error("failed to write renewed certificate", "error", err)
+		} else {
+			slog.Info("certificate renewed successfully — will be used on next mTLS connection")
+		}
 	}
 
 	return newHeartbeatInterval
