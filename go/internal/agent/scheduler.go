@@ -16,10 +16,11 @@ type Scheduler struct {
 	scanFn    ScanFunc
 	cmdCh     <-chan Command
 	configCh  <-chan ConfigUpdate
+	metrics   *Metrics
 }
 
 // NewScheduler creates a scan scheduler with default config.
-func NewScheduler(scanFn ScanFunc, cmdCh <-chan Command, configCh <-chan ConfigUpdate) *Scheduler {
+func NewScheduler(scanFn ScanFunc, cmdCh <-chan Command, configCh <-chan ConfigUpdate, metrics *Metrics) *Scheduler {
 	defaults := DefaultServerConfig()
 	return &Scheduler{
 		interval:  defaults.ScanInterval(),
@@ -27,6 +28,7 @@ func NewScheduler(scanFn ScanFunc, cmdCh <-chan Command, configCh <-chan ConfigU
 		scanFn:    scanFn,
 		cmdCh:     cmdCh,
 		configCh:  configCh,
+		metrics:   metrics,
 	}
 }
 
@@ -73,7 +75,13 @@ func (s *Scheduler) executeScan() {
 	start := time.Now()
 	if err := s.scanFn(); err != nil {
 		slog.Error("scan failed", "error", err, "duration_ms", time.Since(start).Milliseconds())
+		if s.metrics != nil {
+			s.metrics.RecordScanFailure(err.Error())
+		}
 		return
 	}
 	slog.Info("scan completed", "duration_ms", time.Since(start).Milliseconds())
+	if s.metrics != nil {
+		s.metrics.RecordScanSuccess()
+	}
 }

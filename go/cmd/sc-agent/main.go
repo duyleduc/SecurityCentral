@@ -92,8 +92,21 @@ func runAgent(_ *cobra.Command, _ []string) error {
 	// Start rollback watchdog (no-op if no update marker exists)
 	confirmUpdate := agent.StartRollbackWatchdog()
 
+	// Metrics tracking
+	metrics := agent.NewMetrics(version)
+
 	// Start heartbeat loop (uses default 60s interval, adjusted by server config)
-	go agent.HeartbeatLoop(httpClient, cfg.APIURL, cfg.AgentID, version, tlsPaths, cmdCh, configCh, confirmUpdate)
+	go agent.HeartbeatLoop(agent.HeartbeatOpts{
+		Client:         httpClient,
+		BaseURL:        cfg.APIURL,
+		AgentID:        cfg.AgentID,
+		Version:        version,
+		TLSPaths:       tlsPaths,
+		CmdCh:          cmdCh,
+		ConfigCh:       configCh,
+		OnFirstSuccess: confirmUpdate,
+		Metrics:        metrics,
+	})
 
 	// Define scan function
 	scanFn := func() error {
@@ -105,7 +118,7 @@ func runAgent(_ *cobra.Command, _ []string) error {
 	}
 
 	// Start scan scheduler (uses default config, updated by heartbeat)
-	scheduler := agent.NewScheduler(scanFn, cmdCh, configCh)
+	scheduler := agent.NewScheduler(scanFn, cmdCh, configCh, metrics)
 	go scheduler.Run()
 
 	// Wait for shutdown signal
@@ -207,6 +220,19 @@ var uninstallCmd = &cobra.Command{
 }
 
 // ---------------------------------------------------------------------------
+// Status command — diagnostic health check
+// ---------------------------------------------------------------------------
+
+var statusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Show agent health and diagnostic information",
+	Run: func(_ *cobra.Command, _ []string) {
+		report := agent.CollectStatus(version, configPath)
+		agent.PrintStatus(report)
+	},
+}
+
+// ---------------------------------------------------------------------------
 // Version command — print current version
 // ---------------------------------------------------------------------------
 
@@ -235,7 +261,7 @@ func init() {
 
 	uninstallCmd.Flags().BoolVar(&uninstallConfirm, "confirm", false, "Actually uninstall (without this flag, only shows what would be removed)")
 
-	rootCmd.AddCommand(runCmd, installCmd, updateCmd, uninstallCmd, versionCmd)
+	rootCmd.AddCommand(runCmd, installCmd, updateCmd, uninstallCmd, statusCmd, versionCmd)
 }
 
 func main() {
