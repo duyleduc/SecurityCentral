@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client';
 
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errors.js';
-import type { ListServersQuery } from './servers.validation.js';
+import type { ListServersQuery, UpdateServerConfigInput } from './servers.validation.js';
 
 // ---------------------------------------------------------------------------
 // List servers
@@ -90,6 +90,50 @@ export async function getServerById(orgId: string, serverId: string) {
   );
 
   return { ...server, recentFindings, findingCounts: severityCounts };
+}
+
+// ---------------------------------------------------------------------------
+// Update server config (scan settings, heartbeat interval, environment)
+// ---------------------------------------------------------------------------
+
+export async function updateServerConfig(orgId: string, serverId: string, input: UpdateServerConfigInput) {
+  const server = await prisma.server.findFirst({
+    where: { id: serverId, orgId },
+  });
+
+  if (!server) {
+    throw new AppError('RESOURCE_NOT_FOUND', `Server ${serverId} not found`);
+  }
+
+  const metadata = server.metadata as Record<string, unknown>;
+  const currentConfig = (metadata.config ?? {}) as Record<string, unknown>;
+
+  // Merge input into existing config (partial update)
+  const updatedConfig = { ...currentConfig };
+
+  if (input.scan) {
+    const currentScan = (currentConfig.scan ?? {}) as Record<string, unknown>;
+    updatedConfig.scan = { ...currentScan, ...input.scan };
+  }
+  if (input.heartbeat) {
+    const currentHeartbeat = (currentConfig.heartbeat ?? {}) as Record<string, unknown>;
+    updatedConfig.heartbeat = { ...currentHeartbeat, ...input.heartbeat };
+  }
+  if (input.environment !== undefined) {
+    updatedConfig.environment = input.environment;
+  }
+
+  metadata.config = updatedConfig;
+
+  const updated = await prisma.server.update({
+    where: { id: serverId },
+    data: {
+      environment: input.environment ?? server.environment,
+      metadata: metadata as object,
+    },
+  });
+
+  return { ...updated, config: updatedConfig };
 }
 
 // ---------------------------------------------------------------------------

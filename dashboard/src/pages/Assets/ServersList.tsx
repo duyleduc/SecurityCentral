@@ -1,16 +1,18 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Box, Typography, Card, CardContent, Grid, Chip, Stack, Divider,
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
   Paper, Skeleton, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, IconButton, Tabs, Tab, Alert,
+  Checkbox, FormControlLabel, Select, MenuItem, FormControl, InputLabel,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import SettingsIcon from '@mui/icons-material/Settings';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
-import { useServers, useServer, useAgentVersion, type Server } from '../../api/hooks.js';
+import { useServers, useServer, useAgentVersion, useUpdateServerConfig, type Server } from '../../api/hooks.js';
 import { Pagination } from './RepositoriesList.js';
 import { SEVERITY_COLORS } from '../../theme/theme.js';
 import AddServerDialog from '../../components/AddServerDialog.js';
@@ -323,8 +325,92 @@ function ServerDetail({ id, onBack }: { id: string; onBack: () => void }) {
               ))}
             </>
           )}
+
+          <Divider sx={{ my: 2 }} />
+          <AgentSettings serverId={server.id as string} metadata={server.metadata as Record<string, unknown> | undefined} />
         </CardContent>
       </Card>
+    </Box>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Agent Settings (inline in server detail)
+// ---------------------------------------------------------------------------
+
+function AgentSettings({ serverId, metadata }: { readonly serverId: string; readonly metadata: Record<string, unknown> | undefined }) {
+  const updateConfig = useUpdateServerConfig();
+  const config = (metadata?.config ?? {}) as Record<string, unknown>;
+  const scan = (config.scan ?? {}) as Record<string, unknown>;
+
+  const [packages, setPackages] = useState((scan.packages as boolean) ?? true);
+  const [compliance, setCompliance] = useState((scan.compliance as boolean) ?? true);
+  const [scanInterval, setScanInterval] = useState((scan.interval as string) ?? '6h');
+  const [dirty, setDirty] = useState(false);
+
+  // Reset when server changes
+  useEffect(() => {
+    setPackages((scan.packages as boolean) ?? true);
+    setCompliance((scan.compliance as boolean) ?? true);
+    setScanInterval((scan.interval as string) ?? '6h');
+    setDirty(false);
+  }, [serverId]);
+
+  const handleSave = useCallback(() => {
+    updateConfig.mutate(
+      { id: serverId, scan: { packages, compliance, interval: scanInterval } },
+      { onSuccess: () => setDirty(false) },
+    );
+  }, [serverId, packages, compliance, scanInterval, updateConfig]);
+
+  return (
+    <Box>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+        <SettingsIcon fontSize="small" color="action" />
+        <Typography variant="subtitle2">Agent Settings</Typography>
+      </Stack>
+
+      <Stack spacing={1.5} sx={{ ml: 0.5 }}>
+        <FormControlLabel
+          control={<Checkbox checked={packages} onChange={(e) => { setPackages(e.target.checked); setDirty(true); }} size="small" />}
+          label="Scan OS packages for vulnerabilities"
+        />
+        <FormControlLabel
+          control={<Checkbox checked={compliance} onChange={(e) => { setCompliance(e.target.checked); setDirty(true); }} size="small" />}
+          label="Run CIS compliance benchmarks"
+        />
+
+        <FormControl size="small" sx={{ maxWidth: 200 }}>
+          <InputLabel>Scan Interval</InputLabel>
+          <Select value={scanInterval} label="Scan Interval" onChange={(e) => { setScanInterval(e.target.value); setDirty(true); }}>
+            <MenuItem value="1h">Every hour</MenuItem>
+            <MenuItem value="6h">Every 6 hours</MenuItem>
+            <MenuItem value="12h">Every 12 hours</MenuItem>
+            <MenuItem value="24h">Every 24 hours</MenuItem>
+          </Select>
+        </FormControl>
+
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleSave}
+            disabled={!dirty || updateConfig.isPending}
+          >
+            {updateConfig.isPending ? 'Saving...' : 'Save Settings'}
+          </Button>
+          {updateConfig.isSuccess && !dirty && (
+            <Typography variant="caption" color="success.main">
+              Saved. Changes apply within 60 seconds.
+            </Typography>
+          )}
+          {updateConfig.isError && (
+            <Typography variant="caption" color="error.main">
+              Failed to save. Try again.
+            </Typography>
+          )}
+        </Stack>
+      </Stack>
     </Box>
   );
 }

@@ -235,6 +235,23 @@ export function useServer(id: string) {
   });
 }
 
+export interface ServerConfigInput {
+  scan?: { packages?: boolean; compliance?: boolean; interval?: string; onStartup?: boolean };
+  heartbeat?: { interval?: string };
+  environment?: string;
+}
+
+export function useUpdateServerConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...config }: ServerConfigInput & { id: string }) =>
+      apiPatch<Server>(`/servers/${id}/config`, config),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['servers'] });
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Certificates
 // ---------------------------------------------------------------------------

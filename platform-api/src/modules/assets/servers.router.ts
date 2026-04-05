@@ -5,7 +5,7 @@ import { successEnvelope } from '../../middleware/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/rbac.js';
 import * as serversService from './servers.service.js';
-import { ListServersSchema, ServerIdSchema } from './servers.validation.js';
+import { ListServersSchema, ServerIdSchema, UpdateServerConfigSchema } from './servers.validation.js';
 
 export const serversRouter = Router();
 
@@ -35,6 +35,21 @@ serversRouter.get(
     try {
       const server = await serversService.getServerById(req.auth!.orgId, req.params.id);
       res.json(successEnvelope(server));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// PATCH /servers/:id/config — update agent scan/heartbeat settings
+serversRouter.patch(
+  '/:id/config',
+  requirePermission('manage_integrations'),
+  validate({ params: ServerIdSchema, body: UpdateServerConfigSchema }),
+  async (req, res, next) => {
+    try {
+      const result = await serversService.updateServerConfig(req.auth!.orgId, req.params.id, req.body);
+      res.json(successEnvelope(result));
     } catch (err) {
       next(err);
     }
