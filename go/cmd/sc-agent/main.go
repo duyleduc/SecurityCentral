@@ -129,6 +129,8 @@ var installCmd = &cobra.Command{
 // Update command — download latest binary, replace self, restart
 // ---------------------------------------------------------------------------
 
+var updateForce bool
+
 var updateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Update the agent binary to the latest version",
@@ -141,17 +143,7 @@ var updateCmd = &cobra.Command{
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 
-		// Build download URL from the API
-		apiURL := strings.TrimRight(cfg.APIURL, "/")
-		arch := "amd64"
-		if strings.Contains(strings.ToLower(os.Getenv("GOARCH")), "arm") {
-			arch = "arm64"
-		}
-		// Use runtime arch detection
-		if runtimeArch := runtime.GOARCH; runtimeArch == "arm64" {
-			arch = "arm64"
-		}
-		downloadURL := fmt.Sprintf("%s/v1/agents/download?arch=%s", apiURL, arch)
+		arch := runtime.GOARCH
 
 		// Create HTTP client (mTLS or plain)
 		var httpClient *http.Client
@@ -165,8 +157,8 @@ var updateCmd = &cobra.Command{
 			httpClient = &http.Client{Timeout: 60 * time.Second}
 		}
 
-		updater := agent.NewSelfUpdater(httpClient, nil)
-		if err := updater.Update(downloadURL); err != nil {
+		updater := agent.NewSelfUpdater(httpClient, cfg.APIURL)
+		if err := updater.Update(arch, version, updateForce); err != nil {
 			return fmt.Errorf("update failed: %w", err)
 		}
 
@@ -199,6 +191,8 @@ func init() {
 	installCmd.Flags().StringVar(&installToken, "token", "", "One-time install token from dashboard")
 	installCmd.Flags().StringVar(&installAPIURL, "api-url", "https://api.securitycentral.io", "Platform API URL")
 	_ = installCmd.MarkFlagRequired("token")
+
+	updateCmd.Flags().BoolVar(&updateForce, "force", false, "Force update even if already on latest or downgrading")
 
 	rootCmd.AddCommand(runCmd, installCmd, updateCmd, versionCmd)
 }

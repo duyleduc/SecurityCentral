@@ -22,6 +22,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/security-central/security-central/internal/signing"
 	"github.com/security-central/security-central/internal/sysinfo"
 )
 
@@ -85,6 +86,19 @@ type enrollResponse struct {
 
 func Run(token, apiURL string) error {
 	slog.Info("starting agent installation")
+
+	// 0. Self-verification: check if this binary's signature is valid
+	result := signing.VerifySelf(apiURL, runtime.GOARCH)
+	switch {
+	case result.Verified:
+		slog.Info("binary signature verified")
+	case result.Skipped:
+		slog.Warn("binary verification skipped", "reason", result.Reason)
+	default:
+		slog.Error("WARNING: binary signature verification FAILED", "reason", result.Reason)
+		fmt.Fprintf(os.Stderr, "\n  WARNING: This binary could not be verified. It may have been tampered with.\n")
+		fmt.Fprintf(os.Stderr, "  Reason: %s\n\n", result.Reason)
+	}
 
 	// 1. Detect platform
 	hostname, err := os.Hostname()

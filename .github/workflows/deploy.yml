@@ -33,12 +33,15 @@ jobs:
           AGENT_SIGNING_PUBKEY_HEX: ${{ secrets.AGENT_SIGNING_PUBKEY_HEX }}
 
       - name: Sign agent binaries
-        if: ${{ secrets.AGENT_SIGNING_KEY != '' }}
+        if: env.SIGNING_KEY_CONTENT != ''
+        # Secret: AGENT_SIGNING_KEY_PEM — PEM-encoded Ed25519 private key
         run: |
-          echo "${{ secrets.AGENT_SIGNING_KEY }}" > /tmp/agent-signing.key
+          echo "${SIGNING_KEY_CONTENT}" > /tmp/agent-signing.key
+          chmod 600 /tmp/agent-signing.key
           make sign-agent
           rm -f /tmp/agent-signing.key
         env:
+          SIGNING_KEY_CONTENT: ${{ secrets.AGENT_SIGNING_KEY_PEM }}
           AGENT_SIGNING_KEY: /tmp/agent-signing.key
 
       - name: Authenticate to GCP
@@ -51,13 +54,12 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Upload agent binaries to Cloud Storage
-        if: ${{ secrets.DASHBOARD_BUCKET != '' }}
         run: |
-          gsutil cp go/bin/sc-agent-linux-amd64 gs://${{ secrets.DASHBOARD_BUCKET }}/agent/v$(cat AGENT_VERSION | tr -d '[:space:]')/
-          gsutil cp go/bin/sc-agent-linux-arm64 gs://${{ secrets.DASHBOARD_BUCKET }}/agent/v$(cat AGENT_VERSION | tr -d '[:space:]')/
-          # Upload signatures if they exist
+          VERSION=$(cat AGENT_VERSION | tr -d '[:space:]')
+          gsutil cp go/bin/sc-agent-linux-amd64 gs://${DASHBOARD_BUCKET}/agent/v${VERSION}/
+          gsutil cp go/bin/sc-agent-linux-arm64 gs://${DASHBOARD_BUCKET}/agent/v${VERSION}/
           for f in go/bin/sc-agent-linux-*.sha256 go/bin/sc-agent-linux-*.sig; do
-            [ -f "$f" ] && gsutil cp "$f" gs://${{ secrets.DASHBOARD_BUCKET }}/agent/v$(cat AGENT_VERSION | tr -d '[:space:]')/
+            [ -f "$f" ] && gsutil cp "$f" gs://${DASHBOARD_BUCKET}/agent/v${VERSION}/
           done
 
   # ── Build & Push Docker Images ────────────────────
