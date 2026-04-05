@@ -13,6 +13,53 @@ env:
   DASHBOARD_BUCKET: ${{ secrets.DASHBOARD_BUCKET }}
 
 jobs:
+  # ── Build & Sign Agent Binaries ──────────────────
+  build-agent:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build agent binaries
+        run: make build-agent
+        env:
+          AGENT_SIGNING_PUBKEY_HEX: ${{ secrets.AGENT_SIGNING_PUBKEY_HEX }}
+
+      - name: Sign agent binaries
+        if: ${{ secrets.AGENT_SIGNING_KEY != '' }}
+        run: |
+          echo "${{ secrets.AGENT_SIGNING_KEY }}" > /tmp/agent-signing.key
+          make sign-agent
+          rm -f /tmp/agent-signing.key
+        env:
+          AGENT_SIGNING_KEY: /tmp/agent-signing.key
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Upload agent binaries to Cloud Storage
+        if: ${{ secrets.DASHBOARD_BUCKET != '' }}
+        run: |
+          gsutil cp go/bin/sc-agent-linux-amd64 gs://${{ secrets.DASHBOARD_BUCKET }}/agent/v$(cat AGENT_VERSION | tr -d '[:space:]')/
+          gsutil cp go/bin/sc-agent-linux-arm64 gs://${{ secrets.DASHBOARD_BUCKET }}/agent/v$(cat AGENT_VERSION | tr -d '[:space:]')/
+          # Upload signatures if they exist
+          for f in go/bin/sc-agent-linux-*.sha256 go/bin/sc-agent-linux-*.sig; do
+            [ -f "$f" ] && gsutil cp "$f" gs://${{ secrets.DASHBOARD_BUCKET }}/agent/v$(cat AGENT_VERSION | tr -d '[:space:]')/
+          done
+
   # ── Build & Push Docker Images ────────────────────
   build:
     runs-on: ubuntu-latest

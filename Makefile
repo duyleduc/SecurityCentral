@@ -167,13 +167,15 @@ build-go:
 	cd go && CGO_ENABLED=0 go build -ldflags="$(GO_LDFLAGS)" -o bin/sc-agent ./cmd/sc-agent
 	cd go && CGO_ENABLED=0 go build -ldflags="$(GO_LDFLAGS)" -o bin/sc-certmon ./cmd/sc-certmon
 
-build-agent:
+build-agent: _compile-agent sign-agent
+	@echo "Done: sc-agent v$(AGENT_VERSION)"
+
+_compile-agent:
 	@echo "Building sc-agent v$(AGENT_VERSION) for linux/amd64 + linux/arm64..."
 	cd go && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="$(GO_LDFLAGS)" -o bin/sc-agent-linux-amd64 ./cmd/sc-agent
 	cd go && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="$(GO_LDFLAGS)" -o bin/sc-agent-linux-arm64 ./cmd/sc-agent
-	@echo "Built: go/bin/sc-agent-linux-amd64, go/bin/sc-agent-linux-arm64 (v$(AGENT_VERSION))"
 ifdef AGENT_SIGNING_PUBKEY_HEX
-	@echo "  Signing public key embedded: $(AGENT_SIGNING_PUBKEY_HEX)"
+	@echo "  Signing public key embedded"
 endif
 
 build-sc-sign:

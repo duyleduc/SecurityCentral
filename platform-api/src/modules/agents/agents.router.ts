@@ -1,6 +1,5 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { Router } from 'express';
 
 import { validate } from '../../middleware/validate.js';
@@ -15,6 +14,13 @@ import { ingestFindings } from './findings-ingestion.service.js';
 import * as vulndbService from './vulndb.service.js';
 
 export const agentsRouter = Router();
+
+// Resolve local agent binary directory.
+// process.cwd() is the platform-api/ dir when started via Makefile/tsx.
+// The project root is one level up.
+function agentBinDir(): string {
+  return path.join(process.cwd(), '..', 'go', 'bin');
+}
 
 // ---------------------------------------------------------------------------
 // POST /agents/register — authenticated via API key (pre-mTLS)
@@ -116,25 +122,47 @@ agentsRouter.get('/version', (_req, res) => {
 // ---------------------------------------------------------------------------
 agentsRouter.get('/download', (req, res) => {
   const arch = req.query.arch === 'arm64' ? 'arm64' : 'amd64';
-
-  // In production, redirect to the release CDN
-  const { platforms } = agentsService.getLatestVersion();
-  const releaseUrl = platforms[`linux/${arch}` as keyof typeof platforms];
-
-  // Check for local binary first (dev + self-hosted)
-  // Build with: cd go && GOOS=linux GOARCH=amd64 go build -o bin/sc-agent-linux-amd64 ./cmd/sc-agent/
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  const projectRoot = path.resolve(__dirname, '..', '..', '..', '..');
-  const localBinary = path.join(projectRoot, 'go', 'bin', `sc-agent-linux-${arch}`);
+  const localBinary = path.join(agentBinDir(), `sc-agent-linux-${arch}`);
 
   if (fs.existsSync(localBinary)) {
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="sc-agent"`);
+    res.setHeader('Content-Disposition', 'attachment; filename="sc-agent"');
     return res.sendFile(localBinary);
   }
 
-  // Fallback to release URL
-  res.redirect(302, releaseUrl);
+  const { platforms } = agentsService.getLatestVersion();
+  res.redirect(302, platforms[`linux/${arch}` as keyof typeof platforms]);
+});
+
+// ---------------------------------------------------------------------------
+// GET /agents/download/checksum — serve .sha256 file (no auth)
+// ---------------------------------------------------------------------------
+agentsRouter.get('/download/checksum', (req, res) => {
+  const arch = req.query.arch === 'arm64' ? 'arm64' : 'amd64';
+  const checksumFile = path.join(agentBinDir(), `sc-agent-linux-${arch}.sha256`);
+
+  if (fs.existsSync(checksumFile)) {
+    res.setHeader('Content-Type', 'text/plain');
+    return res.sendFile(checksumFile);
+  }
+
+  res.status(404).json({ data: null, meta: null, errors: [{ code: 'NOT_FOUND', message: 'Checksum not available (unsigned build)', status: 404 }] });
+});
+
+// ---------------------------------------------------------------------------
+// GET /agents/download/signature — serve .sig file (no auth)
+// ---------------------------------------------------------------------------
+agentsRouter.get('/download/signature', (req, res) => {
+  const arch = req.query.arch === 'arm64' ? 'arm64' : 'amd64';
+  const sigFile = path.join(agentBinDir(), `sc-agent-linux-${arch}.sig`);
+
+  if (fs.existsSync(sigFile)) {
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="sc-agent.sig"`);
+    return res.sendFile(sigFile);
+  }
+
+  res.status(404).json({ data: null, meta: null, errors: [{ code: 'NOT_FOUND', message: 'Signature not available (unsigned build)', status: 404 }] });
 });
 
 // ---------------------------------------------------------------------------
