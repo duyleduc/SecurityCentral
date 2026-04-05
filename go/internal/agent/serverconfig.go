@@ -8,7 +8,6 @@ import "time"
 type ServerConfig struct {
 	Scan      ScanConfig      `json:"scan"`
 	Heartbeat HeartbeatConfig `json:"heartbeat"`
-	Environment string        `json:"environment"`
 }
 
 // ScanConfig controls what and when to scan.
@@ -36,7 +35,6 @@ func DefaultServerConfig() ServerConfig {
 		Heartbeat: HeartbeatConfig{
 			Interval: "60s",
 		},
-		Environment: "production",
 	}
 }
 

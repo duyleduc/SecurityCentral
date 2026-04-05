@@ -15,6 +15,7 @@ export const ServerIdSchema = z.object({
 });
 
 export const UpdateServerConfigSchema = z.object({
+  tags: z.record(z.string()).optional(),
   scan: z.object({
     packages: z.boolean().optional(),
     compliance: z.boolean().optional(),
@@ -24,7 +25,6 @@ export const UpdateServerConfigSchema = z.object({
   heartbeat: z.object({
     interval: z.enum(['30s', '60s', '120s', '300s']).optional(),
   }).optional(),
-  environment: z.enum(['production', 'staging', 'development']).optional(),
 });
 
 export type UpdateServerConfigInput = z.infer<typeof UpdateServerConfigSchema>;

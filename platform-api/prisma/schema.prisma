@@ -169,7 +169,7 @@ model Server {
   cloudProvider   String?   @map("cloud_provider") // aws | gcp | azure | null (on-prem)
   cloudRegion     String?   @map("cloud_region")
   cloudInstanceId String?   @map("cloud_instance_id")
-  environment     String    @default("production") // production | staging | development
+  tags            Json      @default("{}") @db.JsonB // key-value pairs, e.g. {"env":"prod","team":"infra"}
   agentVersion    String?   @map("agent_version")
   lastHeartbeat   DateTime? @map("last_heartbeat") @db.Timestamptz()
   lastScanAt      DateTime? @map("last_scan_at") @db.Timestamptz()

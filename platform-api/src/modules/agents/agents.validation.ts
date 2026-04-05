@@ -8,7 +8,6 @@ export const RegisterAgentSchema = z.object({
   cloudProvider: z.string().optional(), // aws | gcp | azure | null
   cloudRegion: z.string().optional(),
   cloudInstanceId: z.string().optional(),
-  environment: z.enum(['production', 'staging', 'development']).default('production'),
   csr: z.string().min(1),              // PEM-encoded PKCS#10 CSR
 });
 

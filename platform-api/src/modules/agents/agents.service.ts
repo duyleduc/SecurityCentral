@@ -52,7 +52,6 @@ export async function registerAgent(orgId: string, input: RegisterAgentInput) {
       cloudProvider: input.cloudProvider ?? null,
       cloudRegion: input.cloudRegion ?? null,
       cloudInstanceId: input.cloudInstanceId ?? null,
-      environment: input.environment,
       status: 'active',
       lastHeartbeat: new Date(),
     },
@@ -137,11 +136,10 @@ export async function processHeartbeat(agentId: string, input: HeartbeatInput) {
     });
   }
 
-  // Return server-managed config (scan settings, heartbeat interval, environment)
+  // Return server-managed config (scan settings, heartbeat interval)
   const defaultConfig = {
     scan: { packages: true, compliance: true, interval: '6h', onStartup: true },
     heartbeat: { interval: '60s' },
-    environment: server.environment ?? 'production',
   };
   const agentConfig = (metadata.config as Record<string, unknown>) ?? defaultConfig;
 

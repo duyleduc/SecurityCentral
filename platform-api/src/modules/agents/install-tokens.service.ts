@@ -34,8 +34,8 @@ export async function createInstallToken(
   const expiresAt = new Date(Date.now() + input.expiresInMinutes * 60 * 1000);
 
   const config: Record<string, unknown> = {
-    environment: input.environment,
-    ...(input.labels ? { labels: input.labels } : {}),
+    ...(input.projectId ? { projectId: input.projectId } : {}),
+    tags: input.tags ?? {},
     scan: input.scan ?? { packages: true, compliance: true, interval: '6h', onStartup: true },
   };
 
@@ -90,13 +90,15 @@ export async function redeemInstallToken(input: EnrollAgentInput): Promise<Enrol
   }
 
   const config = token.config as Record<string, unknown>;
-  const environment = (config.environment as string) ?? 'production';
+  const tags = (config.tags ?? {}) as Record<string, string>;
+  const projectId = (config.projectId as string) ?? null;
 
   // Transaction: create server + mark token used
   const result = await prisma.$transaction(async (tx) => {
     const server = await tx.server.create({
       data: {
         orgId: token.orgId,
+        projectId,
         hostname: input.hostname,
         osFamily: input.osFamily,
         osVersion: input.osVersion,
@@ -104,7 +106,7 @@ export async function redeemInstallToken(input: EnrollAgentInput): Promise<Enrol
         cloudProvider: input.cloudProvider ?? null,
         cloudRegion: input.cloudRegion ?? null,
         cloudInstanceId: input.cloudInstanceId ?? null,
-        environment,
+        tags: tags as object,
         status: 'active',
         lastHeartbeat: new Date(),
         metadata: { config } as object,

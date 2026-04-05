@@ -236,9 +236,9 @@ export function useServer(id: string) {
 }
 
 export interface ServerConfigInput {
+  tags?: Record<string, string>;
   scan?: { packages?: boolean; compliance?: boolean; interval?: string; onStartup?: boolean };
   heartbeat?: { interval?: string };
-  environment?: string;
 }
 
 export function useUpdateServerConfig() {
@@ -541,8 +541,8 @@ export interface InstallToken {
 export function useCreateInstallToken() {
   return useMutation({
     mutationFn: (data: {
-      environment?: string;
-      labels?: Record<string, string>;
+      projectId?: string;
+      tags?: Record<string, string>;
       scan?: { packages?: boolean; compliance?: boolean; interval?: string; onStartup?: boolean };
       expiresInMinutes?: number;
     }) => apiPost<InstallToken>('/install-tokens', data),

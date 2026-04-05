@@ -13,7 +13,11 @@ export async function listServers(orgId: string, query: ListServersQuery) {
   const skip = (page - 1) * per_page;
 
   const where: Prisma.ServerWhereInput = { orgId };
-  if (query.status) where.status = query.status;
+  if (query.status) {
+    where.status = query.status;
+  } else {
+    where.status = { not: 'decommissioned' };
+  }
   if (query.environment) where.environment = query.environment;
   if (query.os_family) where.osFamily = query.os_family;
 
@@ -93,7 +97,7 @@ export async function getServerById(orgId: string, serverId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Update server config (scan settings, heartbeat interval, environment)
+// Update server config (tags, scan settings, heartbeat interval)
 // ---------------------------------------------------------------------------
 
 export async function updateServerConfig(orgId: string, serverId: string, input: UpdateServerConfigInput) {
@@ -108,7 +112,6 @@ export async function updateServerConfig(orgId: string, serverId: string, input:
   const metadata = server.metadata as Record<string, unknown>;
   const currentConfig = (metadata.config ?? {}) as Record<string, unknown>;
 
-  // Merge input into existing config (partial update)
   const updatedConfig = { ...currentConfig };
 
   if (input.scan) {
@@ -119,16 +122,13 @@ export async function updateServerConfig(orgId: string, serverId: string, input:
     const currentHeartbeat = (currentConfig.heartbeat ?? {}) as Record<string, unknown>;
     updatedConfig.heartbeat = { ...currentHeartbeat, ...input.heartbeat };
   }
-  if (input.environment !== undefined) {
-    updatedConfig.environment = input.environment;
-  }
 
   metadata.config = updatedConfig;
 
   const updated = await prisma.server.update({
     where: { id: serverId },
     data: {
-      environment: input.environment ?? server.environment,
+      ...(input.tags !== undefined ? { tags: input.tags as object } : {}),
       metadata: metadata as object,
     },
   });
@@ -151,6 +151,6 @@ export async function decommissionServer(orgId: string, serverId: string) {
 
   return prisma.server.update({
     where: { id: serverId },
-    data: { status: 'decommissioned' },
+    data: { status: 'decommissioned', projectId: null },
   });
 }

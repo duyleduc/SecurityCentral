@@ -5,8 +5,8 @@ import { z } from 'zod';
 // ---------------------------------------------------------------------------
 
 export const CreateInstallTokenSchema = z.object({
-  environment: z.enum(['production', 'staging', 'development']).default('production'),
-  labels: z.record(z.string()).optional(),
+  projectId: z.string().uuid().optional(),
+  tags: z.record(z.string()).optional(),
   scan: z
     .object({
       packages: z.boolean().default(true),

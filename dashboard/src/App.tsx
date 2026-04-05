@@ -23,6 +23,7 @@ import { ProjectsPage } from './pages/Projects/index.js';
 import { ScanDetailPage } from './pages/Scans/ScanDetail.js';
 import { EndpointDetailPage } from './pages/Monitoring/EndpointDetail.js';
 import { CertificateDetailPage } from './pages/Assets/CertificateDetail.js';
+import { ServerDetailPage } from './pages/Assets/ServerDetailPage.js';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,6 +60,7 @@ export function App() {
               <Route path="/findings/:id" element={<ProtectedLayout><FindingsPage /></ProtectedLayout>} />
               <Route path="/assets/repositories" element={<ProtectedLayout><AssetsPage tab="repositories" /></ProtectedLayout>} />
               <Route path="/assets/servers" element={<ProtectedLayout><AssetsPage tab="servers" /></ProtectedLayout>} />
+              <Route path="/assets/servers/:id" element={<ProtectedLayout><ServerDetailPage /></ProtectedLayout>} />
               <Route path="/assets/certificates" element={<ProtectedLayout><AssetsPage tab="certificates" /></ProtectedLayout>} />
               <Route path="/assets/certificates/:id" element={<ProtectedLayout><CertificateDetailPage /></ProtectedLayout>} />
               <Route path="/monitoring/domains" element={<ProtectedLayout><DomainMonitoringPage /></ProtectedLayout>} />
