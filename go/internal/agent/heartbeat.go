@@ -56,14 +56,22 @@ type ConfigUpdate struct {
 // commands, delivers server-managed config updates, and handles cert renewal.
 //
 // tlsPaths may be nil (dev mode) — cert renewal is skipped in that case.
-func HeartbeatLoop(client *http.Client, baseURL, agentID, version string, tlsPaths *TLSPaths, cmdCh chan<- Command, configCh chan<- ConfigUpdate) {
+// onFirstSuccess is called once after the first successful heartbeat (used for
+// rollback watchdog confirmation). May be nil.
+func HeartbeatLoop(client *http.Client, baseURL, agentID, version string, tlsPaths *TLSPaths, cmdCh chan<- Command, configCh chan<- ConfigUpdate, onFirstSuccess func()) {
 	sys := sysinfo.Collect()
 	interval := 60 * time.Second
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+	firstSuccess := true
 
 	for {
-		newInterval := sendHeartbeat(client, baseURL, agentID, version, &sys, tlsPaths, cmdCh, configCh)
+		ok, newInterval := sendHeartbeat(client, baseURL, agentID, version, &sys, tlsPaths, cmdCh, configCh)
+
+		if ok && firstSuccess && onFirstSuccess != nil {
+			onFirstSuccess()
+			firstSuccess = false
+		}
 		if newInterval > 0 && newInterval != interval {
 			slog.Info("heartbeat interval changed", "old", interval, "new", newInterval)
 			interval = newInterval
@@ -73,9 +81,9 @@ func HeartbeatLoop(client *http.Client, baseURL, agentID, version string, tlsPat
 	}
 }
 
-// sendHeartbeat sends one heartbeat and returns the new heartbeat interval
-// if the server config changed it (0 means no change).
-func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *sysinfo.SystemInfo, tlsPaths *TLSPaths, cmdCh chan<- Command, configCh chan<- ConfigUpdate) time.Duration {
+// sendHeartbeat sends one heartbeat. Returns (success, newInterval).
+// newInterval is 0 if unchanged.
+func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *sysinfo.SystemInfo, tlsPaths *TLSPaths, cmdCh chan<- Command, configCh chan<- ConfigUpdate) (bool, time.Duration) {
 	hostname, _ := os.Hostname()
 	osFamily, osVersion := detectOS()
 	resources := sysinfo.MeasureResources()
@@ -100,7 +108,7 @@ func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *s
 	body, err := json.Marshal(payload)
 	if err != nil {
 		slog.Error("failed to marshal heartbeat", "error", err)
-		return 0
+		return false, 0
 	}
 
 	url := fmt.Sprintf("%s/v1/agents/heartbeat", baseURL)
@@ -108,7 +116,7 @@ func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *s
 	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		slog.Error("failed to create heartbeat request", "error", err)
-		return 0
+		return false, 0
 	}
 	req.Header.Set("Content-Type", "application/json")
 
@@ -119,19 +127,19 @@ func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *s
 	resp, err := client.Do(req)
 	if err != nil {
 		slog.Warn("heartbeat failed", "error", err)
-		return 0
+		return false, 0
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		slog.Warn("heartbeat returned non-200", "status", resp.StatusCode)
-		return 0
+		return false, 0
 	}
 
 	var hbResp HeartbeatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&hbResp); err != nil {
 		slog.Warn("failed to decode heartbeat response", "error", err)
-		return 0
+		return false, 0
 	}
 
 	// Forward commands to scheduler
@@ -163,7 +171,7 @@ func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *s
 		}
 	}
 
-	return newHeartbeatInterval
+	return true, newHeartbeatInterval
 }
 
 func detectOS() (family, version string) {

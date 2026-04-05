@@ -99,6 +99,11 @@ func (u *SelfUpdater) Update(arch, currentVersion string, force bool) error {
 		return fmt.Errorf("replace binary: %w", err)
 	}
 
+	// Write rollback marker before restarting
+	if err := WriteUpdateMarker(currentBin, backupPath, ""); err != nil {
+		slog.Warn("failed to write update marker (rollback won't work)", "error", err)
+	}
+
 	slog.Info("agent binary updated, restarting service")
 	return restartService()
 }

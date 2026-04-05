@@ -89,8 +89,11 @@ func runAgent(_ *cobra.Command, _ []string) error {
 		tlsPaths = &agent.TLSPaths{Cert: cfg.TLS.Cert, Key: cfg.TLS.Key}
 	}
 
+	// Start rollback watchdog (no-op if no update marker exists)
+	confirmUpdate := agent.StartRollbackWatchdog()
+
 	// Start heartbeat loop (uses default 60s interval, adjusted by server config)
-	go agent.HeartbeatLoop(httpClient, cfg.APIURL, cfg.AgentID, version, tlsPaths, cmdCh, configCh)
+	go agent.HeartbeatLoop(httpClient, cfg.APIURL, cfg.AgentID, version, tlsPaths, cmdCh, configCh, confirmUpdate)
 
 	// Define scan function
 	scanFn := func() error {
@@ -175,6 +178,35 @@ var updateCmd = &cobra.Command{
 }
 
 // ---------------------------------------------------------------------------
+// Uninstall command — remove agent from server
+// ---------------------------------------------------------------------------
+
+var uninstallConfirm bool
+
+var uninstallCmd = &cobra.Command{
+	Use:   "uninstall",
+	Short: "Remove the agent from this server",
+	RunE: func(_ *cobra.Command, _ []string) error {
+		if !uninstallConfirm {
+			install.DryRunUninstall()
+			return nil
+		}
+
+		logging.Init("sc-agent-uninstall")
+
+		// Try to load config for agent ID (best-effort for decommission notification)
+		var apiURL, agentID string
+		cfg, err := config.LoadAgentConfig(configPath)
+		if err == nil {
+			apiURL = cfg.APIURL
+			agentID = cfg.AgentID
+		}
+
+		return install.Uninstall(apiURL, agentID)
+	},
+}
+
+// ---------------------------------------------------------------------------
 // Version command — print current version
 // ---------------------------------------------------------------------------
 
@@ -201,7 +233,9 @@ func init() {
 
 	updateCmd.Flags().BoolVar(&updateForce, "force", false, "Force update even if already on latest or downgrading")
 
-	rootCmd.AddCommand(runCmd, installCmd, updateCmd, versionCmd)
+	uninstallCmd.Flags().BoolVar(&uninstallConfirm, "confirm", false, "Actually uninstall (without this flag, only shows what would be removed)")
+
+	rootCmd.AddCommand(runCmd, installCmd, updateCmd, uninstallCmd, versionCmd)
 }
 
 func main() {
