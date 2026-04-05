@@ -770,6 +770,17 @@ export function useRemoveRepoFromProject() {
   });
 }
 
+export function useDecommissionServer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (serverId: string) => apiDelete(`/servers/${serverId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['servers'] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+}
+
 export function useAssignServerToProject() {
   const qc = useQueryClient();
   return useMutation({

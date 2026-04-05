@@ -32,7 +32,7 @@ import DnsIcon from '@mui/icons-material/Dns';
 import HttpsIcon from '@mui/icons-material/Https';
 import {
   useProject, useProjectSummary, useRepositories, useServers, useAssignRepoToProject, useRemoveRepoFromProject,
-  useAssignServerToProject, useRemoveServerFromProject,
+  useAssignServerToProject, useRemoveServerFromProject, useDecommissionServer,
   useDeleteProject, useUpdateProject, useTriggerScan, useProjectScans, useCancelScan, useDeleteScan,
   useClearProjectScanHistory, useMonitoredEndpoints, useAddEndpoints, useRemoveEndpoint,
   useTriggerEndpointCheck, useUpdateEndpoint, useFindings,
@@ -1196,7 +1196,9 @@ const STATUS_DOT: Record<string, string> = { active: '#16a34a', inactive: '#dc26
 function ServersSection({ projectId, servers }: { projectId: string; servers: Server[] }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Server | null>(null);
   const removeMutation = useRemoveServerFromProject();
+  const decommissionMutation = useDecommissionServer();
 
   return (
     <Box>
@@ -1228,7 +1230,7 @@ function ServersSection({ projectId, servers }: { projectId: string; servers: Se
                 <TableCell>OS</TableCell>
                 <TableCell>Agent</TableCell>
                 <TableCell>Last Heartbeat</TableCell>
-                <TableCell sx={{ width: 50 }} />
+                <TableCell sx={{ width: 90 }} />
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1244,15 +1246,27 @@ function ServersSection({ projectId, servers }: { projectId: string; servers: Se
                   </TableCell>
                   <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{timeAgo(s.lastHeartbeat)}</TableCell>
                   <TableCell>
-                    <Tooltip title="Remove from project">
-                      <IconButton
-                        size="small"
-                        onClick={() => removeMutation.mutate({ serverId: s.id, projectId })}
-                        disabled={removeMutation.isPending}
-                      >
-                        <LinkOffIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                    <Stack direction="row" spacing={0.5}>
+                      <Tooltip title="Remove from project">
+                        <IconButton
+                          size="small"
+                          onClick={() => removeMutation.mutate({ serverId: s.id, projectId })}
+                          disabled={removeMutation.isPending}
+                        >
+                          <LinkOffIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete server (agent will stop)">
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => setDeleteTarget(s)}
+                          disabled={decommissionMutation.isPending}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1263,6 +1277,37 @@ function ServersSection({ projectId, servers }: { projectId: string; servers: Se
 
       <AddServerDialog open={showAdd} onClose={() => setShowAdd(false)} />
       <AssignServerDialog open={showAssign} projectId={projectId} existingServerIds={new Set(servers.map((s) => s.id))} onClose={() => setShowAssign(false)} />
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete Server</DialogTitle>
+        <DialogContent>
+          <Alert severity="error" sx={{ mb: 2 }}>This action cannot be undone.</Alert>
+          <Typography variant="body2">
+            Are you sure you want to delete <strong>{deleteTarget?.hostname}</strong>?
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            The agent on this server will stop sending data and disable itself on the next heartbeat (within 60 seconds).
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={decommissionMutation.isPending}
+            onClick={() => {
+              if (deleteTarget) {
+                decommissionMutation.mutate(deleteTarget.id, {
+                  onSuccess: () => setDeleteTarget(null),
+                });
+              }
+            }}
+          >
+            {decommissionMutation.isPending ? 'Deleting...' : 'Delete Server'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

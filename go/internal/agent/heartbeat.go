@@ -163,9 +163,20 @@ func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *s
 		return false, 0, "decode error: " + err.Error()
 	}
 
-	// Forward commands to scheduler
+	// Process commands
 	for _, cmd := range hbResp.Data.Commands {
 		slog.Info("received command", "type", cmd.Type)
+
+		// Shutdown is handled immediately — don't forward to scheduler
+		if cmd.Type == "shutdown" {
+			reason := "unknown"
+			if r, ok := cmd.Payload["reason"].(string); ok {
+				reason = r
+			}
+			Shutdown(reason)
+			return false, 0, "" // unreachable, but satisfies compiler
+		}
+
 		select {
 		case cmdCh <- cmd:
 		default:

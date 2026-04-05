@@ -80,7 +80,7 @@ export async function registerAgent(orgId: string, input: RegisterAgentInput) {
 // ---------------------------------------------------------------------------
 
 interface HeartbeatCommand {
-  readonly type: 'scan_now' | 'update_agent' | 'update_vulndb';
+  readonly type: 'scan_now' | 'update_agent' | 'update_vulndb' | 'shutdown';
   readonly payload?: Record<string, unknown>;
 }
 
@@ -116,6 +116,15 @@ export async function processHeartbeat(agentId: string, input: HeartbeatInput) {
 
   // Build commands (only user-initiated actions, never auto-update)
   const commands: HeartbeatCommand[] = [];
+
+  // If server is decommissioned, tell agent to shut down
+  if (server.status === 'decommissioned') {
+    commands.push({
+      type: 'shutdown',
+      payload: { reason: 'Server decommissioned by administrator' },
+    });
+    return { commands };
+  }
 
   // Check for pending scans
   const pendingScan = await prisma.scan.findFirst({
