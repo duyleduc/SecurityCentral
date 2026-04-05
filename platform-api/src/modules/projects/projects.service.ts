@@ -263,6 +263,13 @@ export async function assignServerToProject(orgId: string, serverId: string, pro
   return prisma.server.update({ where: { id: serverId }, data: { projectId } });
 }
 
+export async function removeServerFromProject(orgId: string, serverId: string) {
+  const server = await prisma.server.findFirst({ where: { id: serverId, orgId } });
+  if (!server) throw new AppError('RESOURCE_NOT_FOUND', 'Server not found');
+
+  return prisma.server.update({ where: { id: serverId }, data: { projectId: null } });
+}
+
 export async function assignEndpointToProject(orgId: string, endpointId: string, projectId: string) {
   const endpoint = await prisma.monitoredEndpoint.findFirst({ where: { id: endpointId, orgId } });
   if (!endpoint) throw new AppError('RESOURCE_NOT_FOUND', 'Endpoint not found');

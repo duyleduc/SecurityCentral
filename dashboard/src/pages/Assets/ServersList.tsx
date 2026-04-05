@@ -6,7 +6,6 @@ import {
   TextField, IconButton, Tabs, Tab, Alert,
   Checkbox, FormControlLabel, Select, MenuItem, FormControl, InputLabel,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import MemoryIcon from '@mui/icons-material/Memory';
@@ -18,7 +17,6 @@ import LinearProgress from '@mui/material/LinearProgress';
 import { useServers, useServer, useAgentVersion, useUpdateServerConfig, type Server } from '../../api/hooks.js';
 import { Pagination } from './RepositoriesList.js';
 import { SEVERITY_COLORS } from '../../theme/theme.js';
-import AddServerDialog from '../../components/AddServerDialog.js';
 
 const ENV_COLOR: Record<string, 'error' | 'warning' | 'primary'> = {
   production: 'error',
@@ -42,7 +40,6 @@ function relativeTime(dateStr?: string): string {
 export function ServersList() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [showAddDialog, setShowAddDialog] = useState(false);
   const servers = useServers({ page, per_page: 25 });
   const { data: versionInfo } = useAgentVersion();
   const data = servers.data?.data as (Server & { openFindingCount?: number; agentVersion?: string })[] | undefined;
@@ -55,13 +52,7 @@ export function ServersList() {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Typography variant="h5">Servers</Typography>
-        <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setShowAddDialog(true)}>
-          Add Server
-        </Button>
-      </Stack>
-      <AddServerDialog open={showAddDialog} onClose={() => setShowAddDialog(false)} />
+      <Typography variant="h5" sx={{ mb: 2 }}>Servers</Typography>
       {outdatedCount > 0 && latestVersion && (
         <Alert severity="warning" icon={<SystemUpdateAltIcon fontSize="small" />} sx={{ mb: 2 }}>
           {outdatedCount} {outdatedCount === 1 ? 'server has' : 'servers have'} an outdated agent.

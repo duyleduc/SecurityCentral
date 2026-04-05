@@ -769,3 +769,27 @@ export function useRemoveRepoFromProject() {
     },
   });
 }
+
+export function useAssignServerToProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ serverId, projectId }: { serverId: string; projectId: string }) =>
+      apiPost(`/projects/${projectId}/servers/${serverId}`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      qc.invalidateQueries({ queryKey: ['servers'] });
+    },
+  });
+}
+
+export function useRemoveServerFromProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ serverId, projectId }: { serverId: string; projectId: string }) =>
+      apiDelete(`/projects/${projectId}/servers/${serverId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      qc.invalidateQueries({ queryKey: ['servers'] });
+    },
+  });
+}

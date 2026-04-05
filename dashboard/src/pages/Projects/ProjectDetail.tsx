@@ -31,13 +31,15 @@ import EditIcon from '@mui/icons-material/Edit';
 import DnsIcon from '@mui/icons-material/Dns';
 import HttpsIcon from '@mui/icons-material/Https';
 import {
-  useProject, useProjectSummary, useRepositories, useAssignRepoToProject, useRemoveRepoFromProject,
+  useProject, useProjectSummary, useRepositories, useServers, useAssignRepoToProject, useRemoveRepoFromProject,
+  useAssignServerToProject, useRemoveServerFromProject,
   useDeleteProject, useUpdateProject, useTriggerScan, useProjectScans, useCancelScan, useDeleteScan,
   useClearProjectScanHistory, useMonitoredEndpoints, useAddEndpoints, useRemoveEndpoint,
   useTriggerEndpointCheck, useUpdateEndpoint, useFindings,
-  type Repository, type Project, type Scan, type ScanTypeOption, type MonitoredEndpoint,
+  type Repository, type Project, type Server, type Scan, type ScanTypeOption, type MonitoredEndpoint,
   type ProjectSummary, type Finding,
 } from '../../api/hooks.js';
+import AddServerDialog from '../../components/AddServerDialog.js';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { SEVERITY_COLORS, STATUS_COLORS } from '../../theme/theme.js';
 
@@ -81,9 +83,10 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [addRepoOpen, setAddRepoOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
-  const data = project.data?.data as (Project & { repositories: Repository[] }) | undefined;
+  const data = project.data?.data as (Project & { repositories: Repository[]; servers: Server[] }) | undefined;
   const repos = data?.repositories ?? [];
   const repoIds = repos.map((r) => r.id);
+  const projectServers = data?.servers ?? [];
   const stats = summary.data?.data as ProjectSummary | undefined;
 
   const handleDelete = () => {
@@ -148,6 +151,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
         <Tab label="Overview" />
         <Tab label={`Repositories (${repos.length})`} />
+        <Tab label={`Servers (${projectServers.length})`} />
         <Tab label="Scans" />
         <Tab label="Domains" />
         <Tab label="Findings" />
@@ -173,9 +177,10 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           )}
         </Box>
       )}
-      {tab === 2 && <ScanHistory projectId={projectId} repoIds={repoIds} />}
-      {tab === 3 && <DomainMonitoringSection projectId={projectId} />}
-      {tab === 4 && <FindingsTab projectId={projectId} />}
+      {tab === 2 && <ServersSection projectId={projectId} servers={projectServers} />}
+      {tab === 3 && <ScanHistory projectId={projectId} repoIds={repoIds} />}
+      {tab === 4 && <DomainMonitoringSection projectId={projectId} />}
+      {tab === 5 && <FindingsTab projectId={projectId} />}
 
       <AddRepoDialog
         open={addRepoOpen}
@@ -1177,6 +1182,163 @@ function EditTagsDialog({ endpoint, onClose }: { endpoint: MonitoredEndpoint; on
         <Button variant="contained" onClick={handleSave} disabled={updateMutation.isPending}>
           {updateMutation.isPending ? 'Saving...' : 'Save'}
         </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ===========================================================================
+// Servers Section
+// ===========================================================================
+
+const STATUS_DOT: Record<string, string> = { active: '#16a34a', inactive: '#dc2626', decommissioned: '#6b7280' };
+
+function ServersSection({ projectId, servers }: { projectId: string; servers: Server[] }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [showAssign, setShowAssign] = useState(false);
+  const removeMutation = useRemoveServerFromProject();
+
+  return (
+    <Box>
+      <Stack direction="row" justifyContent="flex-end" spacing={1} sx={{ mb: 2 }}>
+        <Button variant="outlined" size="small" startIcon={<DnsIcon />} onClick={() => setShowAssign(true)}>
+          Assign Existing Server
+        </Button>
+        <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setShowAdd(true)}>
+          Add New Server
+        </Button>
+      </Stack>
+
+      {servers.length === 0 ? (
+        <Paper sx={{ py: 5, textAlign: 'center' }}>
+          <DnsIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
+          <Typography color="text.secondary" sx={{ mb: 2 }}>No servers in this project yet</Typography>
+          <Stack direction="row" spacing={1} justifyContent="center">
+            <Button variant="outlined" startIcon={<DnsIcon />} onClick={() => setShowAssign(true)}>Assign Existing</Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setShowAdd(true)}>Add New Server</Button>
+          </Stack>
+        </Paper>
+      ) : (
+        <TableContainer component={Paper}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Status</TableCell>
+                <TableCell>Hostname</TableCell>
+                <TableCell>OS</TableCell>
+                <TableCell>Agent</TableCell>
+                <TableCell>Last Heartbeat</TableCell>
+                <TableCell sx={{ width: 50 }} />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {servers.map((s) => (
+                <TableRow key={s.id} hover>
+                  <TableCell>
+                    <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: STATUS_DOT[s.status] ?? '#6b7280' }} />
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 500 }}>{s.hostname}</TableCell>
+                  <TableCell sx={{ color: 'text.secondary' }}>{s.osFamily} {s.osVersion}</TableCell>
+                  <TableCell>
+                    <Chip label={s.agentVersion ?? '—'} size="small" variant="outlined" />
+                  </TableCell>
+                  <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{timeAgo(s.lastHeartbeat)}</TableCell>
+                  <TableCell>
+                    <Tooltip title="Remove from project">
+                      <IconButton
+                        size="small"
+                        onClick={() => removeMutation.mutate({ serverId: s.id, projectId })}
+                        disabled={removeMutation.isPending}
+                      >
+                        <LinkOffIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+
+      <AddServerDialog open={showAdd} onClose={() => setShowAdd(false)} />
+      <AssignServerDialog open={showAssign} projectId={projectId} existingServerIds={new Set(servers.map((s) => s.id))} onClose={() => setShowAssign(false)} />
+    </Box>
+  );
+}
+
+// ===========================================================================
+// Assign Existing Server Dialog
+// ===========================================================================
+
+function AssignServerDialog({ open, projectId, existingServerIds, onClose }: {
+  readonly open: boolean;
+  readonly projectId: string;
+  readonly existingServerIds: Set<string>;
+  readonly onClose: () => void;
+}) {
+  const allServers = useServers({ page: 1, per_page: 200 });
+  const assignMutation = useAssignServerToProject();
+  const [search, setSearch] = useState('');
+
+  const data = (allServers.data?.data ?? []) as Server[];
+  const available = data.filter((s) => !existingServerIds.has(s.id));
+  const filtered = search
+    ? available.filter((s) => s.hostname.toLowerCase().includes(search.toLowerCase()))
+    : available;
+
+  const handleAssign = (serverId: string) => {
+    assignMutation.mutate({ serverId, projectId }, {
+      onSuccess: () => {
+        onClose();
+        setSearch('');
+      },
+    });
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Assign Server to Project</DialogTitle>
+      <DialogContent>
+        <TextField
+          fullWidth
+          placeholder="Search servers..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          size="small"
+          sx={{ mt: 1, mb: 2 }}
+          InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
+        />
+
+        {allServers.isLoading ? (
+          <CircularProgress size={24} />
+        ) : filtered.length === 0 ? (
+          <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
+            {available.length === 0 ? 'All servers are already in this project' : 'No matching servers'}
+          </Typography>
+        ) : (
+          <Table size="small">
+            <TableBody>
+              {filtered.map((s) => (
+                <TableRow key={s.id} hover sx={{ cursor: 'pointer' }} onClick={() => handleAssign(s.id)}>
+                  <TableCell>
+                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: STATUS_DOT[s.status] ?? '#6b7280' }} />
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 500 }}>{s.hostname}</TableCell>
+                  <TableCell sx={{ color: 'text.secondary', fontSize: '0.8rem' }}>{s.osFamily} {s.osVersion}</TableCell>
+                  <TableCell align="right">
+                    <Button size="small" variant="outlined" disabled={assignMutation.isPending}>
+                      Assign
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
       </DialogActions>
     </Dialog>
   );

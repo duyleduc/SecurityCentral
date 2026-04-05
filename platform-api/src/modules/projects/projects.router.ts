@@ -99,6 +99,14 @@ projectsRouter.post('/:id/servers/:serverId', requirePermission('manage_integrat
   } catch (err) { next(err); }
 });
 
+// DELETE /projects/:id/servers/:serverId — remove server from project
+projectsRouter.delete('/:id/servers/:serverId', requirePermission('manage_integrations'), async (req, res, next) => {
+  try {
+    await projectsService.removeServerFromProject(req.auth!.orgId, req.params.serverId);
+    res.json(successEnvelope({ removed: true }));
+  } catch (err) { next(err); }
+});
+
 // POST /repositories/:repoId/assign — assign repo to project (alternative: from repo side)
 projectsRouter.post('/assign-repo/:repoId', requirePermission('manage_integrations'), validate({ body: AssignAssetSchema }), async (req, res, next) => {
   try {
