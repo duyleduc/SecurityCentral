@@ -9,9 +9,12 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import MemoryIcon from '@mui/icons-material/Memory';
 import SettingsIcon from '@mui/icons-material/Settings';
+import StorageIcon from '@mui/icons-material/Storage';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import LinearProgress from '@mui/material/LinearProgress';
 import { useServers, useServer, useAgentVersion, useUpdateServerConfig, type Server } from '../../api/hooks.js';
 import { Pagination } from './RepositoriesList.js';
 import { SEVERITY_COLORS } from '../../theme/theme.js';
@@ -280,23 +283,11 @@ function ServerDetail({ id, onBack }: { id: string; onBack: () => void }) {
             <Chip label={server.environment as string} size="small" color={ENV_COLOR[server.environment as string] ?? 'default'} />
           </Stack>
 
-          <Grid container spacing={2} sx={{ mb: 2.5 }}>
-            {([
-              ['OS', `${server.osFamily as string} ${server.osVersion as string}`],
-              ['Arch', server.arch as string],
-              ['Agent', (server.agentVersion as string) ?? '-'],
-              ['Cloud', (server.cloudProvider as string) ?? 'On-prem'],
-              ['Region', (server.cloudRegion as string) ?? '-'],
-              ['Heartbeat', relativeTime(server.lastHeartbeat as string)],
-            ] as const).map(([label, value]) => (
-              <Grid size={4} key={label}>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
-                  {label}
-                </Typography>
-                <Typography variant="body2">{value}</Typography>
-              </Grid>
-            ))}
-          </Grid>
+          <ServerInfoGrid server={server} />
+
+          <ServerResourceUsage metadata={server.metadata as Record<string, unknown> | undefined} />
+
+          <ServerSystemInfo metadata={server.metadata as Record<string, unknown> | undefined} />
 
           {Object.keys(counts).length > 0 && (
             <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
@@ -331,6 +322,172 @@ function ServerDetail({ id, onBack }: { id: string; onBack: () => void }) {
         </CardContent>
       </Card>
     </Box>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Server Info Grid
+// ---------------------------------------------------------------------------
+
+function ServerInfoGrid({ server }: { readonly server: Record<string, unknown> }) {
+  const metadata = (server.metadata ?? {}) as Record<string, unknown>;
+  const sysInfo = (metadata.systemInfo ?? {}) as Record<string, unknown>;
+  const cloud = (server.cloudProvider as string) ?? '';
+
+  const status = server.status as string;
+  const lastScan = server.lastScanAt as string | null;
+  const createdAt = server.createdAt as string;
+
+  const fields: [string, string][] = [
+    ['Status', status],
+    ['OS', `${server.osFamily as string} ${server.osVersion as string}`],
+    ['Arch', server.arch as string],
+    ['Kernel', (sysInfo.kernel as string) ?? '-'],
+    ['Agent Version', (server.agentVersion as string) ?? '-'],
+    ['Agent ID', (server.agentId as string) ?? '-'],
+    ['Cloud', cloud ? `${cloud.toUpperCase()} — ${(server.cloudRegion as string) ?? ''}` : 'On-prem'],
+    ['Last Heartbeat', relativeTime(server.lastHeartbeat as string)],
+    ['Last Scan', lastScan ? relativeTime(lastScan) : 'Never'],
+    ['Registered', new Date(createdAt).toLocaleDateString()],
+  ];
+
+  const ips = (sysInfo.ipAddresses ?? []) as string[];
+  if (ips.length > 0) {
+    fields.push(['IP Addresses', ips.join(', ')]);
+  }
+
+  const instanceId = server.cloudInstanceId as string;
+  if (instanceId) {
+    fields.push(['Instance ID', instanceId]);
+  }
+
+  return (
+    <Grid container spacing={2} sx={{ mb: 2.5 }}>
+      {fields.map(([label, value]) => (
+        <Grid size={4} key={label}>
+          <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
+            {label}
+          </Typography>
+          <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>{value}</Typography>
+        </Grid>
+      ))}
+    </Grid>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Resource Usage (CPU, Memory, Disk bars + metrics)
+// ---------------------------------------------------------------------------
+
+function UsageBar({ label, percent, used, total, unit }: { label: string; percent: number; used: number; total: number; unit: string }) {
+  const color = percent > 90 ? 'error' : percent > 70 ? 'warning' : 'primary';
+  return (
+    <Box sx={{ mb: 1.5 }}>
+      <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+        <Typography variant="body2" sx={{ fontWeight: 500 }}>{label}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          {used} / {total} {unit} ({percent.toFixed(1)}%)
+        </Typography>
+      </Stack>
+      <LinearProgress variant="determinate" value={Math.min(percent, 100)} color={color} sx={{ height: 8, borderRadius: 4 }} />
+    </Box>
+  );
+}
+
+function ServerResourceUsage({ metadata }: { readonly metadata: Record<string, unknown> | undefined }) {
+  const res = ((metadata ?? {}).resourceUsage ?? {}) as Record<string, number>;
+
+  if (!res.cpuPercent && !res.memoryPercent && !res.diskPercent) return null;
+
+  const uptime = res.uptimeSecs ?? 0;
+  const days = Math.floor(uptime / 86400);
+  const hours = Math.floor((uptime % 86400) / 3600);
+  const uptimeStr = days > 0 ? `${days}d ${hours}h` : `${hours}h`;
+
+  return (
+    <>
+      <Divider sx={{ my: 2 }} />
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+        <MemoryIcon fontSize="small" color="action" />
+        <Typography variant="subtitle2">Resource Usage</Typography>
+        {uptime > 0 && (
+          <Typography variant="caption" color="text.secondary">Uptime: {uptimeStr}</Typography>
+        )}
+      </Stack>
+
+      <Box sx={{ mb: 1 }}>
+        <UsageBar
+          label="CPU"
+          percent={res.cpuPercent ?? 0}
+          used={Math.round(res.cpuPercent ?? 0)}
+          total={100}
+          unit="%"
+        />
+        <UsageBar
+          label="Memory"
+          percent={res.memoryPercent ?? 0}
+          used={res.memUsedMb ?? 0}
+          total={res.memTotalMb ?? 0}
+          unit="MB"
+        />
+        <UsageBar
+          label="Disk"
+          percent={res.diskPercent ?? 0}
+          used={res.diskUsedGb ?? 0}
+          total={res.diskTotalGb ?? 0}
+          unit="GB"
+        />
+      </Box>
+
+      {(res.loadAvg1 !== undefined) && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          Load Average: {(res.loadAvg1 ?? 0).toFixed(2)} / {(res.loadAvg5 ?? 0).toFixed(2)} / {(res.loadAvg15 ?? 0).toFixed(2)} (1m / 5m / 15m)
+        </Typography>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// System Info (hardware details)
+// ---------------------------------------------------------------------------
+
+function ServerSystemInfo({ metadata }: { readonly metadata: Record<string, unknown> | undefined }) {
+  const sys = ((metadata ?? {}).systemInfo ?? {}) as Record<string, unknown>;
+
+  if (!sys.kernel && !sys.cpuCores) return null;
+
+  return (
+    <>
+      <Divider sx={{ my: 2 }} />
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+        <StorageIcon fontSize="small" color="action" />
+        <Typography variant="subtitle2">System Information</Typography>
+      </Stack>
+
+      <Grid container spacing={2} sx={{ mb: 1 }}>
+        {(sys.cpuCores as number) > 0 && (
+          <Grid size={6}>
+            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>CPU</Typography>
+            <Typography variant="body2">
+              {sys.cpuCores as number} cores{(sys.cpuModel as string) ? ` — ${sys.cpuModel as string}` : ''}
+            </Typography>
+          </Grid>
+        )}
+        {(sys.totalRamMb as number) > 0 && (
+          <Grid size={3}>
+            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>Total RAM</Typography>
+            <Typography variant="body2">{((sys.totalRamMb as number) / 1024).toFixed(1)} GB</Typography>
+          </Grid>
+        )}
+        {(sys.totalDiskGb as number) > 0 && (
+          <Grid size={3}>
+            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>Total Disk</Typography>
+            <Typography variant="body2">{sys.totalDiskGb as number} GB</Typography>
+          </Grid>
+        )}
+      </Grid>
+    </>
   );
 }
 
