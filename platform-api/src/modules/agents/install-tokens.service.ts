@@ -107,6 +107,7 @@ export async function redeemInstallToken(input: EnrollAgentInput): Promise<Enrol
         environment,
         status: 'active',
         lastHeartbeat: new Date(),
+        metadata: { config } as object,
       },
     });
 

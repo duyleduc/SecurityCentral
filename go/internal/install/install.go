@@ -261,14 +261,9 @@ func writeFiles(key *ecdsa.PrivateKey, enrollment *enrollData, apiURL string) er
 		return fmt.Errorf("failed to write CA cert: %w", err)
 	}
 
-	// Write config
-	cfg := enrollment.Config
-	scanInterval := cfg.Scan.Interval
-	if scanInterval == "" {
-		scanInterval = "6h"
-	}
-
+	// Write identity-only config (scan/heartbeat settings are server-managed)
 	yamlContent := fmt.Sprintf(`# SecurityCentral Agent Configuration (auto-generated)
+# Scan and heartbeat settings are managed from the dashboard.
 agent_id: "%s"
 api_url: "%s"
 
@@ -276,26 +271,10 @@ tls:
   cert: "%s/agent.crt"
   key: "%s/agent.key"
   ca: "%s/ca.crt"
-
-scan:
-  on_startup: %t
-  interval: "%s"
-  packages: %t
-  compliance: %t
-
-heartbeat:
-  interval: "60s"
-
-environment: "%s"
 `,
 		enrollment.AgentID,
 		strings.TrimRight(apiURL, "/"),
 		certDir, certDir, certDir,
-		cfg.Scan.OnStartup,
-		scanInterval,
-		cfg.Scan.Packages,
-		cfg.Scan.Compliance,
-		cfg.Environment,
 	)
 
 	if err := os.WriteFile(configFile, []byte(yamlContent), 0644); err != nil {

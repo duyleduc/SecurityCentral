@@ -16,46 +16,60 @@ import (
 
 // HeartbeatPayload is sent to the platform every heartbeat interval.
 type HeartbeatPayload struct {
-	AgentVersion  string                  `json:"agentVersion"`
-	Hostname      string                  `json:"hostname,omitempty"`
-	OSFamily      string                  `json:"osFamily,omitempty"`
-	OSVersion     string                  `json:"osVersion,omitempty"`
-	ResourceUsage *sysinfo.ResourceUsage  `json:"resourceUsage,omitempty"`
-	SystemInfo    *sysinfo.SystemInfo     `json:"systemInfo,omitempty"`
+	AgentVersion  string                 `json:"agentVersion"`
+	Hostname      string                 `json:"hostname,omitempty"`
+	OSFamily      string                 `json:"osFamily,omitempty"`
+	OSVersion     string                 `json:"osVersion,omitempty"`
+	ResourceUsage *sysinfo.ResourceUsage `json:"resourceUsage,omitempty"`
+	SystemInfo    *sysinfo.SystemInfo    `json:"systemInfo,omitempty"`
 }
 
 // HeartbeatResponse from the platform.
 type HeartbeatResponse struct {
 	Data struct {
-		Commands []Command `json:"commands"`
+		Commands []Command     `json:"commands"`
+		Config   *ServerConfig `json:"config,omitempty"`
 	} `json:"data"`
 }
 
 // Command is an instruction from the platform.
 type Command struct {
-	Type    string         `json:"type"` // scan_now | update_agent | update_vulndb
+	Type    string         `json:"type"` // scan_now | update_vulndb
 	Payload map[string]any `json:"payload,omitempty"`
 }
 
-// HeartbeatLoop sends heartbeats at the configured interval and processes commands.
-func HeartbeatLoop(client *http.Client, baseURL, agentID, version string, interval time.Duration, cmdCh chan<- Command) {
-	// Collect static system info once at startup
-	sys := sysinfo.Collect()
+// ConfigUpdate is sent on the configCh when the server delivers new config.
+type ConfigUpdate struct {
+	Config ServerConfig
+}
 
+// HeartbeatLoop sends heartbeats at the configured interval, processes
+// commands, and delivers server-managed config updates.
+//
+// The interval starts at defaultInterval (60s) and is dynamically adjusted
+// when the server sends a different heartbeat.interval in the config.
+func HeartbeatLoop(client *http.Client, baseURL, agentID, version string, cmdCh chan<- Command, configCh chan<- ConfigUpdate) {
+	sys := sysinfo.Collect()
+	interval := 60 * time.Second
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
-		sendHeartbeat(client, baseURL, agentID, version, &sys, cmdCh)
+		newInterval := sendHeartbeat(client, baseURL, agentID, version, &sys, cmdCh, configCh)
+		if newInterval > 0 && newInterval != interval {
+			slog.Info("heartbeat interval changed", "old", interval, "new", newInterval)
+			interval = newInterval
+			ticker.Reset(interval)
+		}
 		<-ticker.C
 	}
 }
 
-func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *sysinfo.SystemInfo, cmdCh chan<- Command) {
+// sendHeartbeat sends one heartbeat and returns the new heartbeat interval
+// if the server config changed it (0 means no change).
+func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *sysinfo.SystemInfo, cmdCh chan<- Command, configCh chan<- ConfigUpdate) time.Duration {
 	hostname, _ := os.Hostname()
 	osFamily, osVersion := detectOS()
-
-	// Measure real system resources (CPU measurement takes ~500ms)
 	resources := sysinfo.MeasureResources()
 
 	payload := HeartbeatPayload{
@@ -70,7 +84,7 @@ func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *s
 	body, err := json.Marshal(payload)
 	if err != nil {
 		slog.Error("failed to marshal heartbeat", "error", err)
-		return
+		return 0
 	}
 
 	url := fmt.Sprintf("%s/v1/agents/heartbeat", baseURL)
@@ -78,11 +92,10 @@ func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *s
 	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		slog.Error("failed to create heartbeat request", "error", err)
-		return
+		return 0
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	// Dev mode: when API is plain HTTP (no TLS), send agent CN via header
 	if strings.HasPrefix(baseURL, "http://") {
 		req.Header.Set("X-Agent-CN", fmt.Sprintf("ag_%s.agents.securitycentral.io", agentID))
 	}
@@ -90,21 +103,22 @@ func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *s
 	resp, err := client.Do(req)
 	if err != nil {
 		slog.Warn("heartbeat failed", "error", err)
-		return
+		return 0
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		slog.Warn("heartbeat returned non-200", "status", resp.StatusCode)
-		return
+		return 0
 	}
 
 	var hbResp HeartbeatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&hbResp); err != nil {
 		slog.Warn("failed to decode heartbeat response", "error", err)
-		return
+		return 0
 	}
 
+	// Forward commands to scheduler
 	for _, cmd := range hbResp.Data.Commands {
 		slog.Info("received command", "type", cmd.Type)
 		select {
@@ -113,6 +127,19 @@ func sendHeartbeat(client *http.Client, baseURL, agentID, version string, sys *s
 			slog.Warn("command channel full, dropping command", "type", cmd.Type)
 		}
 	}
+
+	// Forward config update if present
+	var newHeartbeatInterval time.Duration
+	if hbResp.Data.Config != nil {
+		select {
+		case configCh <- ConfigUpdate{Config: *hbResp.Data.Config}:
+		default:
+			// Non-blocking — scheduler will pick up next time
+		}
+		newHeartbeatInterval = hbResp.Data.Config.HeartbeatInterval()
+	}
+
+	return newHeartbeatInterval
 }
 
 func detectOS() (family, version string) {

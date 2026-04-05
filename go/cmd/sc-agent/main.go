@@ -79,11 +79,12 @@ func runAgent(_ *cobra.Command, _ []string) error {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
 
-	// Command channel for heartbeat → scheduler communication
+	// Channels for heartbeat → scheduler communication
 	cmdCh := make(chan agent.Command, 10)
+	configCh := make(chan agent.ConfigUpdate, 1)
 
-	// Start heartbeat loop in background
-	go agent.HeartbeatLoop(httpClient, cfg.APIURL, cfg.AgentID, version, cfg.Heartbeat.Interval, cmdCh)
+	// Start heartbeat loop (uses default 60s interval, adjusted by server config)
+	go agent.HeartbeatLoop(httpClient, cfg.APIURL, cfg.AgentID, version, cmdCh, configCh)
 
 	// Define scan function
 	scanFn := func() error {
@@ -94,8 +95,8 @@ func runAgent(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	// Start scan scheduler in background
-	scheduler := agent.NewScheduler(cfg.Scan.Interval, cfg.Scan.OnStartup, scanFn, cmdCh)
+	// Start scan scheduler (uses default config, updated by heartbeat)
+	scheduler := agent.NewScheduler(scanFn, cmdCh, configCh)
 	go scheduler.Run()
 
 	// Wait for shutdown signal

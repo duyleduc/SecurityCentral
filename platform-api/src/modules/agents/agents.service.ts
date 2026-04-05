@@ -128,7 +128,15 @@ export async function processHeartbeat(agentId: string, input: HeartbeatInput) {
     });
   }
 
-  return { commands };
+  // Return server-managed config (scan settings, heartbeat interval, environment)
+  const defaultConfig = {
+    scan: { packages: true, compliance: true, interval: '6h', onStartup: true },
+    heartbeat: { interval: '60s' },
+    environment: server.environment ?? 'production',
+  };
+  const agentConfig = (metadata.config as Record<string, unknown>) ?? defaultConfig;
+
+  return { commands, config: agentConfig };
 }
 
 // ---------------------------------------------------------------------------

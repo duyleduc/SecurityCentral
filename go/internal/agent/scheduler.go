@@ -8,21 +8,25 @@ import (
 // ScanFunc is the function signature for running a scan.
 type ScanFunc func() error
 
-// Scheduler manages periodic scan execution and on-demand scan triggers.
+// Scheduler manages periodic scan execution, on-demand triggers, and
+// runtime config updates from the server.
 type Scheduler struct {
 	interval  time.Duration
 	onStartup bool
 	scanFn    ScanFunc
 	cmdCh     <-chan Command
+	configCh  <-chan ConfigUpdate
 }
 
-// NewScheduler creates a scan scheduler.
-func NewScheduler(interval time.Duration, onStartup bool, scanFn ScanFunc, cmdCh <-chan Command) *Scheduler {
+// NewScheduler creates a scan scheduler with default config.
+func NewScheduler(scanFn ScanFunc, cmdCh <-chan Command, configCh <-chan ConfigUpdate) *Scheduler {
+	defaults := DefaultServerConfig()
 	return &Scheduler{
-		interval:  interval,
-		onStartup: onStartup,
+		interval:  defaults.ScanInterval(),
+		onStartup: defaults.Scan.OnStartup,
 		scanFn:    scanFn,
 		cmdCh:     cmdCh,
+		configCh:  configCh,
 	}
 }
 
@@ -49,13 +53,18 @@ func (s *Scheduler) Run() {
 				s.executeScan()
 			case "update_vulndb":
 				slog.Info("updating vulnerability database")
-				// VulnDB update would be triggered here
-			case "update_agent":
-				slog.Info("agent update requested", "payload", cmd.Payload)
-				// Self-update would be triggered here
 			default:
 				slog.Warn("unknown command type", "type", cmd.Type)
 			}
+
+		case update := <-s.configCh:
+			newInterval := update.Config.ScanInterval()
+			if newInterval != s.interval {
+				slog.Info("scan interval changed", "old", s.interval, "new", newInterval)
+				s.interval = newInterval
+				ticker.Reset(s.interval)
+			}
+			s.onStartup = update.Config.Scan.OnStartup
 		}
 	}
 }

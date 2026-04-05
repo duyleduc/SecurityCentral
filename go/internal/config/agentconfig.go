@@ -3,19 +3,17 @@ package config
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
-// AgentConfig holds configuration for the sc-agent binary.
+// AgentConfig holds the identity-only configuration for the sc-agent binary.
+// Behavioral settings (scan interval, compliance toggles, etc.) are managed
+// server-side and delivered via the heartbeat response.
 type AgentConfig struct {
-	AgentID     string        `yaml:"agent_id"`
-	APIURL      string        `yaml:"api_url"`
-	TLS         TLSConfig     `yaml:"tls"`
-	Scan        AgentScanConfig `yaml:"scan"`
-	Heartbeat   HeartbeatConfig `yaml:"heartbeat"`
-	Environment string        `yaml:"environment"`
+	AgentID string    `yaml:"agent_id"`
+	APIURL  string    `yaml:"api_url"`
+	TLS     TLSConfig `yaml:"tls"`
 }
 
 // TLSConfig holds mTLS certificate paths.
@@ -25,20 +23,9 @@ type TLSConfig struct {
 	CA   string `yaml:"ca"`
 }
 
-// AgentScanConfig controls scan behavior.
-type AgentScanConfig struct {
-	OnStartup  bool          `yaml:"on_startup"`
-	Interval   time.Duration `yaml:"interval"`
-	Packages   bool          `yaml:"packages"`
-	Compliance bool          `yaml:"compliance"`
-}
-
-// HeartbeatConfig controls heartbeat behavior.
-type HeartbeatConfig struct {
-	Interval time.Duration `yaml:"interval"`
-}
-
 // LoadAgentConfig reads and validates the agent configuration file.
+// Unknown YAML fields (e.g., scan/heartbeat from older installs) are
+// silently ignored for backward compatibility.
 func LoadAgentConfig(path string) (*AgentConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -46,17 +33,7 @@ func LoadAgentConfig(path string) (*AgentConfig, error) {
 	}
 
 	cfg := &AgentConfig{
-		APIURL:      "https://api.securitycentral.io",
-		Environment: "production",
-		Scan: AgentScanConfig{
-			OnStartup:  true,
-			Interval:   6 * time.Hour,
-			Packages:   true,
-			Compliance: true,
-		},
-		Heartbeat: HeartbeatConfig{
-			Interval: 60 * time.Second,
-		},
+		APIURL: "https://api.securitycentral.io",
 	}
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
