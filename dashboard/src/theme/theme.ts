@@ -3,22 +3,22 @@ import { createTheme } from '@mui/material/styles';
 export const theme = createTheme({
   palette: {
     mode: 'light',
-    primary: { main: '#2563eb', light: '#60a5fa', dark: '#1d4ed8' },
-    secondary: { main: '#7c3aed', light: '#a78bfa', dark: '#5b21b6' },
+    primary: { main: '#0f766e', light: '#2dd4bf', dark: '#0f4c47' },
+    secondary: { main: '#f97316', light: '#fdba74', dark: '#c2410c' },
     error: { main: '#dc2626' },
     warning: { main: '#f59e0b' },
     success: { main: '#16a34a' },
     info: { main: '#0ea5e9' },
-    background: { default: '#f8fafc', paper: '#ffffff' },
-    text: { primary: '#0f172a', secondary: '#64748b' },
+    background: { default: '#f6f4ef', paper: '#ffffff' },
+    text: { primary: '#0b1320', secondary: '#52607a' },
   },
   typography: {
-    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    h4: { fontWeight: 700, fontSize: '1.75rem' },
-    h5: { fontWeight: 600, fontSize: '1.25rem' },
-    h6: { fontWeight: 600, fontSize: '1rem' },
-    subtitle2: { fontWeight: 500, color: '#64748b' },
-    body2: { color: '#475569' },
+    fontFamily: '"Sora", "Segoe UI", system-ui, -apple-system, sans-serif',
+    h4: { fontWeight: 700, fontSize: '1.8rem', letterSpacing: '-0.02em' },
+    h5: { fontWeight: 600, fontSize: '1.3rem', letterSpacing: '-0.01em' },
+    h6: { fontWeight: 600, fontSize: '1.05rem' },
+    subtitle2: { fontWeight: 500, color: '#52607a' },
+    body2: { color: '#3d4b66' },
   },
   shape: { borderRadius: 10 },
   components: {
@@ -30,7 +30,7 @@ export const theme = createTheme({
     },
     MuiCard: {
       styleOverrides: {
-        root: { borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)' },
+        root: { borderRadius: 14, boxShadow: '0 10px 30px rgba(13, 38, 76, 0.08), 0 2px 6px rgba(13, 38, 76, 0.06)' },
       },
     },
     MuiChip: {

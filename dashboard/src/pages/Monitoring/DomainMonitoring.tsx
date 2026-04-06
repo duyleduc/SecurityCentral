@@ -33,7 +33,7 @@ function relativeTime(dateStr: string | null): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-export function DomainMonitoringPage() {
+export function DomainMonitoringPage({ embedded = false }: { embedded?: boolean }) {
   const [page, setPage] = useState(1);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
@@ -60,17 +60,26 @@ export function DomainMonitoringPage() {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}>
-        <Box>
-          <Typography variant="h5">Domain Monitoring</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Monitor TLS certificates and endpoint reachability
-          </Typography>
-        </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setShowAdd(!showAdd)}>
-          Add Domains
-        </Button>
-      </Stack>
+      {embedded ? (
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+          <Typography variant="h6">Domains</Typography>
+          <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setShowAdd(!showAdd)}>
+            Add Domains
+          </Button>
+        </Stack>
+      ) : (
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}>
+          <Box>
+            <Typography variant="h5">Domain Monitoring</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Monitor TLS certificates and endpoint reachability
+            </Typography>
+          </Box>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setShowAdd(!showAdd)}>
+            Add Domains
+          </Button>
+        </Stack>
+      )}
 
       {showAdd && <AddDomainsForm onDone={() => setShowAdd(false)} />}
 

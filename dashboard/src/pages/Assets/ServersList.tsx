@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Chip, Stack,
+  Box, Typography, Chip, Stack, Button,
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
   Paper, Skeleton, Alert,
 } from '@mui/material';
 import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import AddIcon from '@mui/icons-material/Add';
 import { useServers, useAgentVersion, type Server } from '../../api/hooks.js';
 import { Pagination } from './RepositoriesList.js';
+import AddServerDialog from '../../components/AddServerDialog.js';
 
 const STATUS_DOT: Record<string, string> = { active: '#16a34a', inactive: '#dc2626', decommissioned: '#6b7280' };
 
@@ -26,6 +28,7 @@ function relativeTime(dateStr?: string): string {
 export function ServersList() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
+  const [showAdd, setShowAdd] = useState(false);
   const servers = useServers({ page, per_page: 25 });
   const { data: versionInfo } = useAgentVersion();
   const data = servers.data?.data as Server[] | undefined;
@@ -36,7 +39,12 @@ export function ServersList() {
 
   return (
     <Box>
-      <Typography variant="h5" sx={{ mb: 2 }}>Servers</Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+        <Typography variant="h5">Servers</Typography>
+        <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setShowAdd(true)}>
+          Add Server
+        </Button>
+      </Stack>
       {outdatedCount > 0 && latestVersion && (
         <Alert severity="warning" icon={<SystemUpdateAltIcon fontSize="small" />} sx={{ mb: 2 }}>
           {outdatedCount} {outdatedCount === 1 ? 'server has' : 'servers have'} an outdated agent.
@@ -102,6 +110,7 @@ export function ServersList() {
         </Table>
       </TableContainer>
       {meta && <Pagination page={page} total={meta.total ?? 0} perPage={25} onPage={setPage} />}
+      <AddServerDialog open={showAdd} onClose={() => setShowAdd(false)} />
     </Box>
   );
 }

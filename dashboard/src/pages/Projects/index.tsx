@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
-  Box, Typography, Card, CardContent, CardActionArea, Grid, Button, Chip, Stack,
+  Box, Typography, Card, CardContent, CardActionArea, Grid, Button, Chip, Stack, Tabs, Tab,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, Skeleton, IconButton, Tooltip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -14,13 +14,49 @@ import EditIcon from '@mui/icons-material/Edit';
 import { useProjects, useCreateProject, useDeleteProject, useUpdateProject, type Project } from '../../api/hooks.js';
 import { SEVERITY_COLORS } from '../../theme/theme.js';
 import { ProjectDetail } from './ProjectDetail.js';
+import { ServersList } from '../Assets/ServersList.js';
+import { RepositoriesList } from '../Assets/RepositoriesList.js';
+import { CertificatesList } from '../Assets/CertificatesList.js';
+import { DomainMonitoringPage } from '../Monitoring/DomainMonitoring.js';
 
 export function ProjectsPage() {
   const { id } = useParams<{ id?: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('tab') ?? 'projects';
 
   if (id) return <ProjectDetail projectId={id} />;
 
-  return <ProjectList />;
+  const handleTabChange = (_: React.SyntheticEvent, value: string) => {
+    if (value === 'projects') {
+      setSearchParams({});
+    } else {
+      setSearchParams({ tab: value });
+    }
+  };
+
+  return (
+    <Box>
+      <Tabs
+        value={tab}
+        onChange={handleTabChange}
+        sx={{ mb: 2 }}
+        textColor="primary"
+        indicatorColor="primary"
+      >
+        <Tab value="projects" label="Projects" />
+        <Tab value="servers" label="Servers" />
+        <Tab value="repositories" label="Repositories" />
+        <Tab value="certificates" label="Certificates" />
+        <Tab value="domains" label="Domains" />
+      </Tabs>
+
+      {tab === 'projects' && <ProjectList />}
+      {tab === 'servers' && <ServersList />}
+      {tab === 'repositories' && <RepositoriesList />}
+      {tab === 'certificates' && <CertificatesList />}
+      {tab === 'domains' && <DomainMonitoringPage embedded />}
+    </Box>
+  );
 }
 
 function ProjectList() {

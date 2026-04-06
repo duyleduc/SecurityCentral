@@ -24,6 +24,8 @@ import { ScanDetailPage } from './pages/Scans/ScanDetail.js';
 import { EndpointDetailPage } from './pages/Monitoring/EndpointDetail.js';
 import { CertificateDetailPage } from './pages/Assets/CertificateDetail.js';
 import { ServerDetailPage } from './pages/Assets/ServerDetailPage.js';
+import { ReportsPage } from './pages/Reports/index.js';
+import { BillingPage } from './pages/Billing/index.js';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,17 +60,19 @@ export function App() {
               <Route path="/projects/:id" element={<ProtectedLayout><ProjectsPage /></ProtectedLayout>} />
               <Route path="/findings" element={<ProtectedLayout><FindingsPage /></ProtectedLayout>} />
               <Route path="/findings/:id" element={<ProtectedLayout><FindingsPage /></ProtectedLayout>} />
-              <Route path="/assets/repositories" element={<ProtectedLayout><AssetsPage tab="repositories" /></ProtectedLayout>} />
-              <Route path="/assets/servers" element={<ProtectedLayout><AssetsPage tab="servers" /></ProtectedLayout>} />
+              <Route path="/assets/repositories" element={<Navigate to="/projects?tab=repositories" replace />} />
+              <Route path="/assets/servers" element={<Navigate to="/projects?tab=servers" replace />} />
               <Route path="/assets/servers/:id" element={<ProtectedLayout><ServerDetailPage /></ProtectedLayout>} />
-              <Route path="/assets/certificates" element={<ProtectedLayout><AssetsPage tab="certificates" /></ProtectedLayout>} />
+              <Route path="/assets/certificates" element={<Navigate to="/projects?tab=certificates" replace />} />
               <Route path="/assets/certificates/:id" element={<ProtectedLayout><CertificateDetailPage /></ProtectedLayout>} />
-              <Route path="/monitoring/domains" element={<ProtectedLayout><DomainMonitoringPage /></ProtectedLayout>} />
+              <Route path="/monitoring/domains" element={<Navigate to="/projects?tab=domains" replace />} />
               <Route path="/monitoring/domains/:id" element={<ProtectedLayout><EndpointDetailPage /></ProtectedLayout>} />
               <Route path="/scans" element={<ProtectedLayout><ScansPage /></ProtectedLayout>} />
               <Route path="/scans/:id" element={<ProtectedLayout><ScanDetailPage /></ProtectedLayout>} />
               <Route path="/integrations" element={<ProtectedLayout><IntegrationsPage /></ProtectedLayout>} />
               <Route path="/integrations/:provider/repos" element={<ProtectedLayout><RepoSelectionPage /></ProtectedLayout>} />
+              <Route path="/reports" element={<ProtectedLayout><ReportsPage /></ProtectedLayout>} />
+              <Route path="/billing" element={<ProtectedLayout><BillingPage /></ProtectedLayout>} />
               <Route path="/settings" element={<ProtectedLayout><SettingsPage /></ProtectedLayout>} />
 
               {/* Default */}

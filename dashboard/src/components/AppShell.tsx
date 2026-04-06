@@ -15,28 +15,29 @@ import Divider from '@mui/material/Divider';
 import Avatar from '@mui/material/Avatar';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
+import Stack from '@mui/material/Stack';
+import Chip from '@mui/material/Chip';
+import Badge from '@mui/material/Badge';
 
 // MUI Icons
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import FolderIcon from '@mui/icons-material/Folder';
-import DnsIcon from '@mui/icons-material/Dns';
-import HttpsIcon from '@mui/icons-material/Https';
-import RadarIcon from '@mui/icons-material/Radar';
-import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import ExtensionIcon from '@mui/icons-material/Extension';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SecurityIcon from '@mui/icons-material/Security';
+import AssessmentIcon from '@mui/icons-material/Assessment';
+import CreditCardIcon from '@mui/icons-material/CreditCard';
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 
 const NAV_ITEMS = [
-  { path: '/dashboard', label: 'Dashboard', icon: <DashboardIcon /> },
+  { path: '/dashboard', label: 'Home', icon: <DashboardIcon /> },
   { path: '/projects', label: 'Projects', icon: <FolderIcon /> },
   { path: '/findings', label: 'Findings', icon: <BugReportIcon /> },
-  { path: '/assets/servers', label: 'Servers', icon: <DnsIcon /> },
-  { path: '/assets/certificates', label: 'Certificates', icon: <HttpsIcon /> },
-  { path: '/monitoring/domains', label: 'Monitoring', icon: <RadarIcon /> },
+  { path: '/reports', label: 'Reports', icon: <AssessmentIcon /> },
   { path: '/integrations', label: 'Integrations', icon: <ExtensionIcon /> },
+  { path: '/billing', label: 'Billing', icon: <CreditCardIcon /> },
   { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },
 ];
 
@@ -50,8 +51,19 @@ export function AppShell({ children }: { children: ReactNode }) {
     navigate('/login');
   };
 
+  const pageTitle = (() => {
+    if (location.pathname.startsWith('/assets')) return 'Assets';
+    if (location.pathname.startsWith('/findings')) return 'Findings';
+    if (location.pathname.startsWith('/reports')) return 'Reports';
+    if (location.pathname.startsWith('/integrations')) return 'Integrations';
+    if (location.pathname.startsWith('/billing')) return 'Billing';
+    if (location.pathname.startsWith('/settings')) return 'Settings';
+    if (location.pathname.startsWith('/projects')) return 'Projects';
+    return 'Today’s Risks';
+  })();
+
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#f6f4ef' }}>
       {/* Sidebar */}
       <Drawer
         variant="permanent"
@@ -60,21 +72,21 @@ export function AppShell({ children }: { children: ReactNode }) {
           flexShrink: 0,
           '& .MuiDrawer-paper': {
             width: DRAWER_WIDTH,
-            bgcolor: '#0f172a',
-            color: '#e2e8f0',
-            borderRight: 'none',
+            bgcolor: '#fbfaf6',
+            color: '#0b1320',
+            borderRight: '1px solid rgba(11, 19, 32, 0.08)',
           },
         }}
       >
         {/* Logo */}
         <Toolbar sx={{ px: 2.5, py: 2 }}>
-          <SecurityIcon sx={{ mr: 1.5, color: '#60a5fa', fontSize: 28 }} />
-          <Typography variant="h6" noWrap sx={{ color: '#fff', fontWeight: 700, letterSpacing: '-0.02em' }}>
+          <SecurityIcon sx={{ mr: 1.5, color: '#0f766e', fontSize: 28 }} />
+          <Typography variant="h6" noWrap sx={{ color: '#0b1320', fontWeight: 700, letterSpacing: '-0.02em' }}>
             SecurityCentral
           </Typography>
         </Toolbar>
 
-        <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
+        <Divider sx={{ borderColor: 'rgba(11, 19, 32, 0.08)' }} />
 
         {/* Navigation */}
         <List sx={{ flex: 1, px: 1.5, py: 1 }}>
@@ -90,12 +102,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                   mb: 0.3,
                   px: 2,
                   py: 0.8,
-                  color: isActive ? '#fff' : '#94a3b8',
-                  bgcolor: isActive ? 'rgba(37, 99, 235, 0.2)' : 'transparent',
-                  borderLeft: isActive ? '3px solid #2563eb' : '3px solid transparent',
+                  color: isActive ? '#0b1320' : '#556178',
+                  bgcolor: isActive ? 'rgba(15, 118, 110, 0.12)' : 'transparent',
+                  borderLeft: isActive ? '3px solid #0f766e' : '3px solid transparent',
                   '&:hover': {
-                    bgcolor: isActive ? 'rgba(37, 99, 235, 0.25)' : 'rgba(255,255,255,0.05)',
-                    color: '#fff',
+                    bgcolor: isActive ? 'rgba(15, 118, 110, 0.18)' : 'rgba(11, 19, 32, 0.04)',
+                    color: '#0b1320',
                   },
                 }}
               >
@@ -111,15 +123,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </List>
 
-        <Divider sx={{ borderColor: 'rgba(255,255,255,0.08)' }} />
+        <Divider sx={{ borderColor: 'rgba(11, 19, 32, 0.08)' }} />
 
         {/* User section */}
         <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Avatar sx={{ width: 32, height: 32, bgcolor: '#334155', fontSize: 14 }}>
+          <Avatar sx={{ width: 32, height: 32, bgcolor: '#e2e8f0', color: '#0b1320', fontSize: 14 }}>
             {(user?.email?.[0] ?? 'U').toUpperCase()}
           </Avatar>
           <Box sx={{ flex: 1, overflow: 'hidden' }}>
-            <Typography variant="body2" noWrap sx={{ color: '#e2e8f0', fontSize: '0.8rem' }}>
+            <Typography variant="body2" noWrap sx={{ color: '#0b1320', fontSize: '0.8rem' }}>
               {user?.email ?? 'User'}
             </Typography>
             <Typography variant="caption" sx={{ color: '#64748b' }}>
@@ -142,8 +154,34 @@ export function AppShell({ children }: { children: ReactNode }) {
           bgcolor: 'background.default',
           p: 3,
           minHeight: '100vh',
+          backgroundImage: 'radial-gradient(circle at 10% 0%, rgba(15, 118, 110, 0.08), transparent 35%), radial-gradient(circle at 90% 0%, rgba(249, 115, 22, 0.08), transparent 40%)',
         }}
       >
+        <Box
+          sx={{
+            mb: 3,
+            px: 2,
+            py: 1.5,
+            borderRadius: 2,
+            bgcolor: '#ffffff',
+            border: '1px solid rgba(11, 19, 32, 0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            position: 'sticky',
+            top: 16,
+            zIndex: 10,
+          }}
+        >
+          <Typography variant="h5">{pageTitle}</Typography>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Chip label="Starter Plan" color="primary" variant="outlined" sx={{ fontWeight: 600 }} />
+            <Badge color="error" variant="dot">
+              <NotificationsNoneIcon />
+            </Badge>
+            <Chip label="Upgrade" color="secondary" />
+          </Stack>
+        </Box>
         {children}
       </Box>
     </Box>

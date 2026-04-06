@@ -29,7 +29,7 @@ export function FindingsPage() {
 
   const [page, setPage] = useState(1);
   const [perPage] = useState(25);
-  const [severity, setSeverity] = useState('');
+  const [severity, setSeverity] = useState('critical,high');
   const [status, setStatus] = useState('');
   const [projectId, setProjectId] = useState('');
   const [q, setQ] = useState('');
@@ -83,6 +83,7 @@ export function FindingsPage() {
           displayEmpty
           sx={{ minWidth: 150 }}
         >
+          <MenuItem value="critical,high">High impact only</MenuItem>
           <MenuItem value="">All Severities</MenuItem>
           {SEVERITIES.map((s) => <MenuItem key={s} value={s} sx={{ textTransform: 'capitalize' }}>{s}</MenuItem>)}
         </Select>
@@ -106,11 +107,11 @@ export function FindingsPage() {
           <MenuItem value="">All Projects</MenuItem>
           {projects.map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
         </Select>
-        {(severity || status || projectId || q) && (
+        {(severity !== 'critical,high' || status || projectId || q) && (
           <Button
             size="small"
             startIcon={<ClearIcon />}
-            onClick={() => { setSeverity(''); setStatus(''); setProjectId(''); setQ(''); setPage(1); }}
+            onClick={() => { setSeverity('critical,high'); setStatus(''); setProjectId(''); setQ(''); setPage(1); }}
           >
             Clear filters
           </Button>
