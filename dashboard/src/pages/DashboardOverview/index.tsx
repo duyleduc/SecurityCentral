@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useDashboardSummary, useDashboardTopRisks, useDashboardAssets, useFindingsTrends } from '../../api/hooks.js';
 import { subscribe } from '../../ws/index.js';
@@ -15,6 +15,8 @@ import LinearProgress from '@mui/material/LinearProgress';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 import Divider from '@mui/material/Divider';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import { Link } from 'react-router-dom';
 
 export function DashboardOverview() {
@@ -23,6 +25,7 @@ export function DashboardOverview() {
   const assets = useDashboardAssets();
   const trends = useFindingsTrends({ interval: 'day', days: 30 });
   const qc = useQueryClient();
+  const [view, setView] = useState<'operator' | 'executive'>('operator');
 
   useEffect(() => {
     const unsubs = [
@@ -47,12 +50,38 @@ export function DashboardOverview() {
     certs: assetsData?.certificates?.total ?? 0,
   };
 
+  const riskSources = useMemo(() => {
+    const counts: Record<string, number> = {};
+    topRisksData.forEach((f) => {
+      const src = f.source ?? 'unknown';
+      counts[src] = (counts[src] ?? 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([key, value]) => ({ key, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 4);
+  }, [topRisksData]);
+
   return (
     <Box>
-      <Typography variant="h4" sx={{ mb: 0.5 }}>Today’s Risks</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Focus on the highest-impact issues first. Everything else can wait.
-      </Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+        <Box>
+          <Typography variant="h4" sx={{ mb: 0.5 }}>General View</Typography>
+          <Typography variant="body2" color="text.secondary">
+            A decision-first snapshot of what matters most right now.
+          </Typography>
+        </Box>
+        <ToggleButtonGroup
+          size="small"
+          value={view}
+          exclusive
+          onChange={(_, v) => v && setView(v)}
+          sx={{ bgcolor: '#ffffff', border: '1px solid rgba(11, 19, 32, 0.08)', borderRadius: 2 }}
+        >
+          <ToggleButton value="operator" sx={{ textTransform: 'none' }}>Operator</ToggleButton>
+          <ToggleButton value="executive" sx={{ textTransform: 'none' }}>Executive</ToggleButton>
+        </ToggleButtonGroup>
+      </Stack>
 
       {/* Summary row */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -81,32 +110,63 @@ export function DashboardOverview() {
         <Grid size={7}>
           <Card>
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 1 }}>Fix-It Checklist</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Tackle these first for the biggest risk reduction.
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                {view === 'operator' ? 'What to Fix This Week' : 'Top Risk Drivers'}
               </Typography>
-              {topRisks.isLoading ? (
-                <Skeleton height={180} />
-              ) : topRisksData.length === 0 ? (
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                  No open findings. You’re in great shape.
-                </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {view === 'operator'
+                  ? 'Prioritized tasks with the highest impact.'
+                  : 'Where risk is concentrated across sources.'}
+              </Typography>
+              {view === 'operator' ? (
+                topRisks.isLoading ? (
+                  <Skeleton height={180} />
+                ) : topRisksData.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                    No open findings. You’re in great shape.
+                  </Typography>
+                ) : (
+                  <Stack spacing={1.5}>
+                    {topRisksData.slice(0, 6).map((f: any) => (
+                      <Box key={f.id} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Chip label={f.severity} size="small" sx={{ bgcolor: SEVERITY_COLORS[f.severity] ?? '#64748b', color: '#fff' }} />
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {f.title?.length > 70 ? f.title.slice(0, 67) + '...' : f.title}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {f.repository?.name ?? f.server?.hostname ?? f.certificate?.subjectCn ?? 'Unknown asset'}
+                          </Typography>
+                        </Box>
+                        <Button size="small" variant="outlined" component={Link} to={`/findings/${f.id}`}>
+                          View fix
+                        </Button>
+                      </Box>
+                    ))}
+                  </Stack>
+                )
               ) : (
                 <Stack spacing={1.5}>
-                  {topRisksData.slice(0, 6).map((f: any) => (
-                    <Box key={f.id} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Chip label={f.severity} size="small" sx={{ bgcolor: SEVERITY_COLORS[f.severity] ?? '#64748b', color: '#fff' }} />
+                  {riskSources.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                      No data yet.
+                    </Typography>
+                  ) : riskSources.map((s) => (
+                    <Box key={s.key} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Chip label={s.key} size="small" variant="outlined" />
                       <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {f.title?.length > 70 ? f.title.slice(0, 67) + '...' : f.title}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {f.repository?.name ?? f.server?.hostname ?? f.certificate?.subjectCn ?? 'Unknown asset'}
-                        </Typography>
+                        <LinearProgress
+                          variant="determinate"
+                          value={Math.min(100, (s.value / Math.max(1, topRisksData.length)) * 100)}
+                          sx={{
+                            height: 8,
+                            borderRadius: 4,
+                            bgcolor: '#efece6',
+                            '& .MuiLinearProgress-bar': { bgcolor: '#0f766e' },
+                          }}
+                        />
                       </Box>
-                      <Button size="small" variant="outlined" component={Link} to={`/findings/${f.id}`}>
-                        View fix
-                      </Button>
+                      <Typography variant="caption" color="text.secondary">{s.value} findings</Typography>
                     </Box>
                   ))}
                 </Stack>
@@ -118,7 +178,7 @@ export function DashboardOverview() {
         <Grid size={5}>
           <Card sx={{ mb: 2 }}>
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>Asset Coverage</Typography>
+              <Typography variant="h6" sx={{ mb: 2 }}>Posture Health</Typography>
               {assets.isLoading ? <Skeleton height={120} /> : assetsData && (
                 <Stack spacing={2}>
                   {[
@@ -191,7 +251,9 @@ export function DashboardOverview() {
 
       <Card>
         <CardContent>
-          <Typography variant="h6" sx={{ mb: 2 }}>Risk Trend (30 days)</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            {view === 'operator' ? 'Risk Trend (30 days)' : 'Posture Trend (30 days)'}
+          </Typography>
           {trends.isLoading ? <Skeleton height={120} /> : trendsData?.new_findings?.length > 0 ? (
             <Box>
               <Box sx={{ display: 'flex', gap: 2, mb: 1.5 }}>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
-  Box, Typography, Card, CardContent, CardActionArea, Grid, Button, Chip, Stack, Tabs, Tab,
+  Box, Typography, Card, CardContent, CardActionArea, Grid, Button, Chip, Stack, LinearProgress,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, Skeleton, IconButton, Tooltip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -9,53 +9,19 @@ import FolderIcon from '@mui/icons-material/Folder';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import DnsIcon from '@mui/icons-material/Dns';
 import CodeIcon from '@mui/icons-material/Code';
+import TravelExploreIcon from '@mui/icons-material/TravelExplore';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import { useProjects, useCreateProject, useDeleteProject, useUpdateProject, type Project } from '../../api/hooks.js';
-import { SEVERITY_COLORS } from '../../theme/theme.js';
 import { ProjectDetail } from './ProjectDetail.js';
-import { ServersList } from '../Assets/ServersList.js';
-import { RepositoriesList } from '../Assets/RepositoriesList.js';
-import { CertificatesList } from '../Assets/CertificatesList.js';
-import { DomainMonitoringPage } from '../Monitoring/DomainMonitoring.js';
 
 export function ProjectsPage() {
   const { id } = useParams<{ id?: string }>();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tab = searchParams.get('tab') ?? 'projects';
 
   if (id) return <ProjectDetail projectId={id} />;
 
-  const handleTabChange = (_: React.SyntheticEvent, value: string) => {
-    if (value === 'projects') {
-      setSearchParams({});
-    } else {
-      setSearchParams({ tab: value });
-    }
-  };
-
   return (
-    <Box>
-      <Tabs
-        value={tab}
-        onChange={handleTabChange}
-        sx={{ mb: 2 }}
-        textColor="primary"
-        indicatorColor="primary"
-      >
-        <Tab value="projects" label="Projects" />
-        <Tab value="servers" label="Servers" />
-        <Tab value="repositories" label="Repositories" />
-        <Tab value="certificates" label="Certificates" />
-        <Tab value="domains" label="Domains" />
-      </Tabs>
-
-      {tab === 'projects' && <ProjectList />}
-      {tab === 'servers' && <ServersList />}
-      {tab === 'repositories' && <RepositoriesList />}
-      {tab === 'certificates' && <CertificatesList />}
-      {tab === 'domains' && <DomainMonitoringPage embedded />}
-    </Box>
+    <ProjectList />
   );
 }
 
@@ -118,6 +84,10 @@ function ProjectList() {
 
 function ProjectCard({ project, onClick, onEdit }: { project: Project; onClick: () => void; onEdit: () => void }) {
   const deleteMutation = useDeleteProject();
+  const open = project.openFindings ?? 0;
+  const healthPct = open === 0 ? 100 : open <= 5 ? 85 : open <= 20 ? 60 : 35;
+  const healthLabel = open === 0 ? 'Healthy' : open <= 5 ? 'Needs Review' : open <= 20 ? 'At Risk' : 'Critical';
+  const healthColor = open === 0 ? '#16a34a' : open <= 5 ? '#f59e0b' : open <= 20 ? '#ea580c' : '#dc2626';
 
   return (
     <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -143,7 +113,7 @@ function ProjectCard({ project, onClick, onEdit }: { project: Project; onClick: 
           </Stack>
 
           {/* Asset counts */}
-          <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+          <Stack direction="row" spacing={2} sx={{ mt: 2, flexWrap: 'wrap' }} useFlexGap>
             <Stack direction="row" spacing={0.5} alignItems="center">
               <CodeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
               <Typography variant="body2" color="text.secondary">{project.repoCount} repos</Typography>
@@ -152,7 +122,29 @@ function ProjectCard({ project, onClick, onEdit }: { project: Project; onClick: 
               <DnsIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
               <Typography variant="body2" color="text.secondary">{project.serverCount} servers</Typography>
             </Stack>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <TravelExploreIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+              <Typography variant="body2" color="text.secondary">{project.endpointCount} domains</Typography>
+            </Stack>
           </Stack>
+
+          {/* Health indicator */}
+          <Box sx={{ mt: 2 }}>
+            <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">Project health</Typography>
+              <Typography variant="caption" sx={{ color: healthColor, fontWeight: 600 }}>{healthLabel}</Typography>
+            </Stack>
+            <LinearProgress
+              variant="determinate"
+              value={healthPct}
+              sx={{
+                height: 6,
+                borderRadius: 3,
+                bgcolor: '#efece6',
+                '& .MuiLinearProgress-bar': { bgcolor: healthColor },
+              }}
+            />
+          </Box>
         </CardContent>
       </CardActionArea>
 
