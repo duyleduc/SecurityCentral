@@ -58,8 +58,9 @@ jobs:
           VERSION=$(cat AGENT_VERSION | tr -d '[:space:]')
           gsutil cp go/bin/sc-agent-linux-amd64 gs://${DASHBOARD_BUCKET}/agent/v${VERSION}/
           gsutil cp go/bin/sc-agent-linux-arm64 gs://${DASHBOARD_BUCKET}/agent/v${VERSION}/
+          shopt -s nullglob
           for f in go/bin/sc-agent-linux-*.sha256 go/bin/sc-agent-linux-*.sig; do
-            [ -f "$f" ] && gsutil cp "$f" gs://${DASHBOARD_BUCKET}/agent/v${VERSION}/
+            gsutil cp "$f" gs://${DASHBOARD_BUCKET}/agent/v${VERSION}/
           done
 
   # ── Build & Push Docker Images ────────────────────
