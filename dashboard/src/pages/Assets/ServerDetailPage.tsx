@@ -116,10 +116,6 @@ export function ServerDetailPage() {
               <Chip icon={<FolderIcon />} label={project.name} variant="outlined" component={Link} to={`/projects/${project.id}`} clickable />
             )}
           </Stack>
-
-          {/* Tags */}
-          <TagsSection tags={tags} serverId={server.id as string} updateConfig={updateConfig} />
-
           <ServerInfoGrid server={server} />
           <ServerResourceUsage metadata={server.metadata as Record<string, unknown> | undefined} />
           <ServerSystemInfo metadata={server.metadata as Record<string, unknown> | undefined} />

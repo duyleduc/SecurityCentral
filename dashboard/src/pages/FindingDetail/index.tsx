@@ -70,9 +70,9 @@ export function FindingDetail({ findingId }: { findingId: string }) {
       <Card>
         <CardContent sx={{ p: 3 }}>
           {/* Header */}
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 3 }}>
-            <Box>
-              <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
+          <Stack sx={{ mb: 3 }} spacing={1.5}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Stack direction="row" spacing={1}>
                 <Chip
                   label={severity}
                   size="small"
@@ -92,23 +92,30 @@ export function FindingDetail({ findingId }: { findingId: string }) {
                   }}
                 />
               </Stack>
-              <Typography variant="h6">{finding.title as string}</Typography>
-            </Box>
 
-            {/* Status actions */}
-            <Stack direction="row" spacing={1}>
-              {transitions.map((s) => (
-                <Button
-                  key={s}
-                  variant="outlined"
-                  size="small"
-                  onClick={() => handleStatusChange(s)}
-                  disabled={updateMutation.isPending}
-                >
-                  {STATUS_LABEL[s]}
-                </Button>
-              ))}
+              {/* Status actions */}
+              <Stack direction="row" spacing={1}>
+                {transitions.map((s) => (
+                  <Button
+                    key={s}
+                    variant={s === 'resolved' ? 'contained' : 'outlined'}
+                    size="small"
+                    onClick={() => handleStatusChange(s)}
+                    disabled={updateMutation.isPending}
+                    sx={{
+                      ...(s === 'resolved' && { bgcolor: '#16a34a', color: '#fff', '&:hover': { bgcolor: '#15803d' } }),
+                      ...(s === 'suppressed' && { borderColor: '#64748b', color: '#64748b' }),
+                      ...(s === 'false_positive' && { borderColor: '#0ea5e9', color: '#0ea5e9' }),
+                      ...(s === 'in_progress' && { borderColor: '#f59e0b', color: '#f59e0b' }),
+                      ...(s === 'open' && { borderColor: '#dc2626', color: '#dc2626' }),
+                    }}
+                  >
+                    {STATUS_LABEL[s]}
+                  </Button>
+                ))}
+              </Stack>
             </Stack>
+            <Typography variant="h6">{finding.title as string}</Typography>
           </Stack>
 
           {/* Info grid */}

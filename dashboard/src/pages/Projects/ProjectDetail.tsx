@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useHeaderTitle } from '../../components/AppShell.js';
 import {
   Box, Typography, Button, Chip, Stack, Paper, Skeleton,
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
   IconButton, Tooltip, Alert, Tabs, Tab,
   Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, InputAdornment, CircularProgress, LinearProgress,
+  Menu, MenuItem, Divider,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
@@ -79,9 +81,13 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const summary = useProjectSummary(projectId);
   const deleteMutation = useDeleteProject();
   const navigate = useNavigate();
+  const { setTitle } = useHeaderTitle();
   const [tab, setTab] = useState(0);
   const [addRepoOpen, setAddRepoOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [quickAddAnchor, setQuickAddAnchor] = useState<null | HTMLElement>(null);
+  const [showAddServer, setShowAddServer] = useState(false);
+  const [addDomainOpen, setAddDomainOpen] = useState(false);
 
   const data = project.data?.data as (Project & { repositories: Repository[]; servers: Server[] }) | undefined;
   const repos = data?.repositories ?? [];
@@ -96,6 +102,11 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       deleteMutation.mutate(projectId, { onSuccess: () => navigate('/projects') });
     }
   };
+
+  useEffect(() => {
+    if (data?.name) setTitle(data.name);
+    return () => setTitle(null);
+  }, [data?.name, setTitle]);
 
   if (project.isLoading) {
     return (
@@ -121,26 +132,30 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   return (
     <Box>
       {/* Header */}
-      <Button component={Link} to="/projects" startIcon={<ArrowBackIcon />} size="small" sx={{ mb: 1 }}>
-        Back to Projects
-      </Button>
-
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 3 }}>
-        <Box>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <IconButton component={Link} to="/projects" size="small">
+            <ArrowBackIcon />
+          </IconButton>
           <Typography variant="h4">{data.name}</Typography>
-          {data.description && (
-            <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>{data.description}</Typography>
-          )}
-        </Box>
-        <Stack direction="row" spacing={0.5}>
+        </Stack>
+        <Stack direction="row" spacing={1}>
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={(e) => setQuickAddAnchor(e.currentTarget)}
+          >
+            Add
+          </Button>
           <Tooltip title="Edit project">
-            <IconButton onClick={() => setEditOpen(true)}>
-              <EditIcon />
+            <IconButton onClick={() => setEditOpen(true)} sx={{ bgcolor: 'rgba(15, 118, 110, 0.08)' }}>
+              <EditIcon fontSize="small" />
             </IconButton>
           </Tooltip>
           <Tooltip title="Delete project">
-            <IconButton color="error" onClick={handleDelete}>
-              <DeleteIcon />
+            <IconButton color="error" onClick={handleDelete} sx={{ bgcolor: 'rgba(220, 38, 38, 0.08)' }}>
+              <DeleteIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         </Stack>
@@ -152,37 +167,50 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       {/* Tabs */}
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
         <Tab label="Overview" />
-        <Tab label={`Repositories (${repos.length})`} />
-        <Tab label={`Servers (${projectServers.length})`} />
-        <Tab label={`Scans (${totalScans})`} />
-        <Tab label={`Domains (${stats?.assets.endpoints ?? 0})`} />
-        <Tab label={`Findings (${stats?.totalOpenFindings ?? 0})`} />
+        <Tab label={`Assets (${repos.length + projectServers.length + (stats?.assets.endpoints ?? 0)})`} />
+        <Tab label={`Scans (${totalScans + (stats?.totalOpenFindings ?? 0)})`} />
       </Tabs>
 
       {/* Tab content */}
       {tab === 0 && <OverviewTab stats={stats} loading={summary.isLoading} projectId={projectId} repos={repos} repoIds={repoIds} />}
       {tab === 1 && (
         <Box>
-          <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
-            <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setAddRepoOpen(true)}>
-              Add Repository
-            </Button>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+            <Typography variant="h6">Repositories</Typography>
           </Stack>
           {repos.length === 0 ? (
-            <Paper sx={{ py: 5, textAlign: 'center' }}>
+            <Paper sx={{ py: 4, textAlign: 'center', mb: 3 }}>
               <CodeIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
               <Typography color="text.secondary" sx={{ mb: 2 }}>No repositories in this project yet</Typography>
-              <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAddRepoOpen(true)}>Add Repository</Button>
             </Paper>
           ) : (
-            <RepoTable repos={repos} projectId={projectId} />
+            <Box sx={{ mb: 3 }}>
+              <RepoTable repos={repos} projectId={projectId} />
+            </Box>
           )}
+
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+            <Typography variant="h6">Servers</Typography>
+          </Stack>
+          <Box sx={{ mb: 3 }}>
+            <ServersSection projectId={projectId} servers={projectServers} />
+          </Box>
+
+          <Stack id="project-domains-anchor" direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+            <Typography variant="h6">Domains</Typography>
+          </Stack>
+          <DomainMonitoringSection projectId={projectId} />
         </Box>
       )}
-      {tab === 2 && <ServersSection projectId={projectId} servers={projectServers} />}
-      {tab === 3 && <ScanHistory projectId={projectId} repoIds={repoIds} />}
-      {tab === 4 && <DomainMonitoringSection projectId={projectId} />}
-      {tab === 5 && <FindingsTab projectId={projectId} />}
+      {tab === 2 && (
+        <Box>
+          <Box sx={{ mb: 3 }}>
+            <ScanHistory projectId={projectId} repoIds={repoIds} />
+          </Box>
+          <Typography variant="h6" sx={{ mb: 1.5 }}>Findings</Typography>
+          <FindingsTab projectId={projectId} />
+        </Box>
+      )}
 
       <AddRepoDialog
         open={addRepoOpen}
@@ -190,6 +218,44 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         existingRepoIds={new Set(repoIds)}
         onClose={() => setAddRepoOpen(false)}
       />
+
+      <AddServerDialog open={showAddServer} onClose={() => setShowAddServer(false)} projectId={projectId} />
+
+      <Menu
+        anchorEl={quickAddAnchor}
+        open={Boolean(quickAddAnchor)}
+        onClose={() => setQuickAddAnchor(null)}
+      >
+        <MenuItem
+          onClick={() => {
+            setQuickAddAnchor(null);
+            setAddRepoOpen(true);
+          }}
+        >
+          Add Repository
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setQuickAddAnchor(null);
+            setShowAddServer(true);
+          }}
+        >
+          Add Server
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setQuickAddAnchor(null);
+            setTab(1);
+            const el = document.getElementById('project-domains-anchor');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setAddDomainOpen(true);
+          }}
+        >
+          Add Domain
+        </MenuItem>
+      </Menu>
+
+      <AddDomainDialog open={addDomainOpen} projectId={projectId} onClose={() => setAddDomainOpen(false)} />
 
       <EditProjectDialog
         open={editOpen}
@@ -918,7 +984,6 @@ function DomainMonitoringSection({ projectId }: { projectId: string }) {
   const endpointsQuery = useMonitoredEndpoints({ projectId, per_page: 200 });
   const removeEndpoint = useRemoveEndpoint();
   const triggerCheck = useTriggerEndpointCheck();
-  const [addOpen, setAddOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
 
   const endpoints = (endpointsQuery.data?.data ?? []) as MonitoredEndpoint[];
@@ -932,15 +997,10 @@ function DomainMonitoringSection({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
-        <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>Add Domain</Button>
-      </Stack>
-
       {endpoints.length === 0 ? (
         <Paper sx={{ py: 5, textAlign: 'center' }}>
           <LanguageIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
           <Typography color="text.secondary" sx={{ mb: 2 }}>No domains monitored in this project</Typography>
-          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>Add Domain</Button>
         </Paper>
       ) : (
         <TableContainer component={Paper}>
@@ -999,7 +1059,6 @@ function DomainMonitoringSection({ projectId }: { projectId: string }) {
         </TableContainer>
       )}
 
-      <AddDomainDialog open={addOpen} projectId={projectId} onClose={() => setAddOpen(false)} />
       {editId && <EditTagsDialog endpoint={endpoints.find((e) => e.id === editId)!} onClose={() => setEditId(null)} />}
     </>
   );
@@ -1203,17 +1262,10 @@ function ServersSection({ projectId, servers }: { projectId: string; servers: Se
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
-        <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setShowAdd(true)}>
-          Add Server
-        </Button>
-      </Stack>
-
       {servers.length === 0 ? (
         <Paper sx={{ py: 5, textAlign: 'center' }}>
           <DnsIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
           <Typography color="text.secondary" sx={{ mb: 2 }}>No servers in this project yet</Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setShowAdd(true)}>Add Server</Button>
         </Paper>
       ) : (
         <TableContainer component={Paper}>
@@ -1294,4 +1346,3 @@ function ServersSection({ projectId, servers }: { projectId: string; servers: Se
     </Box>
   );
 }
-

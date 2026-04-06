@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, createContext, useContext, useMemo, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.js';
 import { DRAWER_WIDTH } from '../theme/theme.js';
@@ -16,8 +16,6 @@ import Avatar from '@mui/material/Avatar';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import Stack from '@mui/material/Stack';
-import Chip from '@mui/material/Chip';
-import Badge from '@mui/material/Badge';
 
 // MUI Icons
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -29,7 +27,19 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import SecurityIcon from '@mui/icons-material/Security';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
-import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
+
+type HeaderTitleContextValue = {
+  title: string | null;
+  setTitle: (value: string | null) => void;
+};
+
+const HeaderTitleContext = createContext<HeaderTitleContextValue | undefined>(undefined);
+
+export function useHeaderTitle() {
+  const ctx = useContext(HeaderTitleContext);
+  if (!ctx) throw new Error('useHeaderTitle must be used within AppShell');
+  return ctx;
+}
 
 const NAV_ITEMS = [
   { path: '/dashboard', label: 'Home', icon: <DashboardIcon /> },
@@ -45,6 +55,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [customTitle, setCustomTitle] = useState<string | null>(null);
 
   const handleLogout = () => {
     logout();
@@ -61,6 +72,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (location.pathname.startsWith('/projects')) return 'Projects';
     return 'Today’s Risks';
   })();
+
+  const headerTitle = customTitle ?? pageTitle;
+  const ctxValue = useMemo(() => ({ title: customTitle, setTitle: setCustomTitle }), [customTitle]);
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#f6f4ef' }}>
@@ -147,43 +161,20 @@ export function AppShell({ children }: { children: ReactNode }) {
       </Drawer>
 
       {/* Main content */}
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          bgcolor: 'background.default',
-          p: 3,
-          minHeight: '100vh',
-          backgroundImage: 'radial-gradient(circle at 10% 0%, rgba(15, 118, 110, 0.08), transparent 35%), radial-gradient(circle at 90% 0%, rgba(249, 115, 22, 0.08), transparent 40%)',
-        }}
-      >
+      <HeaderTitleContext.Provider value={ctxValue}>
         <Box
+          component="main"
           sx={{
-            mb: 3,
-            px: 2,
-            py: 1.5,
-            borderRadius: 2,
-            bgcolor: '#ffffff',
-            border: '1px solid rgba(11, 19, 32, 0.08)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            position: 'sticky',
-            top: 16,
-            zIndex: 10,
+            flexGrow: 1,
+            bgcolor: 'background.default',
+            p: 3,
+            minHeight: '100vh',
+            backgroundImage: 'radial-gradient(circle at 10% 0%, rgba(15, 118, 110, 0.08), transparent 35%), radial-gradient(circle at 90% 0%, rgba(249, 115, 22, 0.08), transparent 40%)',
           }}
         >
-          <Typography variant="h5">{pageTitle}</Typography>
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Chip label="Starter Plan" color="primary" variant="outlined" sx={{ fontWeight: 600 }} />
-            <Badge color="error" variant="dot">
-              <NotificationsNoneIcon />
-            </Badge>
-            <Chip label="Upgrade" color="secondary" />
-          </Stack>
+          {children}
         </Box>
-        {children}
-      </Box>
+      </HeaderTitleContext.Provider>
     </Box>
   );
 }
