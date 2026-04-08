@@ -40,6 +40,7 @@ export function EndpointDetailPage() {
   const navigate = useNavigate();
   const query = useEndpointDetail(id ?? '');
   const triggerCheck = useTriggerEndpointCheck();
+  const [scanTriggered, setScanTriggered] = useState(false);
 
   const ep = query.data?.data;
 
@@ -61,8 +62,6 @@ export function EndpointDetailPage() {
       </Box>
     );
   }
-
-  const [scanTriggered, setScanTriggered] = useState(false);
 
   const statusInfo = STATUS_LABEL[ep.lastStatus ?? ''] ?? { color: '#9e9e9e', text: 'Pending' };
   const heartbeats = ep.heartbeats ?? [];
