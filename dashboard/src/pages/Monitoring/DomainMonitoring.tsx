@@ -14,7 +14,7 @@ import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import LockIcon from '@mui/icons-material/Lock';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
-import { useMonitoredEndpoints, useAddEndpoints, useRemoveEndpoint, useTriggerEndpointCheck, useProjects, type MonitoredEndpoint, type Project } from '../../api/hooks.js';
+import { useMonitoredEndpoints, useAddEndpoints, useRemoveEndpoint, useTriggerEndpointCheck, useProjects, type MonitoredEndpoint, type Project, type TlsScanInfo } from '../../api/hooks.js';
 
 const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
   healthy: { color: '#16a34a', label: 'Healthy' },
@@ -150,6 +150,7 @@ export function DomainMonitoringPage({ embedded = false }: { embedded?: boolean 
               <TableRow>
                 <TableCell>Status</TableCell>
                 <TableCell>Endpoint</TableCell>
+                <TableCell align="center">SSL</TableCell>
                 <TableCell>Tags</TableCell>
                 <TableCell>Last Checked</TableCell>
                 <TableCell align="right">Response</TableCell>
@@ -341,6 +342,9 @@ function EndpointRow({ endpoint: ep }: { endpoint: MonitoredEndpoint }) {
           )}
         </Stack>
       </TableCell>
+      <TableCell align="center">
+        <SslGradeBadge tls={ep.lastTlsInfo} />
+      </TableCell>
       <TableCell>
         <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
           {Object.entries(tags).map(([k, v]) => (
@@ -376,5 +380,60 @@ function EndpointRow({ endpoint: ep }: { endpoint: MonitoredEndpoint }) {
         </Stack>
       </TableCell>
     </TableRow>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SSL Grade computation + badge
+// ---------------------------------------------------------------------------
+
+function computeSslGrade(tls: TlsScanInfo): { grade: string; color: string; bg: string } {
+  const isWeakProtocol = tls.tlsVersion ? ['SSLv2', 'SSLv3', 'TLSv1', 'TLSv1.1'].includes(tls.tlsVersion) : false;
+  const isSslProtocol = tls.tlsVersion ? tls.tlsVersion.startsWith('SSL') : false;
+  const weakCiphers = ['RC4', '3DES', 'DES', 'EXPORT', 'NULL', 'ANON'];
+  const isWeakCipher = tls.cipherName ? weakCiphers.some((wc) => tls.cipherName!.toUpperCase().includes(wc)) : false;
+  const isWeakSig = tls.signatureAlgorithm ? ['SHA1', 'MD5'].some((w) => tls.signatureAlgorithm.toUpperCase().includes(w)) : false;
+  const isMd5 = tls.signatureAlgorithm?.toUpperCase().includes('MD5');
+  const isWeakKey = tls.keyBits != null && (
+    (tls.keyAlgorithm.startsWith('RSA') && tls.keyBits < 2048) ||
+    (tls.keyAlgorithm.startsWith('ECDSA') && tls.keyBits < 256)
+  );
+  const certExpired = (tls.certDaysLeft ?? 999) <= 0;
+
+  const criticals = [isSslProtocol, certExpired, isMd5].filter(Boolean).length;
+  const highs = [isWeakProtocol && !isSslProtocol, isWeakCipher, isWeakKey, isWeakSig && !isMd5, !certExpired && (tls.certDaysLeft ?? 999) <= 7].filter(Boolean).length;
+  const mediums = [!tls.forwardSecrecy, !tls.hsts, !tls.chainValid, tls.isSelfSigned].filter(Boolean).length;
+
+  if (criticals > 0) return { grade: 'F', color: '#991b1b', bg: '#fef2f2' };
+  if (highs > 0) return { grade: 'C', color: '#c2410c', bg: '#fff7ed' };
+  if (mediums > 2) return { grade: 'B-', color: '#a16207', bg: '#fefce8' };
+  if (mediums > 0) return { grade: 'B+', color: '#1d4ed8', bg: '#eff6ff' };
+  if (tls.tlsVersion === 'TLSv1.3' && tls.forwardSecrecy && tls.hsts) return { grade: 'A+', color: '#15803d', bg: '#f0fdf4' };
+  return { grade: 'A', color: '#16a34a', bg: '#f0fdf4' };
+}
+
+function SslGradeBadge({ tls }: { tls: TlsScanInfo | null }) {
+  if (!tls) {
+    return (
+      <Tooltip title="No SSL scan yet">
+        <Typography variant="caption" sx={{ color: 'text.disabled' }}>--</Typography>
+      </Tooltip>
+    );
+  }
+
+  const { grade, color, bg } = computeSslGrade(tls);
+
+  return (
+    <Tooltip title={`SSL Grade: ${grade} — click for details`}>
+      <Box sx={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        width: 32, height: 32, borderRadius: '50%',
+        bgcolor: bg, border: `2px solid ${color}`,
+        fontWeight: 800, fontSize: grade.length > 1 ? '0.65rem' : '0.8rem',
+        color, lineHeight: 1, cursor: 'pointer',
+      }}>
+        {grade}
+      </Box>
+    </Tooltip>
   );
 }

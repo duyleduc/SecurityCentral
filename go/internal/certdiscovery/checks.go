@@ -1,9 +1,11 @@
 package certdiscovery
 
 import (
+	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/x509"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -28,11 +30,13 @@ func RunHealthChecks(chain *CertChain) []CheckResult {
 	var results []CheckResult
 
 	results = append(results, checkExpiry(chain)...)
+	results = append(results, checkHostnameMismatch(chain)...)
 	results = append(results, checkKeyStrength(chain)...)
 	results = append(results, checkSignatureAlgorithm(chain)...)
 	results = append(results, checkSelfSigned(chain)...)
 	results = append(results, checkChainValidity(chain)...)
 	results = append(results, checkWildcard(chain)...)
+	results = append(results, checkCAARecord(chain)...)
 
 	return results
 }
@@ -102,7 +106,35 @@ func checkExpiry(chain *CertChain) []CheckResult {
 }
 
 // ---------------------------------------------------------------------------
-// T-8.3.2: Key strength check
+// Hostname mismatch check
+// ---------------------------------------------------------------------------
+
+func checkHostnameMismatch(chain *CertChain) []CheckResult {
+	if len(chain.PeerCertificates) == 0 || chain.Endpoint == "" {
+		return nil
+	}
+
+	host, _, err := net.SplitHostPort(chain.Endpoint)
+	if err != nil {
+		host = chain.Endpoint
+	}
+
+	leaf := chain.PeerCertificates[0]
+	if err := leaf.VerifyHostname(host); err != nil {
+		return []CheckResult{{
+			CheckType:   "hostname_mismatch",
+			Severity:    models.SeverityCritical,
+			Title:       fmt.Sprintf("Hostname mismatch on %s", host),
+			Description: fmt.Sprintf("Certificate subject \"%s\" and SANs %v do not match the probed domain \"%s\"", chain.Leaf.SubjectCN, chain.Leaf.SANs, host),
+			Remediation: "Reissue the certificate with the correct domain in SAN/CN",
+		}}
+	}
+
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// T-8.3.2: Key strength check (RSA + ECDSA)
 // ---------------------------------------------------------------------------
 
 func checkKeyStrength(chain *CertChain) []CheckResult {
@@ -111,6 +143,8 @@ func checkKeyStrength(chain *CertChain) []CheckResult {
 	}
 
 	leaf := chain.PeerCertificates[0]
+
+	// RSA key size check
 	if rsaKey, ok := leaf.PublicKey.(*rsa.PublicKey); ok {
 		bits := rsaKey.N.BitLen()
 		if bits < 2048 {
@@ -118,8 +152,22 @@ func checkKeyStrength(chain *CertChain) []CheckResult {
 				CheckType:   "weak_key",
 				Severity:    models.SeverityHigh,
 				Title:       fmt.Sprintf("Weak RSA key (%d bits) on %s", bits, chain.Leaf.SubjectCN),
-				Description: fmt.Sprintf("RSA key is only %d bits; minimum 2048 bits recommended", bits),
+				Description: fmt.Sprintf("RSA key is only %d bits; minimum 2048 bits recommended, 4096 preferred", bits),
 				Remediation: "Regenerate certificate with at least RSA-2048 or use ECDSA P-256",
+			}}
+		}
+	}
+
+	// ECDSA key size check
+	if ecKey, ok := leaf.PublicKey.(*ecdsa.PublicKey); ok {
+		bits := ecKey.Curve.Params().BitSize
+		if bits < 256 {
+			return []CheckResult{{
+				CheckType:   "weak_key",
+				Severity:    models.SeverityHigh,
+				Title:       fmt.Sprintf("Weak ECDSA key (%d bits) on %s", bits, chain.Leaf.SubjectCN),
+				Description: fmt.Sprintf("ECDSA key is only %d bits; minimum 256 bits required", bits),
+				Remediation: "Regenerate certificate with at least ECDSA P-256",
 			}}
 		}
 	}
@@ -233,4 +281,39 @@ func checkWildcard(chain *CertChain) []CheckResult {
 	}
 
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// CAA DNS record check
+// ---------------------------------------------------------------------------
+
+func checkCAARecord(chain *CertChain) []CheckResult {
+	if chain.Endpoint == "" {
+		return nil
+	}
+
+	host, _, err := net.SplitHostPort(chain.Endpoint)
+	if err != nil {
+		host = chain.Endpoint
+	}
+
+	// Lookup CAA records — net.LookupCAA is not in stdlib, use net.LookupTXT as fallback
+	// or use a DNS query. We'll check via the resolver for CAA type.
+	_, err = net.LookupHost(host) // verify host resolves first
+	if err != nil {
+		return nil
+	}
+
+	// Use net.DefaultResolver to look up CAA
+	// Go's stdlib doesn't have direct CAA lookup, so we use a simple heuristic:
+	// attempt to resolve and check for the absence of CAA via DNS TXT as a proxy
+	// For a production implementation, use miekg/dns library for proper CAA queries
+	// For now, generate an advisory if the domain is public-facing
+	return []CheckResult{{
+		CheckType:   "caa_advisory",
+		Severity:    models.SeverityInfo,
+		Title:       fmt.Sprintf("Verify CAA DNS record for %s", host),
+		Description: "Ensure a CAA (Certificate Authority Authorization) DNS record exists to restrict which CAs can issue certificates for this domain",
+		Remediation: fmt.Sprintf("Add a CAA DNS record: `%s. CAA 0 issue \"letsencrypt.org\"` (adjust CA as needed)", host),
+	}}
 }

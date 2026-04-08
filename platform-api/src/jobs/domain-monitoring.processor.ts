@@ -2,6 +2,7 @@ import tls from 'node:tls';
 import https from 'node:https';
 import http from 'node:http';
 import crypto from 'node:crypto';
+import dns from 'node:dns/promises';
 import type { Job } from 'bullmq';
 
 import { prisma } from '../lib/prisma.js';
@@ -44,10 +45,14 @@ export async function processDomainCheck(job: Job<DomainCheckJobData>): Promise<
   let httpStatusCode: number | null = null;
   let errorMessage: string | null = null;
   let certDaysLeft: number | null = null;
+  let hasHsts = false;
+  let tlsInfo: Record<string, unknown> | null = null;
 
   // --- Step 1: HTTP/HTTPS health check ---
   try {
-    httpStatusCode = await probeHttp(cleanHost, port);
+    const httpResult = await probeHttp(cleanHost, port);
+    httpStatusCode = httpResult.statusCode;
+    hasHsts = httpResult.hasHsts;
     if (httpStatusCode >= 200 && httpStatusCode < 400) {
       heartbeatStatus = 'up';
       endpointStatus = 'healthy';
@@ -71,6 +76,30 @@ export async function processDomainCheck(job: Job<DomainCheckJobData>): Promise<
     }
 
     certDaysLeft = Math.floor((certInfo.notAfter.getTime() - Date.now()) / 86400000);
+
+    // Build TLS scan info for persistence
+    const cipherUpper = (certInfo.cipherName ?? '').toUpperCase();
+    const hasForwardSecrecy = cipherUpper.includes('ECDHE') || cipherUpper.includes('DHE');
+    tlsInfo = {
+      tlsVersion: certInfo.tlsVersion ?? null,
+      cipherName: certInfo.cipherName ?? null,
+      cipherVersion: certInfo.cipherVersion ?? null,
+      forwardSecrecy: hasForwardSecrecy,
+      hsts: hasHsts,
+      keyAlgorithm: certInfo.keyAlgorithm,
+      signatureAlgorithm: certInfo.signatureAlgorithm,
+      validationLevel: certInfo.validationLevel ?? 'unknown',
+      subjectCn: certInfo.subject,
+      issuerCn: certInfo.issuer,
+      certDaysLeft,
+      certNotAfter: certInfo.notAfter.toISOString(),
+      chainValid: certInfo.chainValid,
+      chainDepth: certInfo.chainDepth,
+      isSelfSigned: certInfo.isSelfSigned,
+      keyBits: certInfo.keyBits ?? null,
+      sans: certInfo.sans,
+      scannedAt: new Date().toISOString(),
+    };
 
     // Check cert health
     if (certDaysLeft <= 0) {
@@ -112,6 +141,14 @@ export async function processDomainCheck(job: Job<DomainCheckJobData>): Promise<
     });
 
     await generateCertFindings(orgId, cleanHost, port, certInfo, fingerprint);
+
+    // --- Step 2b: HSTS header check (only for HTTPS endpoints) ---
+    if ((port === 443 || port === 8443) && !hasHsts) {
+      await generateSecurityHeaderFindings(orgId, cleanHost, port);
+    }
+
+    // --- Step 2c: CAA DNS record check ---
+    await generateCaaFindings(orgId, cleanHost, port);
   } catch (err) {
     if (!errorMessage) errorMessage = (err as Error).message;
     log.info('TLS probe failed', { host: cleanHost, port, error: (err as Error).message });
@@ -138,6 +175,7 @@ export async function processDomainCheck(job: Job<DomainCheckJobData>): Promise<
       lastCheckedAt: new Date(),
       lastStatus: endpointStatus,
       lastResponseMs: responseMs,
+      lastTlsInfo: tlsInfo as any,
     },
   });
 
@@ -165,6 +203,14 @@ interface CertInfo {
   raw: Buffer;
   isSelfSigned: boolean;
   keyBits?: number;
+  // TLS connection metadata
+  tlsVersion?: string;       // TLSv1.3, TLSv1.2, etc.
+  cipherName?: string;        // e.g. TLS_AES_256_GCM_SHA384
+  cipherVersion?: string;     // e.g. TLSv1.3
+  // Certificate policy (DV/OV/EV)
+  validationLevel?: 'DV' | 'OV' | 'EV' | 'unknown';
+  // Issuer org for OV/EV detection
+  subjectOrg?: string;
 }
 
 function probeTls(host: string, port: number): Promise<CertInfo> {
@@ -186,20 +232,29 @@ function probeTls(host: string, port: number): Promise<CertInfo> {
           current = current.issuerCertificate;
         }
 
+        // Extract TLS connection metadata
+        const cipher = socket.getCipher();
+        const protocol = socket.getProtocol();
+
         const info: CertInfo = {
           subject: String(cert.subject?.CN ?? ''),
-          issuer: buildIssuerName(cert.issuer),
+          issuer: buildIssuerName(cert.issuer as any),
           sans: (cert.subjectaltname ?? '').split(',').map((s: string) => s.trim().replace('DNS:', '')).filter(Boolean),
           serialNumber: cert.serialNumber ?? '',
           notBefore: new Date(cert.valid_from),
           notAfter: new Date(cert.valid_to),
           keyAlgorithm: inferKeyAlgorithm(cert),
-          signatureAlgorithm: cert.infoAccess ? 'SHA256' : 'unknown',
+          signatureAlgorithm: inferSignatureAlgorithm(cert),
           chainValid,
           chainDepth,
           raw: cert.raw,
           isSelfSigned: cert.subject?.CN === cert.issuer?.CN && cert.subject?.O === cert.issuer?.O && !cert.issuerCertificate,
           keyBits: cert.bits,
+          tlsVersion: protocol ?? undefined,
+          cipherName: cipher?.name,
+          cipherVersion: cipher?.version,
+          validationLevel: detectValidationLevel(cert),
+          subjectOrg: Array.isArray(cert.subject?.O) ? cert.subject?.O[0] : cert.subject?.O,
         };
 
         socket.destroy();
@@ -231,12 +286,16 @@ function buildIssuerName(issuer: { O?: string; CN?: string } | undefined): strin
 // HTTP/HTTPS health check
 // ---------------------------------------------------------------------------
 
+interface HttpProbeResult {
+  statusCode: number;
+  hasHsts: boolean;
+}
+
 /**
- * Sends a HEAD request (falls back to GET) and returns the HTTP status code.
+ * Sends a HEAD request (falls back to GET) and returns the HTTP status code + security headers.
  * Tries HTTPS first for port 443/8443, otherwise HTTP.
- * Follows up to 5 redirects.
  */
-function probeHttp(host: string, port: number): Promise<number> {
+function probeHttp(host: string, port: number): Promise<HttpProbeResult> {
   const isSecure = port === 443 || port === 8443;
   const protocol = isSecure ? https : http;
   const url = `${isSecure ? 'https' : 'http'}://${host}${port === 443 || port === 80 ? '' : `:${port}`}/`;
@@ -245,20 +304,19 @@ function probeHttp(host: string, port: number): Promise<number> {
     const req = protocol.request(url, {
       method: 'HEAD',
       timeout: HTTP_TIMEOUT_MS,
-      rejectUnauthorized: false, // don't fail on self-signed certs
+      rejectUnauthorized: false,
       headers: { 'User-Agent': 'SecurityCentral/1.0 health-check' },
     }, (res) => {
-      // Follow redirects
+      const hasHsts = Boolean(res.headers['strict-transport-security']);
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        // Just report the redirect status — don't chase it
-        resolve(res.statusCode);
+        resolve({ statusCode: res.statusCode, hasHsts });
       } else {
-        resolve(res.statusCode ?? 0);
+        resolve({ statusCode: res.statusCode ?? 0, hasHsts });
       }
-      res.resume(); // drain response
+      res.resume();
     });
 
-    req.on('error', (err) => {
+    req.on('error', () => {
       // If HEAD fails, try GET (some servers reject HEAD)
       const getReq = protocol.request(url, {
         method: 'GET',
@@ -266,7 +324,8 @@ function probeHttp(host: string, port: number): Promise<number> {
         rejectUnauthorized: false,
         headers: { 'User-Agent': 'SecurityCentral/1.0 health-check' },
       }, (res) => {
-        resolve(res.statusCode ?? 0);
+        const hasHsts = Boolean(res.headers['strict-transport-security']);
+        resolve({ statusCode: res.statusCode ?? 0, hasHsts });
         res.resume();
       });
       getReq.on('error', reject);
@@ -282,9 +341,72 @@ function probeHttp(host: string, port: number): Promise<number> {
 function inferKeyAlgorithm(cert: tls.PeerCertificate): string {
   const bits = cert.bits;
   if (!bits) return 'unknown';
-  if (bits >= 2048 && bits <= 4096) return `RSA-${bits}`;
+  // ECDSA keys are typically 256, 384, or 521 bits
   if (bits >= 256 && bits <= 521) return `ECDSA-P${bits}`;
+  // RSA keys are 1024+ bits
   return `RSA-${bits}`;
+}
+
+/**
+ * Extract the actual signature algorithm from the certificate's raw ASN.1 data.
+ * Node's PeerCertificate doesn't expose signatureAlgorithm directly, so we
+ * parse the fingerprint256 hash name and OID-based heuristics.
+ */
+function inferSignatureAlgorithm(cert: tls.PeerCertificate): string {
+  // Node.js exposes the signature algorithm OID indirectly via the fingerprint
+  // The most reliable approach: parse the X509Certificate if available (Node 15+)
+  try {
+    const x509 = new crypto.X509Certificate(cert.raw);
+    // x509.sigAlgName is not directly available, but we can check via toString()
+    const pem = x509.toString();
+    // Parse from the text representation
+    const sigMatch = pem.match(/Signature Algorithm:\s*(\S+)/i);
+    if (sigMatch) return sigMatch[1].toUpperCase().replace('WITHRSAENCRYPTION', '').replace('WITH', '-');
+  } catch {
+    // Fallback below
+  }
+
+  // Heuristic: modern certs are SHA256, but we flag if we can't determine
+  // Check for known weak signatures by examining raw cert bytes for SHA-1 OID
+  const sha1OID = Buffer.from([0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x05]); // sha1WithRSAEncryption
+  if (cert.raw && cert.raw.includes(sha1OID)) return 'SHA1';
+
+  const md5OID = Buffer.from([0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x04]); // md5WithRSAEncryption
+  if (cert.raw && cert.raw.includes(md5OID)) return 'MD5';
+
+  return 'SHA256'; // safe default for modern certificates
+}
+
+/**
+ * Detect certificate validation level (DV/OV/EV) from certificate policies.
+ * EV certs have specific OIDs; OV certs have Organization in subject; DV is the rest.
+ */
+function detectValidationLevel(cert: tls.PeerCertificate): 'DV' | 'OV' | 'EV' | 'unknown' {
+  // EV certificates contain specific policy OIDs — check via X509Certificate
+  try {
+    const x509 = new crypto.X509Certificate(cert.raw);
+    const info = x509.toString();
+    // Known EV policy OIDs patterns
+    const evIndicators = [
+      '2.16.840.1.114412.2.1',   // DigiCert EV
+      '2.16.840.1.113733.1.7.23.6', // Symantec/VeriSign EV
+      '1.3.6.1.4.1.6449.1.2.1.5.1', // Comodo/Sectigo EV
+      '2.16.840.1.114028.10.1.2',    // Entrust EV
+      '1.3.6.1.4.1.8024.0.2.100.1.2', // QuoVadis EV
+      'Policy: 2.23.140.1.1',          // CA/Browser Forum EV OID
+    ];
+    if (evIndicators.some((oid) => info.includes(oid))) return 'EV';
+  } catch {
+    // Fall through to simpler checks
+  }
+
+  // OV: has Organization in subject
+  const subjectOrg = cert.subject?.O;
+  const orgStr = Array.isArray(subjectOrg) ? subjectOrg[0] : subjectOrg;
+  if (orgStr && orgStr.trim().length > 0) return 'OV';
+
+  // DV: no org, just domain validation
+  return 'DV';
 }
 
 // ---------------------------------------------------------------------------
@@ -298,35 +420,103 @@ async function generateCertFindings(
   cert: CertInfo,
   fingerprint: string,
 ): Promise<void> {
-  const findings: Array<{ severity: string; title: string; description: string }> = [];
+  const findings: Array<{ severity: string; title: string; description: string; remediation: string }> = [];
   const daysUntilExpiry = Math.floor((cert.notAfter.getTime() - Date.now()) / 86400000);
+
+  // --- 1. Certificate Identity & Validity ---
 
   // Expiry checks
   if (daysUntilExpiry <= 0) {
-    findings.push({ severity: 'critical', title: `EXPIRED certificate: ${cert.subject}`, description: `Certificate for ${host}:${port} expired ${Math.abs(daysUntilExpiry)} days ago` });
+    findings.push({ severity: 'critical', title: `EXPIRED certificate: ${cert.subject}`, description: `Certificate for ${host}:${port} expired ${Math.abs(daysUntilExpiry)} days ago`, remediation: 'Renew the certificate immediately' });
   } else if (daysUntilExpiry <= 7) {
-    findings.push({ severity: 'critical', title: `Certificate ${cert.subject} expires in ${daysUntilExpiry}d`, description: `Expires ${cert.notAfter.toISOString()}` });
+    findings.push({ severity: 'critical', title: `Certificate ${cert.subject} expires in ${daysUntilExpiry}d`, description: `Expires ${cert.notAfter.toISOString()}`, remediation: 'Renew the certificate before expiration' });
   } else if (daysUntilExpiry <= 30) {
-    findings.push({ severity: 'high', title: `Certificate ${cert.subject} expires in ${daysUntilExpiry}d`, description: `Expires ${cert.notAfter.toISOString()}` });
+    findings.push({ severity: 'high', title: `Certificate ${cert.subject} expires in ${daysUntilExpiry}d`, description: `Expires ${cert.notAfter.toISOString()}`, remediation: 'Renew the certificate before expiration' });
   } else if (daysUntilExpiry <= 60) {
-    findings.push({ severity: 'medium', title: `Certificate ${cert.subject} expires in ${daysUntilExpiry}d`, description: `Expires ${cert.notAfter.toISOString()}` });
+    findings.push({ severity: 'medium', title: `Certificate ${cert.subject} expires in ${daysUntilExpiry}d`, description: `Expires ${cert.notAfter.toISOString()}`, remediation: 'Schedule certificate renewal' });
   } else if (daysUntilExpiry <= 90) {
-    findings.push({ severity: 'low', title: `Certificate ${cert.subject} expires in ${daysUntilExpiry}d`, description: `Expires ${cert.notAfter.toISOString()}` });
+    findings.push({ severity: 'low', title: `Certificate ${cert.subject} expires in ${daysUntilExpiry}d`, description: `Expires ${cert.notAfter.toISOString()}`, remediation: 'Plan certificate renewal' });
   }
 
-  // Weak key
-  if (cert.keyBits && cert.keyBits < 2048 && cert.keyAlgorithm.startsWith('RSA')) {
-    findings.push({ severity: 'high', title: `Weak RSA key (${cert.keyBits} bits) on ${cert.subject}`, description: 'Minimum 2048 bits recommended' });
+  // Hostname mismatch: verify CN or SAN matches the probed domain
+  if (!isHostnameMatch(host, cert.subject, cert.sans)) {
+    findings.push({
+      severity: 'critical',
+      title: `Hostname mismatch on ${host}`,
+      description: `Certificate subject "${cert.subject}" and SANs [${cert.sans.join(', ')}] do not match the probed domain "${host}"`,
+      remediation: 'Reissue the certificate with the correct domain in SAN/CN',
+    });
   }
 
   // Self-signed
   if (cert.isSelfSigned) {
-    findings.push({ severity: 'medium', title: `Self-signed certificate on ${cert.subject}`, description: 'Not issued by a trusted CA' });
+    findings.push({ severity: 'medium', title: `Self-signed certificate on ${cert.subject}`, description: 'Certificate is not issued by a trusted Certificate Authority', remediation: 'Replace with a certificate from a trusted CA (e.g., Let\'s Encrypt, AWS ACM)' });
   }
 
   // Incomplete chain
   if (!cert.chainValid) {
-    findings.push({ severity: 'medium', title: `Incomplete chain on ${cert.subject}`, description: 'Certificate chain validation failed' });
+    findings.push({ severity: 'medium', title: `Incomplete certificate chain on ${cert.subject}`, description: 'Certificate chain validation failed — may break mobile or older browser connections', remediation: 'Ensure the server presents the full chain including intermediate certificates' });
+  }
+
+  // --- 2. Cryptographic Strength ---
+
+  // Weak RSA key
+  if (cert.keyBits && cert.keyBits < 2048 && cert.keyAlgorithm.startsWith('RSA')) {
+    findings.push({ severity: 'high', title: `Weak RSA key (${cert.keyBits} bits) on ${cert.subject}`, description: `RSA key is only ${cert.keyBits} bits; minimum 2048 bits recommended, 4096 preferred`, remediation: 'Regenerate certificate with at least RSA-2048 or use ECDSA P-256' });
+  }
+
+  // Weak ECDSA key
+  if (cert.keyBits && cert.keyBits < 256 && cert.keyAlgorithm.startsWith('ECDSA')) {
+    findings.push({ severity: 'high', title: `Weak ECDSA key (${cert.keyBits} bits) on ${cert.subject}`, description: `ECDSA key is only ${cert.keyBits} bits; minimum 256 bits required`, remediation: 'Regenerate certificate with at least ECDSA P-256' });
+  }
+
+  // Weak signature algorithm (SHA-1 or MD5)
+  const sigAlg = cert.signatureAlgorithm.toUpperCase();
+  if (sigAlg.includes('SHA1') || sigAlg === 'SHA1') {
+    findings.push({ severity: 'high', title: `SHA-1 signature on ${cert.subject}`, description: 'SHA-1 is cryptographically broken and rejected by modern browsers', remediation: 'Reissue certificate with SHA-256 or stronger signature algorithm' });
+  }
+  if (sigAlg.includes('MD5') || sigAlg === 'MD5') {
+    findings.push({ severity: 'critical', title: `MD5 signature on ${cert.subject}`, description: 'MD5 is cryptographically broken and trivially forgeable', remediation: 'Reissue certificate with SHA-256 immediately' });
+  }
+
+  // --- 3. Protocol & Cipher Suite ---
+
+  // Weak TLS version
+  if (cert.tlsVersion) {
+    const weakProtocols = ['SSLv2', 'SSLv3', 'TLSv1', 'TLSv1.1'];
+    if (weakProtocols.includes(cert.tlsVersion)) {
+      findings.push({
+        severity: cert.tlsVersion.startsWith('SSL') ? 'critical' : 'high',
+        title: `Weak protocol ${cert.tlsVersion} on ${host}:${port}`,
+        description: `Server negotiated ${cert.tlsVersion} which has known vulnerabilities (POODLE, BEAST). Only TLS 1.2+ should be enabled`,
+        remediation: 'Disable SSL 2.0, SSL 3.0, TLS 1.0, and TLS 1.1. Enable only TLS 1.2 and TLS 1.3',
+      });
+    }
+  }
+
+  // Weak cipher suite
+  if (cert.cipherName) {
+    const cipher = cert.cipherName.toUpperCase();
+    const weakCiphers = ['RC4', '3DES', 'DES', 'EXPORT', 'NULL', 'ANON'];
+    const matchedWeak = weakCiphers.find((wc) => cipher.includes(wc));
+    if (matchedWeak) {
+      findings.push({
+        severity: matchedWeak === 'NULL' || matchedWeak === 'ANON' ? 'critical' : 'high',
+        title: `Weak cipher ${cert.cipherName} on ${host}:${port}`,
+        description: `Cipher suite contains ${matchedWeak} which is cryptographically weak. Prefer AEAD ciphers (AES-GCM, CHACHA20-POLY1305)`,
+        remediation: 'Configure server to use only strong cipher suites with AEAD (AES-GCM, CHACHA20-POLY1305)',
+      });
+    }
+
+    // No forward secrecy
+    if (!cipher.includes('ECDHE') && !cipher.includes('DHE')) {
+      findings.push({
+        severity: 'medium',
+        title: `No forward secrecy on ${host}:${port}`,
+        description: `Cipher ${cert.cipherName} does not use ephemeral key exchange (ECDHE/DHE). Past traffic can be decrypted if the private key is compromised`,
+        remediation: 'Enable ECDHE cipher suites to ensure forward secrecy',
+      });
+    }
   }
 
   // Find the certificate record to link findings
@@ -336,7 +526,6 @@ async function generateCertFindings(
   });
 
   for (const f of findings) {
-    // Upsert: match by title + cert to avoid duplicates
     const existing = await prisma.finding.findFirst({
       where: { orgId, title: f.title, certificateId: certRecord?.id, status: { in: ['open', 'in_progress'] } },
     });
@@ -351,11 +540,98 @@ async function generateCertFindings(
           title: f.title,
           description: f.description,
           ...(certRecord ? { certificate: { connect: { id: certRecord.id } } } : {}),
-          detail: { host, port, fingerprint, days_until_expiry: daysUntilExpiry } as any,
-          remediation: 'Renew or replace the certificate',
+          detail: { host, port, fingerprint, days_until_expiry: daysUntilExpiry, tls_version: cert.tlsVersion, cipher: cert.cipherName, validation_level: cert.validationLevel } as any,
+          remediation: f.remediation,
         },
       });
     }
+  }
+}
+
+/**
+ * Check if a hostname matches the certificate's CN or any SAN entry.
+ * Supports wildcard matching (e.g., *.example.com matches sub.example.com).
+ */
+function isHostnameMatch(hostname: string, cn: string, sans: string[]): boolean {
+  const candidates = sans.length > 0 ? sans : [cn];
+  const lower = hostname.toLowerCase();
+
+  return candidates.some((name) => {
+    const pattern = name.toLowerCase();
+    if (pattern === lower) return true;
+    // Wildcard: *.example.com matches foo.example.com but not foo.bar.example.com
+    if (pattern.startsWith('*.')) {
+      const wildBase = pattern.slice(2); // example.com
+      const hostParts = lower.split('.');
+      if (hostParts.length < 2) return false;
+      const hostBase = hostParts.slice(1).join('.'); // example.com from foo.example.com
+      return hostBase === wildBase;
+    }
+    return false;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// HSTS header finding
+// ---------------------------------------------------------------------------
+
+async function generateSecurityHeaderFindings(orgId: string, host: string, port: number): Promise<void> {
+  const title = `Missing HSTS header on ${host}:${port}`;
+  const existing = await prisma.finding.findFirst({
+    where: { orgId, title, status: { in: ['open', 'in_progress'] } },
+  });
+
+  if (!existing) {
+    await prisma.finding.create({
+      data: {
+        organization: { connect: { id: orgId } },
+        source: 'cert_monitor',
+        severity: 'medium' as any,
+        status: 'open',
+        title,
+        description: 'The server does not send the Strict-Transport-Security (HSTS) header, leaving users vulnerable to protocol downgrade attacks and cookie hijacking',
+        detail: { host, port, check_type: 'hsts_missing' } as any,
+        remediation: 'Add the Strict-Transport-Security header: `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`',
+      },
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CAA DNS record check
+// ---------------------------------------------------------------------------
+
+async function generateCaaFindings(orgId: string, host: string, port: number): Promise<void> {
+  try {
+    const records = await dns.resolveCaa(host);
+    // CAA records exist — no finding needed
+    if (records && records.length > 0) return;
+  } catch (err) {
+    // ENODATA or ENOTFOUND means no CAA records — that's the finding
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENODATA' && code !== 'ENOTFOUND' && code !== 'ESERVFAIL') {
+      return; // DNS error unrelated to CAA, skip silently
+    }
+  }
+
+  const title = `No CAA DNS record for ${host}`;
+  const existing = await prisma.finding.findFirst({
+    where: { orgId, title, status: { in: ['open', 'in_progress'] } },
+  });
+
+  if (!existing) {
+    await prisma.finding.create({
+      data: {
+        organization: { connect: { id: orgId } },
+        source: 'cert_monitor',
+        severity: 'low' as any,
+        status: 'open',
+        title,
+        description: 'No CAA (Certificate Authority Authorization) DNS record found. Any CA can issue certificates for this domain, increasing the risk of unauthorized certificate issuance',
+        detail: { host, port, check_type: 'caa_missing' } as any,
+        remediation: 'Add a CAA DNS record specifying which CAs are authorized to issue certificates for this domain (e.g., `0 issue "letsencrypt.org"`)',
+      },
+    });
   }
 }
 

@@ -563,6 +563,27 @@ export function useCreateInstallToken() {
 // Domain Monitoring
 // ---------------------------------------------------------------------------
 
+export interface TlsScanInfo {
+  tlsVersion: string | null;
+  cipherName: string | null;
+  cipherVersion: string | null;
+  forwardSecrecy: boolean;
+  hsts: boolean;
+  keyAlgorithm: string;
+  signatureAlgorithm: string;
+  validationLevel: 'DV' | 'OV' | 'EV' | 'unknown';
+  subjectCn: string;
+  issuerCn: string;
+  certDaysLeft: number;
+  certNotAfter: string;
+  chainValid: boolean;
+  chainDepth: number;
+  isSelfSigned: boolean;
+  keyBits: number | null;
+  sans: string[];
+  scannedAt: string;
+}
+
 export interface MonitoredEndpoint {
   id: string;
   host: string;
@@ -574,6 +595,7 @@ export interface MonitoredEndpoint {
   lastCheckedAt: string | null;
   lastStatus: string | null;
   lastResponseMs: number | null;
+  lastTlsInfo: TlsScanInfo | null;
   projectId: string | null;
   project?: { id: string; name: string } | null;
   createdAt: string;
@@ -596,10 +618,40 @@ export interface UptimePeriod {
   avgResponseMs: number;
 }
 
+export interface EndpointCertificate {
+  id: string;
+  subjectCn: string;
+  sans: string[];
+  issuerCn: string;
+  serialNumber: string;
+  fingerprintSha256: string;
+  notBefore: string;
+  notAfter: string;
+  keyAlgorithm: string;
+  signatureAlgorithm: string;
+  chainValid: boolean | null;
+  chainDepth: number | null;
+  status: string;
+  lastCheckedAt: string;
+}
+
+export interface EndpointFinding {
+  id: string;
+  title: string;
+  severity: string;
+  status: string;
+  description: string | null;
+  remediation: string | null;
+  detail: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface EndpointDetail extends MonitoredEndpoint {
   heartbeats: Heartbeat[];
   uptime: Record<string, UptimePeriod>;
   responseHistory: Array<{ time: string; ms: number; status: string }>;
+  certificate: EndpointCertificate | null;
+  findings: EndpointFinding[];
 }
 
 export function useEndpointDetail(id: string) {
@@ -660,7 +712,10 @@ export function useTriggerEndpointCheck() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiPost(`/monitoring/domains/${id}/check`, {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['monitored-endpoints'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['monitored-endpoints'] });
+      qc.invalidateQueries({ queryKey: ['certificates'] });
+    },
   });
 }
 

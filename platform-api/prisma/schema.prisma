@@ -425,6 +425,7 @@ model MonitoredEndpoint {
   lastCheckedAt  DateTime? @map("last_checked_at") @db.Timestamptz()
   lastStatus     String?   @map("last_status") // healthy | unhealthy | unreachable
   lastResponseMs Int?      @map("last_response_ms")
+  lastTlsInfo    Json?     @map("last_tls_info") @db.JsonB // TLS scan metadata: version, cipher, hsts, etc.
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz()
 
   organization Organization     @relation(fields: [orgId], references: [id])

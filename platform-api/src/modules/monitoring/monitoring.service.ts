@@ -195,7 +195,56 @@ export async function getEndpointDetail(orgId: string, endpointId: string) {
     .reverse()
     .map((h) => ({ time: h.createdAt, ms: h.responseMs, status: h.status }));
 
-  return { ...endpoint, heartbeats: heartbeats.reverse(), uptime, responseHistory };
+  // Certificate linked to this endpoint (discovered via probe)
+  const discoveredFrom = `probe:${endpoint.host}:${endpoint.port}`;
+  const certificate = await prisma.certificate.findFirst({
+    where: { orgId, discoveredFrom },
+    orderBy: { lastCheckedAt: 'desc' },
+    select: {
+      id: true,
+      subjectCn: true,
+      sans: true,
+      issuerCn: true,
+      serialNumber: true,
+      fingerprintSha256: true,
+      notBefore: true,
+      notAfter: true,
+      keyAlgorithm: true,
+      signatureAlgorithm: true,
+      chainValid: true,
+      chainDepth: true,
+      status: true,
+      lastCheckedAt: true,
+    },
+  });
+
+  // SSL/cert findings for this endpoint
+  const findings = await prisma.finding.findMany({
+    where: {
+      orgId,
+      source: 'cert_monitor',
+      status: { in: ['open', 'in_progress'] },
+      ...(certificate ? { certificateId: certificate.id } : {}),
+      OR: [
+        { detail: { path: ['host'], equals: endpoint.host } },
+        ...(certificate ? [{ certificateId: certificate.id }] : []),
+      ],
+    },
+    orderBy: [{ severity: 'asc' }, { createdAt: 'desc' }],
+    take: 50,
+    select: {
+      id: true,
+      title: true,
+      severity: true,
+      status: true,
+      description: true,
+      remediation: true,
+      detail: true,
+      createdAt: true,
+    },
+  });
+
+  return { ...endpoint, heartbeats: heartbeats.reverse(), uptime, responseHistory, certificate, findings };
 }
 
 // ---------------------------------------------------------------------------
