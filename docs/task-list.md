@@ -20,34 +20,34 @@ Phase 0 (Foundation)
 
 ### Infrastructure
 
-- [ ] Create `docker-compose.yml` with MySQL 8 service
-- [ ] Create `Makefile` with `start`, `stop`, `test`, `build` targets
+- [x] Create `docker-compose.yml` with MySQL 8 service
+- [x] Create `Makefile` with `start`, `stop`, `test`, `build` targets
 
 ### Backend (platform-api)
 
-- [ ] Init Node.js + TypeScript project (`package.json`, `tsconfig.json`)
-- [ ] Set up Express app with middleware stack (`cors`, `request-id`, `request-logger`, `rate-limit`, `errors`)
-- [ ] Create Prisma schema for MySQL 8 (Organization, User, ApiKey, Project, Server, MonitoredEndpoint, Scan, Finding, ServerMetricSnapshot, EndpointHeartbeat, InstallToken, Integration, AuditLog, NotificationPreference)
+- [x] Init Node.js + TypeScript project (`package.json`, `tsconfig.json`)
+- [x] Set up Express app with middleware stack (`cors`, `request-id`, `request-logger`, `rate-limit`, `errors`)
+- [x] Create Prisma schema for MySQL 8 (Organization, User, ApiKey, Project, Server, MonitoredEndpoint, Scan, Finding, ServerMetricSnapshot, EndpointHeartbeat, InstallToken, Integration, AuditLog, NotificationPreference)
 - [ ] Run initial migration
-- [ ] Create `lib/env.ts` — environment config with validation
-- [ ] Create `lib/prisma.ts` — Prisma client singleton
-- [ ] Create `lib/logger.ts` — structured logging
-- [ ] Create `lib/jwt.ts` — JWT sign/verify helpers
-- [ ] Create auth module — `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`
-- [ ] Create auth middleware (JWT Bearer validation)
-- [ ] Create RBAC middleware (owner / admin / member / viewer)
-- [ ] Create `GET /health` endpoint
-- [ ] Create `prisma/seed.ts` with test data
+- [x] Create `lib/env.ts` — environment config with validation
+- [x] Create `lib/prisma.ts` — Prisma client singleton
+- [x] Create `lib/logger.ts` — structured logging
+- [x] Create `lib/jwt.ts` — JWT sign/verify helpers
+- [x] Create auth module — `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`
+- [x] Create auth middleware (JWT Bearer validation)
+- [x] Create RBAC middleware (owner / admin / member / viewer)
+- [x] Create `GET /health` endpoint
+- [x] Create `prisma/seed.ts` with test data
 
 ### Frontend (dashboard)
 
-- [ ] Init Vite + React 18 + TypeScript project
-- [ ] Set up MUI v7 theme (`theme/theme.ts`)
-- [ ] Create API client with interceptors (`api/client.ts`)
-- [ ] Create `AuthContext` + `ProtectedRoute`
-- [ ] Create Login page
-- [ ] Create Register page
-- [ ] Create AppShell (sidebar nav, top bar with project switcher, search, alerts, user menu)
+- [x] Init Vite + React 18 + TypeScript project
+- [x] Set up MUI v7 theme (`theme/theme.ts`)
+- [x] Create API client with interceptors (`api/client.ts`)
+- [x] Create `AuthContext` + `ProtectedRoute`
+- [x] Create Login page
+- [x] Create Register page
+- [x] Create AppShell (sidebar nav, top bar with project switcher, search, alerts, user menu)
 
 ### Done when
 
@@ -61,23 +61,23 @@ Register → Login → see empty app shell with sidebar.
 
 ### Backend
 
-- [ ] Projects CRUD — `GET/POST /api/v1/projects`, `GET/PATCH/DELETE /api/v1/projects/:id`
-- [ ] Project summary — `GET /api/v1/projects/:id/summary`
-- [ ] Monitoring endpoints CRUD — `GET/POST /api/v1/monitoring/endpoints`, `GET/DELETE /api/v1/monitoring/endpoints/:id`
-- [ ] Domain check service — SSL/TLS cert fetch, HTTP uptime check, DNS record lookup (SPF/DKIM/DMARC)
-- [ ] Manual check trigger — `POST /api/v1/monitoring/endpoints/:id/check`
-- [ ] Check history — `GET /api/v1/monitoring/endpoints/:id/heartbeats`
-- [ ] In-process scheduler (`scheduler.ts`) — run domain checks per endpoint `checkInterval` (1h/6h/24h)
-- [ ] Store results in EndpointHeartbeat table
+- [x] Projects CRUD — `GET/POST /api/v1/projects`, `GET/PATCH/DELETE /api/v1/projects/:id`
+- [x] Project summary — `GET /api/v1/projects/:id/summary`
+- [x] Monitoring endpoints CRUD — `GET/POST /api/v1/monitoring/endpoints`, `GET/DELETE /api/v1/monitoring/endpoints/:id`
+- [x] Domain check service — SSL/TLS cert fetch, HTTP uptime check, DNS record lookup (SPF/DKIM/DMARC)
+- [x] Manual check trigger — `POST /api/v1/monitoring/endpoints/:id/check`
+- [x] Check history — `GET /api/v1/monitoring/endpoints/:id/heartbeats`
+- [x] In-process scheduler (`scheduler.ts`) — run domain checks per endpoint `checkInterval` (1h/6h/24h)
+- [x] Store results in EndpointHeartbeat table
 
 ### Frontend
 
-- [ ] Projects list page (cards, create dialog)
-- [ ] Project detail page (linked assets summary)
-- [ ] Domain list page (chart-first: SSL expiry overview, uptime distribution, DNS security coverage, high-risk domain cards)
-- [ ] Add Domain dialog/flow
-- [ ] Domain detail page (SSL/TLS info, uptime bar chart, DNS security status)
-- [ ] React Query hooks for projects and monitoring endpoints
+- [x] Projects list page (cards, create dialog)
+- [x] Project detail page (linked assets summary)
+- [x] Domain list page (chart-first: status summary cards, domain cards with SSL/status chips)
+- [x] Add Domain dialog/flow
+- [x] Domain detail page (SSL/TLS info, uptime status, DNS security status, check history table)
+- [x] React Query hooks for projects and monitoring endpoints
 
 ### Done when
 

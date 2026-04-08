@@ -1,0 +1,62 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { ThemeProvider, CssBaseline } from '@mui/material';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+import { theme } from './theme/theme';
+import { AuthProvider } from './auth/AuthContext';
+import { ProtectedRoute } from './auth/ProtectedRoute';
+import { AppShell } from './components/AppShell';
+import { LoginPage } from './pages/Login/LoginPage';
+import { RegisterPage } from './pages/Register/RegisterPage';
+import { DashboardOverviewPage } from './pages/DashboardOverview/DashboardOverviewPage';
+import { ProjectsPage } from './pages/Projects/ProjectsPage';
+import { ProjectDetailPage } from './pages/Projects/ProjectDetailPage';
+import { DomainsPage } from './pages/Monitoring/DomainsPage';
+import { DomainDetailPage } from './pages/Monitoring/DomainDetailPage';
+import { ServersPage } from './pages/Servers/ServersPage';
+import { FindingsPage } from './pages/Findings/FindingsPage';
+import { SettingsPage } from './pages/Settings/SettingsPage';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: 1,
+    },
+  },
+});
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <BrowserRouter>
+          <AuthProvider>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <AppShell />
+                  </ProtectedRoute>
+                }
+              >
+                <Route path="/" element={<DashboardOverviewPage />} />
+                <Route path="/projects" element={<ProjectsPage />} />
+                <Route path="/projects/:id" element={<ProjectDetailPage />} />
+                <Route path="/domains" element={<DomainsPage />} />
+                <Route path="/domains/:id" element={<DomainDetailPage />} />
+                <Route path="/servers" element={<ServersPage />} />
+                <Route path="/findings" element={<FindingsPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
+}

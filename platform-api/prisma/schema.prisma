@@ -1,0 +1,339 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Organization (multi-tenant root)
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  name      String   @db.VarChar(100)
+  slug      String   @unique @db.VarChar(120)
+  plan      String   @default("free") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  users                  User[]
+  apiKeys                ApiKey[]
+  installTokens          InstallToken[]
+  projects               Project[]
+  scans                  Scan[]
+  findings               Finding[]
+  integrations           Integration[]
+  auditLogs              AuditLog[]
+  notificationPreferences NotificationPreference[]
+
+  @@map("organizations")
+}
+
+// ---------------------------------------------------------------------------
+// User
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(uuid()) @db.VarChar(36)
+  orgId        String   @map("org_id") @db.VarChar(36)
+  email        String   @unique @db.VarChar(255)
+  name         String   @db.VarChar(100)
+  role         String   @default("member") @db.VarChar(20) // owner | admin | member | viewer
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  org Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// API Key (hashed, prefix-based lookup)
+// ---------------------------------------------------------------------------
+
+model ApiKey {
+  id         String    @id @default(uuid()) @db.VarChar(36)
+  orgId      String    @map("org_id") @db.VarChar(36)
+  createdBy  String    @map("created_by") @db.VarChar(36)
+  name       String    @db.VarChar(100)
+  keyHash    String    @map("key_hash") @db.VarChar(64)
+  keyPrefix  String    @map("key_prefix") @db.VarChar(30)
+  scopes     Json      @default("[]") @db.Json
+  lastUsedAt DateTime? @map("last_used_at") @db.DateTime(3)
+  expiresAt  DateTime? @map("expires_at") @db.DateTime(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+
+  org Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+  @@index([keyPrefix])
+  @@map("api_keys")
+}
+
+// ---------------------------------------------------------------------------
+// Install Token (agent provisioning, one-time use)
+// ---------------------------------------------------------------------------
+
+model InstallToken {
+  id        String    @id @default(uuid()) @db.VarChar(36)
+  orgId     String    @map("org_id") @db.VarChar(36)
+  projectId String?   @map("project_id") @db.VarChar(36)
+  tokenHash String    @map("token_hash") @db.VarChar(64)
+  label     String    @default("") @db.VarChar(100)
+  usedAt    DateTime? @map("used_at") @db.DateTime(3)
+  usedBy    String?   @map("used_by") @db.VarChar(36)
+  expiresAt DateTime  @map("expires_at") @db.DateTime(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+
+  org     Organization @relation(fields: [orgId], references: [id])
+  project Project?     @relation(fields: [projectId], references: [id])
+
+  @@index([orgId])
+  @@index([tokenHash])
+  @@map("install_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Project (logical asset grouping)
+// ---------------------------------------------------------------------------
+
+model Project {
+  id          String   @id @default(uuid()) @db.VarChar(36)
+  orgId       String   @map("org_id") @db.VarChar(36)
+  name        String   @db.VarChar(100)
+  description String   @default("") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  org               Organization       @relation(fields: [orgId], references: [id])
+  servers           Server[]
+  monitoredEndpoints MonitoredEndpoint[]
+  installTokens     InstallToken[]
+
+  @@index([orgId])
+  @@map("projects")
+}
+
+// ---------------------------------------------------------------------------
+// Server (agent-monitored)
+// ---------------------------------------------------------------------------
+
+model Server {
+  id            String    @id @default(uuid()) @db.VarChar(36)
+  orgId         String    @map("org_id") @db.VarChar(36)
+  projectId     String?   @map("project_id") @db.VarChar(36)
+  hostname      String    @db.VarChar(255)
+  agentId       String?   @unique @map("agent_id") @db.VarChar(36)
+  agentVersion  String?   @map("agent_version") @db.VarChar(20)
+  osFamily      String?   @map("os_family") @db.VarChar(50)
+  osVersion     String?   @map("os_version") @db.VarChar(50)
+  status        String    @default("offline") @db.VarChar(20) // online | offline | warning | critical
+  lastHeartbeat DateTime? @map("last_heartbeat") @db.DateTime(3)
+  apiKeyHash    String?   @map("api_key_hash") @db.VarChar(64)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+
+  project  Project?              @relation(fields: [projectId], references: [id])
+  metrics  ServerMetricSnapshot[]
+  findings Finding[]
+
+  @@index([orgId])
+  @@index([projectId])
+  @@map("servers")
+}
+
+// ---------------------------------------------------------------------------
+// ServerMetricSnapshot (time-series from heartbeats)
+// ---------------------------------------------------------------------------
+
+model ServerMetricSnapshot {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  serverId  String   @map("server_id") @db.VarChar(36)
+  cpu       Float
+  memory    Float
+  disk      Float
+  urgent    Boolean  @default(false)
+  alerts    Json     @default("[]") @db.Json
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  server Server @relation(fields: [serverId], references: [id])
+
+  @@index([serverId, createdAt])
+  @@map("server_metric_snapshots")
+}
+
+// ---------------------------------------------------------------------------
+// MonitoredEndpoint (domain/SSL/uptime)
+// ---------------------------------------------------------------------------
+
+model MonitoredEndpoint {
+  id            String   @id @default(uuid()) @db.VarChar(36)
+  orgId         String   @map("org_id") @db.VarChar(36)
+  projectId     String?  @map("project_id") @db.VarChar(36)
+  host          String   @db.VarChar(255)
+  port          Int      @default(443)
+  protocol      String   @default("https") @db.VarChar(10)
+  checkInterval String   @default("1h") @map("check_interval") @db.VarChar(10) // 1h | 6h | 24h
+  status        String   @default("pending") @db.VarChar(20) // healthy | degraded | down | pending
+  lastCheckAt   DateTime? @map("last_check_at") @db.DateTime(3)
+  nextCheckAt   DateTime? @map("next_check_at") @db.DateTime(3)
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  project    Project?            @relation(fields: [projectId], references: [id])
+  heartbeats EndpointHeartbeat[]
+
+  @@index([orgId])
+  @@index([projectId])
+  @@index([nextCheckAt])
+  @@map("monitored_endpoints")
+}
+
+// ---------------------------------------------------------------------------
+// EndpointHeartbeat (uptime check results)
+// ---------------------------------------------------------------------------
+
+model EndpointHeartbeat {
+  id         String   @id @default(uuid()) @db.VarChar(36)
+  endpointId String   @map("endpoint_id") @db.VarChar(36)
+  statusCode Int?     @map("status_code")
+  responseMs Int?     @map("response_ms")
+  isUp       Boolean  @map("is_up")
+  sslValid   Boolean? @map("ssl_valid")
+  sslExpiry  DateTime? @map("ssl_expiry") @db.DateTime(3)
+  sslIssuer  String?  @map("ssl_issuer") @db.VarChar(255)
+  sslDaysLeft Int?    @map("ssl_days_left")
+  tlsVersion String?  @map("tls_version") @db.VarChar(20)
+  dnsSpf     String?  @map("dns_spf") @db.VarChar(20)   // pass | fail | missing
+  dnsDkim    String?  @map("dns_dkim") @db.VarChar(20)
+  dnsDmarc   String?  @map("dns_dmarc") @db.VarChar(20)
+  details    Json?    @db.Json
+  error      String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  endpoint MonitoredEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt])
+  @@map("endpoint_heartbeats")
+}
+
+// ---------------------------------------------------------------------------
+// Scan
+// ---------------------------------------------------------------------------
+
+model Scan {
+  id            String    @id @default(uuid()) @db.VarChar(36)
+  orgId         String    @map("org_id") @db.VarChar(36)
+  type          String    @db.VarChar(30)   // code_dependencies | code_secrets | infra_packages | infra_compliance | cert_discovery | cert_check
+  status        String    @default("pending") @db.VarChar(20) // pending | running | completed | failed | cancelled
+  trigger       String    @default("manual") @db.VarChar(20) // manual | scheduled | webhook
+  duration      Int?      // milliseconds
+  findingsTotal Int       @default(0) @map("findings_total")
+  meta          Json?     @db.Json
+  startedAt     DateTime? @map("started_at") @db.DateTime(3)
+  completedAt   DateTime? @map("completed_at") @db.DateTime(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+
+  org      Organization @relation(fields: [orgId], references: [id])
+  findings Finding[]
+
+  @@index([orgId])
+  @@map("scans")
+}
+
+// ---------------------------------------------------------------------------
+// Finding (vulnerability / issue)
+// ---------------------------------------------------------------------------
+
+model Finding {
+  id          String    @id @default(uuid()) @db.VarChar(36)
+  orgId       String    @map("org_id") @db.VarChar(36)
+  scanId      String?   @map("scan_id") @db.VarChar(36)
+  serverId    String?   @map("server_id") @db.VarChar(36)
+  endpointId  String?   @map("endpoint_id") @db.VarChar(36)
+  source      String    @db.VarChar(30) // code_scanner | infra_agent | cert_monitor
+  severity    String    @db.VarChar(10) // critical | high | medium | low | info
+  status      String    @default("open") @db.VarChar(20) // open | in_progress | resolved | suppressed | false_positive
+  title       String    @db.VarChar(500)
+  description String?   @db.Text
+  cveId       String?   @map("cve_id") @db.VarChar(30)
+  cvssScore   Float?    @map("cvss_score")
+  detail      Json?     @db.Json
+  resolvedAt  DateTime? @map("resolved_at") @db.DateTime(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+
+  org    Organization @relation(fields: [orgId], references: [id])
+  scan   Scan?        @relation(fields: [scanId], references: [id])
+  server Server?      @relation(fields: [serverId], references: [id])
+
+  @@index([orgId])
+  @@index([orgId, severity])
+  @@index([orgId, status])
+  @@map("findings")
+}
+
+// ---------------------------------------------------------------------------
+// Integration (github | gitlab | slack)
+// ---------------------------------------------------------------------------
+
+model Integration {
+  id         String   @id @default(uuid()) @db.VarChar(36)
+  orgId      String   @map("org_id") @db.VarChar(36)
+  provider   String   @db.VarChar(20)
+  config     Json     @db.Json
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  org Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, provider])
+  @@map("integrations")
+}
+
+// ---------------------------------------------------------------------------
+// AuditLog
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.VarChar(36)
+  orgId      String   @map("org_id") @db.VarChar(36)
+  actorId    String?  @map("actor_id") @db.VarChar(36)
+  action     String   @db.VarChar(50)
+  entityType String   @map("entity_type") @db.VarChar(50)
+  entityId   String?  @map("entity_id") @db.VarChar(36)
+  oldValues  Json?    @map("old_values") @db.Json
+  newValues  Json?    @map("new_values") @db.Json
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  org Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, createdAt])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// NotificationPreference
+// ---------------------------------------------------------------------------
+
+model NotificationPreference {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  orgId     String   @map("org_id") @db.VarChar(36)
+  channel   String   @db.VarChar(20) // email | slack | webhook
+  eventType String   @map("event_type") @db.VarChar(50)
+  enabled   Boolean  @default(true)
+  config    Json?    @db.Json
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  org Organization @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, channel, eventType])
+  @@map("notification_preferences")
+}
