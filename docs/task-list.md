@@ -1,0 +1,182 @@
+# SecurityCentral MVP — Task List
+
+Derived from [mvp-plan.md](./mvp-plan.md) and [ui-wireframes.md](./ui-wireframes.md).
+
+**Phases 1 & 2 can be built in parallel. Phase 3 requires both. Phase 4 is last.**
+
+```
+Phase 0 (Foundation)
+  ├── Phase 1 (Projects + Domains) ──┐
+  │                                   ├── Phase 3 (Scoring + Findings)
+  └── Phase 2 (Servers + Agent) ─────┘         │
+                                          Phase 4 (Real-Time + Polish)
+```
+
+---
+
+## Phase 0: Foundation
+
+**Goal:** Docker boots MySQL. API serves `/health`. Dashboard renders login → app shell.
+
+### Infrastructure
+
+- [ ] Create `docker-compose.yml` with MySQL 8 service
+- [ ] Create `Makefile` with `start`, `stop`, `test`, `build` targets
+
+### Backend (platform-api)
+
+- [ ] Init Node.js + TypeScript project (`package.json`, `tsconfig.json`)
+- [ ] Set up Express app with middleware stack (`cors`, `request-id`, `request-logger`, `rate-limit`, `errors`)
+- [ ] Create Prisma schema for MySQL 8 (Organization, User, ApiKey, Project, Server, MonitoredEndpoint, Scan, Finding, ServerMetricSnapshot, EndpointHeartbeat, InstallToken, Integration, AuditLog, NotificationPreference)
+- [ ] Run initial migration
+- [ ] Create `lib/env.ts` — environment config with validation
+- [ ] Create `lib/prisma.ts` — Prisma client singleton
+- [ ] Create `lib/logger.ts` — structured logging
+- [ ] Create `lib/jwt.ts` — JWT sign/verify helpers
+- [ ] Create auth module — `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`
+- [ ] Create auth middleware (JWT Bearer validation)
+- [ ] Create RBAC middleware (owner / admin / member / viewer)
+- [ ] Create `GET /health` endpoint
+- [ ] Create `prisma/seed.ts` with test data
+
+### Frontend (dashboard)
+
+- [ ] Init Vite + React 18 + TypeScript project
+- [ ] Set up MUI v7 theme (`theme/theme.ts`)
+- [ ] Create API client with interceptors (`api/client.ts`)
+- [ ] Create `AuthContext` + `ProtectedRoute`
+- [ ] Create Login page
+- [ ] Create Register page
+- [ ] Create AppShell (sidebar nav, top bar with project switcher, search, alerts, user menu)
+
+### Done when
+
+Register → Login → see empty app shell with sidebar.
+
+---
+
+## Phase 1: Projects + Domain Monitoring
+
+**Goal:** Users create projects, add domains, see SSL/uptime/DNS check results.
+
+### Backend
+
+- [ ] Projects CRUD — `GET/POST /api/v1/projects`, `GET/PATCH/DELETE /api/v1/projects/:id`
+- [ ] Project summary — `GET /api/v1/projects/:id/summary`
+- [ ] Monitoring endpoints CRUD — `GET/POST /api/v1/monitoring/endpoints`, `GET/DELETE /api/v1/monitoring/endpoints/:id`
+- [ ] Domain check service — SSL/TLS cert fetch, HTTP uptime check, DNS record lookup (SPF/DKIM/DMARC)
+- [ ] Manual check trigger — `POST /api/v1/monitoring/endpoints/:id/check`
+- [ ] Check history — `GET /api/v1/monitoring/endpoints/:id/heartbeats`
+- [ ] In-process scheduler (`scheduler.ts`) — run domain checks per endpoint `checkInterval` (1h/6h/24h)
+- [ ] Store results in EndpointHeartbeat table
+
+### Frontend
+
+- [ ] Projects list page (cards, create dialog)
+- [ ] Project detail page (linked assets summary)
+- [ ] Domain list page (chart-first: SSL expiry overview, uptime distribution, DNS security coverage, high-risk domain cards)
+- [ ] Add Domain dialog/flow
+- [ ] Domain detail page (SSL/TLS info, uptime bar chart, DNS security status)
+- [ ] React Query hooks for projects and monitoring endpoints
+
+### Done when
+
+Create project → add `google.com` → see SSL cert info, TLS version, SPF/DKIM/DMARC.
+
+---
+
+## Phase 2: Server Monitoring + Go Agent
+
+**Goal:** Go agent on server sends adaptive heartbeats, dashboard shows live metrics.
+
+### Go Agent (sc-agent)
+
+- [ ] Init Go module, Cobra CLI setup (`cmd/sc-agent/main.go`)
+- [ ] Config loading (`internal/config/agentconfig.go`) — API URL, API key, thresholds
+- [ ] System info collection (`internal/sysinfo/`) — CPU, RAM, disk, open ports, process list
+- [ ] Collect loop (`internal/agent/collector.go`) — every 1s, ring buffer
+- [ ] Threshold checks (`internal/agent/thresholds.go`) — CPU >85%, RAM >85%, disk >90%, new port, service down
+- [ ] Send loop (`internal/agent/heartbeat.go`) — urgent 15s debounce, normal 60s
+- [ ] Platform HTTP client (`internal/platform/client.go`) — register, heartbeat, findings
+- [ ] Graceful shutdown (`internal/agent/shutdown.go`)
+- [ ] Structured logging (`internal/logging/logging.go`)
+- [ ] Cross-compile targets: `linux/amd64`, `linux/arm64`
+
+### Backend
+
+- [ ] Install tokens — `GET/POST /api/v1/install-tokens`
+- [ ] Agent registration — `POST /v1/agents/register` (consume install token, create server record)
+- [ ] Agent heartbeat — `POST /v1/agents/heartbeat` (store metrics in ServerMetricSnapshot, process alerts)
+- [ ] Agent findings — `POST /v1/agents/findings`
+- [ ] Servers read — `GET /api/v1/servers`, `GET /api/v1/servers/:id`
+- [ ] Server metrics — `GET /api/v1/servers/:id/metrics` (time-series query)
+
+### Frontend
+
+- [ ] Server list page (chart-first: health distribution donut, risk trend area chart, live load bubble chart, top risky server cards)
+- [ ] Add Server dialog (show install token + agent install command)
+- [ ] Server detail page (live CPU/RAM/disk charts via Recharts, OS info, security posture, recent alerts)
+- [ ] React Query hooks for servers and metrics
+
+### Done when
+
+Install agent → heartbeats arrive → spike CPU → urgent heartbeat within 15s.
+
+---
+
+## Phase 3: Scoring + Findings + Dashboard
+
+**Goal:** Security scores (0–100) per asset, findings list, dashboard overview.
+
+### Backend
+
+- [ ] Scoring engine (`lib/scoring.ts`) — calculate score per asset with severity-based deductions, return breakdown
+- [ ] Findings CRUD — `GET /api/v1/findings`, `GET /api/v1/findings/:id`, `PATCH /api/v1/findings/:id` (status transitions)
+- [ ] Auto-create findings from domain checks (SSL issues, DNS gaps, downtime)
+- [ ] Auto-create findings from agent alerts (CPU/RAM/disk threshold breaches)
+- [ ] Dashboard summary — `GET /api/v1/dashboard/summary`
+- [ ] Dashboard top risks — `GET /api/v1/dashboard/top-risks`
+- [ ] Dashboard assets — `GET /api/v1/dashboard/assets`
+
+### Frontend
+
+- [ ] `ScoreBadge` component (color-coded 0–100 with breakdown tooltip)
+- [ ] Dashboard overview page (severity cards, trends line chart, recent alerts, score cards per asset type)
+- [ ] Findings list page (filterable by severity, source, status; drill-down to detail)
+- [ ] Add scores to server detail and domain detail pages
+
+### Done when
+
+Domains and servers show scores with "why" breakdown. Dashboard shows top risks.
+
+---
+
+## Phase 4: Real-Time + Polish
+
+**Goal:** WebSocket updates, notifications, onboarding, deployment.
+
+### Backend
+
+- [ ] Socket.IO server setup (`ws/server.ts`) — JWT handshake, org-scoped rooms
+- [ ] WebSocket event hooks (`ws/hooks.ts`) — emit `finding:new`, `finding:resolved`, `scan:completed`, `agent:connected`, `agent:disconnected`, `cert:expiring`
+- [ ] Offline detection — `setInterval` every 5 min, flag agents that missed heartbeats
+- [ ] Org settings + notification preferences module
+- [ ] Audit log module
+
+### Frontend
+
+- [ ] WebSocket client (`ws/client.ts`) — connect, reconnect, handle events
+- [ ] Real-time React Query invalidation on WebSocket events
+- [ ] Settings page (org settings, notification preferences, API keys management)
+- [ ] Onboarding wizard (create project → add domain → install agent)
+
+### Deployment
+
+- [ ] Dockerfile for platform-api
+- [ ] Dockerfile for dashboard
+- [ ] Go cross-compile in Makefile (`linux/amd64` + `linux/arm64`)
+- [ ] Update `docker-compose.yml` to boot entire stack
+
+### Done when
+
+Dashboard updates in real-time. `docker compose up` boots entire stack.

@@ -92,20 +92,16 @@ Error:   { success: false, error: { code, message } }
 
 All routes versioned under `/api/v1/*`. Agent endpoints at `/v1/agents/*` with separate rate limits.
 
-### 4.2 Worker (BullMQ)
+### 4.2 Scheduled Tasks (in-process)
 
-Same codebase as Platform API, runs as a separate process consuming job queues.
+For MVP, async work runs in-process via `setInterval`/`setTimeout` within the Platform API process. No separate worker or Redis required.
 
-| Queue | Concurrency | Purpose |
-|-------|-------------|---------|
-| `scan-orchestration` | 5 | Dispatches and coordinates scan execution |
-| `finding-ingestion` | 10 | Processes raw scan results into findings |
-| `notifications` | 10 | Sends Slack/email alerts |
-| `es-sync` | 10 | Replicates findings to search index |
-| `github-pr` | 3 | Creates PRs for auto-fixable vulnerabilities |
-| `cloud-discovery` | 1 | Discovers EC2/VM instances from cloud providers |
-| `domain-monitoring` | 10 | Scheduled TLS/uptime checks on endpoints |
-| `vulndb-sync` | 1 | Syncs CVE data from NVD/advisory sources |
+| Task | Interval | Purpose |
+|------|----------|---------|
+| Domain monitoring | Per endpoint `checkInterval` (1h/6h/24h) | TLS/HTTP/DNS checks on monitored endpoints |
+| Offline detection | Every 5 minutes | Detect agents that missed heartbeats |
+
+> **Future:** Extract to BullMQ workers backed by Redis for horizontal scaling, retry guarantees, and concurrency control. The queue architecture is designed but deferred.
 
 ### 4.3 Dashboard (React + Vite + MUI)
 
@@ -261,16 +257,17 @@ Organization (multi-tenant root)
 - Severity levels: `critical | high | medium | low | info`
 - CVE data stored in `Vulnerability` + `VulnerabilityAffects` (ecosystem, package, version range)
 
-### 5.2 Redis — Memorystore
+### 5.2 Redis (deferred)
 
-- **BullMQ job queues** — all async work
-- **Socket.IO adapter** — pub/sub for multi-instance WebSocket
-- **Rate limiting** — request counters
-- **Session cache** — short-lived data
+Not used in MVP. All async work runs in-process. Add Redis later for:
+- BullMQ job queues (horizontal scaling)
+- Socket.IO adapter (multi-instance WebSocket)
+- Rate limiting (distributed counters)
+- Session cache
 
-### 5.3 Search (optional, phase 2)
+### 5.3 Search (deferred)
 
-Elasticsearch/OpenSearch as a read replica for findings full-text search and aggregation. Synced via `es-sync` queue.
+Elasticsearch/OpenSearch as a read replica for findings full-text search and aggregation.
 
 ---
 
@@ -282,7 +279,7 @@ Elasticsearch/OpenSearch as a read replica for findings full-text search and agg
 |-------|--------|
 | Browser users | JWT Bearer token + HttpOnly refresh cookie |
 | CI/CD / automation | API key (`X-API-Key: sc_live_...`) — hashed in DB |
-| Go agents | mTLS client certificates |
+| Go agents | API key (`X-Agent-Key`) — mTLS deferred |
 
 ### 6.2 Authorization
 
@@ -305,8 +302,7 @@ All data queries scoped by `orgId`. No cross-tenant data access. Rate limiting p
 ## 7. Real-Time Architecture
 
 ```
-Platform API ──publish──▶ Redis pub/sub ──▶ Socket.IO adapter ──▶ Browser clients
-                                                                    (org-scoped rooms)
+Platform API ──emit──▶ Socket.IO server ──▶ Browser clients (org-scoped rooms)
 ```
 
 **Events:**
@@ -327,14 +323,13 @@ Clients join org-scoped rooms on connect. JWT validated in Socket.IO handshake.
 | Component | GCP Service | Config |
 |-----------|-------------|--------|
 | Platform API | Cloud Run | min 1 instance, autoscale to 10 |
-| Worker | Cloud Run | always-on, 1 instance (scales with queue depth) |
 | Dashboard | Cloud Run (or Cloud Storage + Cloud CDN) | static SPA, CDN-cached |
-| sc-certmon | Cloud Run Jobs | Cloud Scheduler trigger (e.g., every 6h) |
 | MySQL | Cloud SQL (MySQL 8) | Private IP, automated backups |
-| Redis | Memorystore for Redis | 1GB basic tier |
 | Agent binaries | Cloud Storage | versioned binary hosting for agent self-update |
-| Secrets | Secret Manager | API keys, JWT secrets, OAuth tokens, signing keys |
-| Container images | Artifact Registry | Docker images for all containerized services |
+| Secrets | Secret Manager | API keys, JWT secrets, OAuth tokens |
+| Container images | Artifact Registry | Docker images for containerized services |
+
+> **Later:** Add Memorystore (Redis) for BullMQ workers and Socket.IO multi-instance adapter.
 
 ### 8.2 Networking
 
@@ -344,11 +339,11 @@ Internet ──▶ Cloud Load Balancer (HTTPS)
               ├──▶ /ws/*      → Cloud Run: Platform API (WebSocket)
               └──▶ /*         → Cloud Run: Dashboard (or CDN)
 
-Customer Servers ──mTLS──▶ Cloud Run: Platform API (/v1/agents/*)
+Customer Servers ──HTTPS + API Key──▶ Cloud Run: Platform API (/v1/agents/*)
 ```
 
-- Cloud Run services in **VPC connector** for private Cloud SQL / Memorystore access
-- Agent traffic over public internet with mTLS
+- Cloud Run services in **VPC connector** for private Cloud SQL access
+- Agent traffic over public internet with HTTPS + API key auth (mTLS deferred)
 - Cloud SQL with private IP only (no public access)
 
 ### 8.3 CI/CD (deploying SecurityCentral itself)
@@ -407,18 +402,17 @@ sc-agent (on customer server)
     ← commands: [scan_now] (or scheduled)
   → runs scanners (packages, compliance, secrets)
   → POST /v1/agents/findings
-    → finding-ingestion → MySQL → notifications → Dashboard
+    → Findings stored in MySQL → Dashboard updated via WebSocket
 ```
 
 ### 10.3 Domain Monitoring Flow
 
 ```
-Cloud Scheduler (every 1h/6h/24h)
-  → domain-monitoring queue
-    → Worker checks TLS, HTTP headers, DNS records, uptime
-      → Findings + EndpointHeartbeat stored
-        → cert:expiring WebSocket event if applicable
-          → notifications queue → Slack/email
+In-process scheduler (per endpoint checkInterval: 1h/6h/24h)
+  → API checks TLS, HTTP headers, DNS records, uptime
+    → Findings + EndpointHeartbeat stored in MySQL
+      → cert:expiring WebSocket event if applicable
+        → Dashboard updated in real-time
 ```
 
 ---
@@ -429,12 +423,17 @@ Cloud Scheduler (every 1h/6h/24h)
 |-------|-----------|
 | Frontend | React 18, TypeScript, Vite, MUI v7, React Query v5, Socket.IO client, Recharts |
 | Backend API | Node.js, TypeScript, Express, Prisma ORM |
-| Job Queue | BullMQ on Redis |
 | Database | MySQL 8 (Cloud SQL) |
-| Cache / Pub-Sub | Redis (Memorystore) |
-| Real-time | Socket.IO with Redis adapter |
+| Real-time | Socket.IO (standalone, no Redis adapter for MVP) |
 | Scanning Agents | Go 1.22, Cobra CLI, single-binary |
-| Agent Comms | HTTPS + mTLS, Ed25519 signing |
-| Search (phase 2) | Elasticsearch / OpenSearch |
-| Cloud | GCP: Cloud Run, Cloud SQL, Memorystore, Cloud Storage, Secret Manager, Artifact Registry |
+| Agent Comms | HTTPS + API key (mTLS deferred) |
+| Cloud | GCP: Cloud Run, Cloud SQL, Cloud Storage, Secret Manager, Artifact Registry |
 | CI/CD | Cloud Build (or GitHub Actions) |
+
+**Deferred:**
+| Layer | Technology |
+|-------|-----------|
+| Job Queue | BullMQ on Redis |
+| Cache / Pub-Sub | Redis (Memorystore) |
+| Search | Elasticsearch / OpenSearch |
+| Agent Signing | Ed25519 binary verification |
