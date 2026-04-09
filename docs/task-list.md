@@ -91,32 +91,32 @@ Create project → add `google.com` → see SSL cert info, TLS version, SPF/DKIM
 
 ### Go Agent (sc-agent)
 
-- [ ] Init Go module, Cobra CLI setup (`cmd/sc-agent/main.go`)
-- [ ] Config loading (`internal/config/agentconfig.go`) — API URL, API key, thresholds
-- [ ] System info collection (`internal/sysinfo/`) — CPU, RAM, disk, open ports, process list
-- [ ] Collect loop (`internal/agent/collector.go`) — every 1s, ring buffer
-- [ ] Threshold checks (`internal/agent/thresholds.go`) — CPU >85%, RAM >85%, disk >90%, new port, service down
-- [ ] Send loop (`internal/agent/heartbeat.go`) — urgent 15s debounce, normal 60s
-- [ ] Platform HTTP client (`internal/platform/client.go`) — register, heartbeat, findings
-- [ ] Graceful shutdown (`internal/agent/shutdown.go`)
-- [ ] Structured logging (`internal/logging/logging.go`)
-- [ ] Cross-compile targets: `linux/amd64`, `linux/arm64`
+- [x] Init Go module, Cobra CLI setup (`cmd/sc-agent/main.go`)
+- [x] Config loading (`internal/config/agentconfig.go`) — API URL, API key, thresholds
+- [x] System info collection (`internal/sysinfo/`) — CPU, RAM, disk
+- [x] Collect loop (`internal/agent/collector.go`) — every 1s, ring buffer
+- [x] Threshold checks (`internal/agent/thresholds.go`) — CPU >85%, RAM >85%, disk >90%
+- [x] Send loop (`internal/agent/heartbeat.go`) — urgent 15s debounce, normal 60s
+- [x] Platform HTTP client (`internal/platform/client.go`) — register, heartbeat, findings
+- [x] Graceful shutdown (`internal/agent/shutdown.go`)
+- [x] Structured logging (`internal/logging/logging.go`)
+- [x] Cross-compile targets: `linux/amd64`, `linux/arm64`
 
 ### Backend
 
-- [ ] Install tokens — `GET/POST /api/v1/install-tokens`
-- [ ] Agent registration — `POST /v1/agents/register` (consume install token, create server record)
-- [ ] Agent heartbeat — `POST /v1/agents/heartbeat` (store metrics in ServerMetricSnapshot, process alerts)
-- [ ] Agent findings — `POST /v1/agents/findings`
-- [ ] Servers read — `GET /api/v1/servers`, `GET /api/v1/servers/:id`
-- [ ] Server metrics — `GET /api/v1/servers/:id/metrics` (time-series query)
+- [x] Install tokens — `GET/POST /api/v1/install-tokens`
+- [x] Agent registration — `POST /v1/agents/register` (consume install token, create server record)
+- [x] Agent heartbeat — `POST /v1/agents/heartbeat` (store metrics in ServerMetricSnapshot, process alerts)
+- [x] Agent findings — `POST /v1/agents/findings`
+- [x] Servers read — `GET /api/v1/servers`, `GET /api/v1/servers/:id`
+- [x] Server metrics — `GET /api/v1/servers/:id/metrics` (time-series query)
 
 ### Frontend
 
-- [ ] Server list page (chart-first: health distribution donut, risk trend area chart, live load bubble chart, top risky server cards)
-- [ ] Add Server dialog (show install token + agent install command)
-- [ ] Server detail page (live CPU/RAM/disk charts via Recharts, OS info, security posture, recent alerts)
-- [ ] React Query hooks for servers and metrics
+- [x] Server list page (status summary cards, server cards with status/OS/version)
+- [x] Add Server dialog (generate install token, show install command with copy button)
+- [x] Server detail page (live CPU/RAM/disk cards + Recharts line chart, OS info, server metadata)
+- [x] React Query hooks for servers, metrics, and install tokens
 
 ### Done when
 

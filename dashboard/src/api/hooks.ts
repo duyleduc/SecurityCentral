@@ -164,3 +164,84 @@ export function useHeartbeats(endpointId: string, limit = 20) {
     enabled: !!endpointId,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Servers
+// ---------------------------------------------------------------------------
+
+export interface Server {
+  id: string;
+  hostname: string;
+  agentId: string | null;
+  agentVersion: string | null;
+  osFamily: string | null;
+  osVersion: string | null;
+  status: string;
+  lastHeartbeat: string | null;
+  createdAt: string;
+  _count?: { metrics: number; findings: number };
+  metrics?: ServerMetric[];
+}
+
+export interface ServerMetric {
+  id: string;
+  cpu: number;
+  memory: number;
+  disk: number;
+  urgent: boolean;
+  alerts: unknown[];
+  createdAt: string;
+}
+
+export interface InstallToken {
+  id: string;
+  rawToken?: string;
+  label: string;
+  expiresAt: string;
+  usedAt: string | null;
+  project?: { id: string; name: string } | null;
+}
+
+export function useServers() {
+  return useQuery({
+    queryKey: ['servers'],
+    queryFn: () => apiClient<Server[]>('/api/v1/servers'),
+  });
+}
+
+export function useServer(id: string) {
+  return useQuery({
+    queryKey: ['servers', id],
+    queryFn: () => apiClient<Server>(`/api/v1/servers/${id}`),
+    enabled: !!id,
+    refetchInterval: 10_000,
+  });
+}
+
+export function useServerMetrics(id: string, hours = 24) {
+  return useQuery({
+    queryKey: ['servers', id, 'metrics', hours],
+    queryFn: () => apiClient<ServerMetric[]>(`/api/v1/servers/${id}/metrics?hours=${hours}`),
+    enabled: !!id,
+    refetchInterval: 15_000,
+  });
+}
+
+export function useCreateInstallToken() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { label?: string; projectId?: string; expiresInHours?: number }) =>
+      apiClient<InstallToken>('/api/v1/install-tokens', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['install-tokens'] }),
+  });
+}
+
+export function useInstallTokens() {
+  return useQuery({
+    queryKey: ['install-tokens'],
+    queryFn: () => apiClient<InstallToken[]>('/api/v1/install-tokens'),
+  });
+}

@@ -9,6 +9,8 @@ import { errorHandler, successEnvelope } from './middleware/errors.js';
 import { authRouter } from './modules/auth/auth.router.js';
 import { projectsRouter } from './modules/projects/projects.router.js';
 import { monitoringRouter } from './modules/monitoring/monitoring.router.js';
+import { installTokensRouter, agentRouter } from './modules/agents/agents.router.js';
+import { serversRouter } from './modules/servers/servers.router.js';
 
 const app = express();
 
@@ -35,6 +37,9 @@ app.get('/health', (_req, res) => {
 app.use('/auth', authRouter);
 app.use('/api/v1/projects', projectsRouter);
 app.use('/api/v1/monitoring/endpoints', monitoringRouter);
+app.use('/api/v1/install-tokens', installTokensRouter);
+app.use('/api/v1/servers', serversRouter);
+app.use('/v1/agents', agentRouter);
 
 // ---------------------------------------------------------------------------
 // Error handler (must be last)

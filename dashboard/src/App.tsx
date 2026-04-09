@@ -14,6 +14,7 @@ import { ProjectDetailPage } from './pages/Projects/ProjectDetailPage';
 import { DomainsPage } from './pages/Monitoring/DomainsPage';
 import { DomainDetailPage } from './pages/Monitoring/DomainDetailPage';
 import { ServersPage } from './pages/Servers/ServersPage';
+import { ServerDetailPage } from './pages/Servers/ServerDetailPage';
 import { FindingsPage } from './pages/Findings/FindingsPage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
 
@@ -50,6 +51,7 @@ export default function App() {
                 <Route path="/domains" element={<DomainsPage />} />
                 <Route path="/domains/:id" element={<DomainDetailPage />} />
                 <Route path="/servers" element={<ServersPage />} />
+                <Route path="/servers/:id" element={<ServerDetailPage />} />
                 <Route path="/findings" element={<FindingsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>

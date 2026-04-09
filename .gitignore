@@ -13,7 +13,6 @@ build/
 # Go binaries
 go/bin/
 /sc-scan
-/sc-agent
 /sc-certmon
 
 # Signing keys (NEVER commit private or public keys)
