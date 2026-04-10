@@ -185,21 +185,29 @@ async function runScan(
 // ---------------------------------------------------------------------------
 
 async function runScanner(workDir: string, scanType: string): Promise<ScannerResult> {
-  // Try sc-scan Go binary first
+  // Always run builtin Node.js scanner (native audit tools with real-time vuln DBs)
+  const result = await runBuiltinScanner(workDir, scanType);
+
+  // Additionally run sc-scan Go binary for secrets/configs/patterns detection
+  // (Go binary has 50+ regex patterns, unsafe config detection, risky code patterns)
   const binary = await findBinary('sc-scan');
   if (binary) {
-    logger.info('using sc-scan binary', { path: binary });
+    logger.info('running sc-scan binary for additional analysis', { path: binary });
     try {
-      const findings = await runGoBinary(binary, workDir, scanType);
-      return { findings, warnings: [], scannersRun: ['sc-scan'], scannersSkipped: [] };
+      const goFindings = await runGoBinary(binary, workDir, scanType);
+      // Dedup: only add Go findings whose titles aren't already present
+      const existingTitles = new Set(result.findings.map((f) => f.title));
+      const newFindings = goFindings.filter((f) => !existingTitles.has(f.title));
+      result.findings.push(...newFindings);
+      result.scannersRun.push('sc-scan');
+      logger.info('sc-scan added findings', { new: newFindings.length, deduped: goFindings.length - newFindings.length });
     } catch (err) {
-      logger.warn('sc-scan binary failed, falling back to built-in scanner', { error: (err as Error).message });
+      logger.warn('sc-scan binary failed', { error: (err as Error).message });
+      result.scannersSkipped.push('sc-scan');
     }
   }
 
-  // Fallback: built-in Node.js scanner (uses native audit tools)
-  logger.info('using built-in Node.js scanner');
-  return runBuiltinScanner(workDir, scanType);
+  return result;
 }
 
 async function findBinary(name: string): Promise<string | null> {
@@ -725,20 +733,46 @@ async function ingestFindings(
   scanId: string,
   findings: readonly ScanFinding[],
 ): Promise<number> {
+  // Fetch ALL existing findings for this repo (any status) for proper dedup
   const existingFindings = await prisma.finding.findMany({
-    where: { repositoryId, status: { in: ['open', 'in_progress'] } },
-    select: { id: true, title: true, cveId: true },
+    where: { repositoryId },
+    select: { id: true, title: true, cveId: true, status: true },
   });
 
-  const existingKeys = new Set(existingFindings.map((f) => dedupKey(f.cveId, f.title)));
+  // Build lookup: key → existing finding
+  const existingByKey = new Map<string, { id: string; status: string }>();
+  for (const f of existingFindings) {
+    existingByKey.set(dedupKey(f.cveId, f.title), { id: f.id, status: f.status });
+  }
+
   const newKeys = new Set<string>();
   let created = 0;
+  let reopened = 0;
 
   for (const f of findings) {
     const key = dedupKey(f.cve_id, f.title);
     newKeys.add(key);
-    if (existingKeys.has(key)) continue;
 
+    const existing = existingByKey.get(key);
+    if (existing) {
+      // Already exists — if resolved/suppressed/false_positive, reopen it
+      if (existing.status !== 'open' && existing.status !== 'in_progress') {
+        await prisma.finding.update({
+          where: { id: existing.id },
+          data: { status: 'open', scanId, resolvedAt: null },
+        });
+        reopened++;
+      } else {
+        // Already open — just link to latest scan
+        await prisma.finding.update({
+          where: { id: existing.id },
+          data: { scanId },
+        });
+      }
+      continue;
+    }
+
+    // New finding — create it
     await prisma.finding.create({
       data: {
         orgId, scanId, repositoryId,
@@ -755,16 +789,22 @@ async function ingestFindings(
     created++;
   }
 
-  // Auto-resolve stale findings (only when scan produced results — don't resolve everything on empty scan)
-  if (newKeys.size === 0) return created;
-  const staleFindings = existingFindings.filter((f) => !newKeys.has(dedupKey(f.cveId, f.title)));
-  if (staleFindings.length > 0) {
-    await prisma.finding.updateMany({
-      where: { id: { in: staleFindings.map((f) => f.id) } },
-      data: { status: 'resolved', resolvedAt: new Date() },
-    });
-    logger.info('auto-resolved stale findings', { count: staleFindings.length });
+  // Auto-resolve: open findings NOT in this scan's results (only when scan produced results)
+  if (newKeys.size > 0) {
+    const openFindings = existingFindings.filter((f) =>
+      (f.status === 'open' || f.status === 'in_progress') &&
+      !newKeys.has(dedupKey(f.cveId, f.title)),
+    );
+    if (openFindings.length > 0) {
+      await prisma.finding.updateMany({
+        where: { id: { in: openFindings.map((f) => f.id) } },
+        data: { status: 'resolved', resolvedAt: new Date() },
+      });
+      logger.info('auto-resolved stale findings', { count: openFindings.length });
+    }
   }
+
+  logger.info('findings ingested', { created, reopened, total: findings.length });
 
   return created;
 }

@@ -8,8 +8,8 @@ start:
 	@echo "MySQL is ready."
 
 stop:
-	-@lsof -ti:3000 | xargs kill 2>/dev/null || true
-	-@lsof -ti:5173 | xargs kill 2>/dev/null || true
+	-@lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+	-@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
 	docker compose down
 
 restart: stop start
@@ -25,11 +25,19 @@ dev: ensure-mysql
 	@echo "API: http://localhost:3000  Dashboard: http://localhost:5173"
 
 dev-stop:
-	-@lsof -ti:3000 | xargs kill 2>/dev/null || true
-	-@lsof -ti:5173 | xargs kill 2>/dev/null || true
+	-@lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+	-@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
+	@sleep 1
 	@echo "Dev servers stopped."
 
-dev-restart: dev-stop dev
+dev-restart:
+	-@lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+	-@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
+	@sleep 1
+	@docker compose exec mysql mysqladmin ping -h localhost -u root -prootpassword --silent 2>/dev/null || $(MAKE) start
+	cd platform-api && npm run dev &
+	cd dashboard && npm run dev &
+	@echo "API: http://localhost:3000  Dashboard: http://localhost:5173"
 
 # Database
 migrate:

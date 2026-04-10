@@ -68,7 +68,8 @@ export function RepositoryDetailPage() {
   };
 
   const openFindings = repo._count?.findings ?? 0;
-  const { score, breakdown } = computeScore({});
+  const fc = (repo as any).findingCounts as Record<string, number> | undefined;
+  const { score, breakdown } = computeScore(fc ?? {});
 
   return (
     <Box>
@@ -109,7 +110,7 @@ export function RepositoryDetailPage() {
             {['critical', 'high', 'medium', 'low'].map((sev) => (
               <Box key={sev} sx={{ textAlign: 'center', minWidth: 70 }}>
                 <Typography variant="h5" sx={{ color: SEVERITY_COLORS[sev], fontWeight: 700 }}>
-                  0
+                  {fc?.[sev] ?? 0}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>{sev}</Typography>
               </Box>

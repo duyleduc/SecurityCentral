@@ -43,7 +43,20 @@ export async function getById(orgId: string, id: string) {
   if (!repo) {
     throw new AppError('RESOURCE_NOT_FOUND', 'Repository not found');
   }
-  return repo;
+
+  // Severity breakdown for open findings
+  const severityGroups = await prisma.finding.groupBy({
+    by: ['severity'],
+    where: { repositoryId: id, status: 'open' },
+    _count: true,
+  });
+
+  const findingCounts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  for (const g of severityGroups) {
+    findingCounts[g.severity] = g._count;
+  }
+
+  return { ...repo, findingCounts };
 }
 
 export async function remove(orgId: string, id: string) {
