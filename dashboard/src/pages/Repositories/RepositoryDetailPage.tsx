@@ -3,16 +3,21 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Chip, Button, Card, CardContent, Stack, Tabs, Tab,
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
-  Paper, Skeleton, Alert, Divider,
+  Paper, Skeleton, Alert, Divider, Collapse, IconButton, CircularProgress,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import HistoryIcon from '@mui/icons-material/History';
+import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import {
   useRepository,
   useRepositoryScans,
   useTriggerScan,
+  useClearScanHistory,
+  useScanFindings,
   type Scan,
 } from '../../api/hooks';
 import { ScoreBadge, computeScore } from '../../components/ScoreBadge';
@@ -47,6 +52,7 @@ export function RepositoryDetailPage() {
   const { data: repo, isLoading: repoLoading } = useRepository(id ?? '');
   const { data: scans, isLoading: scansLoading } = useRepositoryScans(id ?? '');
   const triggerScan = useTriggerScan();
+  const clearHistory = useClearScanHistory();
   const [tab, setTab] = useState(0);
 
   if (repoLoading) {
@@ -135,9 +141,23 @@ export function RepositoryDetailPage() {
 
       {/* Tabs */}
       <Card>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: 'divider', px: 2 }}>
-          <Tab icon={<HistoryIcon />} iconPosition="start" label={`Scan History (${scans?.length ?? 0})`} />
-        </Tabs>
+        <Stack direction="row" alignItems="center" sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 2, flex: 1 }}>
+            <Tab icon={<HistoryIcon />} iconPosition="start" label={`Scan History (${scans?.length ?? 0})`} />
+          </Tabs>
+          {(scans?.length ?? 0) > 0 && (
+            <Button
+              size="small"
+              color="error"
+              startIcon={<DeleteSweepIcon />}
+              onClick={() => { if (confirm('Clear all scan history and findings for this repository?')) clearHistory.mutate(id!); }}
+              disabled={clearHistory.isPending}
+              sx={{ mr: 2 }}
+            >
+              {clearHistory.isPending ? 'Clearing...' : 'Clear History'}
+            </Button>
+          )}
+        </Stack>
 
         {/* Scan History Tab */}
         {tab === 0 && (
@@ -145,6 +165,7 @@ export function RepositoryDetailPage() {
             <Table size="small">
               <TableHead>
                 <TableRow>
+                  <TableCell sx={{ width: 40 }} />
                   <TableCell>Status</TableCell>
                   <TableCell>Type</TableCell>
                   <TableCell>Trigger</TableCell>
@@ -157,34 +178,16 @@ export function RepositoryDetailPage() {
               <TableBody>
                 {scansLoading ? (
                   Array.from({ length: 3 }).map((_, i) => (
-                    <TableRow key={i}>{Array.from({ length: 7 }).map((__, j) => <TableCell key={j}><Skeleton /></TableCell>)}</TableRow>
+                    <TableRow key={i}>{Array.from({ length: 8 }).map((__, j) => <TableCell key={j}><Skeleton /></TableCell>)}</TableRow>
                   ))
                 ) : !scans?.length ? (
                   <TableRow>
-                    <TableCell colSpan={7} sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>
+                    <TableCell colSpan={8} sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>
                       No scans yet. Click "Trigger Scan" to start.
                     </TableCell>
                   </TableRow>
                 ) : scans.map((s: Scan) => (
-                  <TableRow key={s.id} hover>
-                    <TableCell>
-                      <Chip label={s.status} size="small" color={statusColor(s.status)} />
-                    </TableCell>
-                    <TableCell>{s.type}</TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>{s.trigger}</TableCell>
-                    <TableCell sx={{ color: 'text.secondary' }}>{s.branch ?? '-'}</TableCell>
-                    <TableCell align="right">
-                      {s.findingsTotal > 0 ? (
-                        <Typography variant="body2" fontWeight={500}>{s.findingsTotal}</Typography>
-                      ) : '0'}
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
-                      {formatDuration(s.duration)}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
-                      {new Date(s.createdAt).toLocaleString()}
-                    </TableCell>
-                  </TableRow>
+                  <ScanRow key={s.id} scan={s} repoId={id!} />
                 ))}
               </TableBody>
             </Table>
@@ -192,5 +195,104 @@ export function RepositoryDetailPage() {
         )}
       </Card>
     </Box>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Expandable scan row with findings detail
+// ---------------------------------------------------------------------------
+
+function ScanRow({ scan, repoId }: { scan: Scan; repoId: string }) {
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+  const { data: findings, isLoading } = useScanFindings(repoId, open ? scan.id : null);
+
+  return (
+    <>
+      <TableRow hover sx={{ cursor: 'pointer', '& > *': { borderBottom: open ? 'unset' : undefined } }} onClick={() => setOpen(!open)}>
+        <TableCell>
+          <IconButton size="small">
+            {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+          </IconButton>
+        </TableCell>
+        <TableCell>
+          <Chip label={scan.status} size="small" color={statusColor(scan.status)} />
+        </TableCell>
+        <TableCell>{scan.type}</TableCell>
+        <TableCell sx={{ color: 'text.secondary' }}>{scan.trigger}</TableCell>
+        <TableCell sx={{ color: 'text.secondary' }}>{scan.branch ?? '-'}</TableCell>
+        <TableCell align="right">
+          {scan.findingsTotal > 0 ? (
+            <Typography variant="body2" fontWeight={500}>{scan.findingsTotal}</Typography>
+          ) : '0'}
+        </TableCell>
+        <TableCell align="right" sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+          {formatDuration(scan.duration)}
+        </TableCell>
+        <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+          {new Date(scan.createdAt).toLocaleString()}
+        </TableCell>
+      </TableRow>
+
+      {/* Expanded findings row */}
+      <TableRow>
+        <TableCell sx={{ py: 0 }} colSpan={8}>
+          <Collapse in={open} timeout="auto" unmountOnExit>
+            <Box sx={{ py: 2, px: 1 }}>
+              {isLoading ? (
+                <Box sx={{ textAlign: 'center', py: 2 }}><CircularProgress size={20} /></Box>
+              ) : !findings?.length ? (
+                <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+                  No findings discovered in this scan.
+                </Typography>
+              ) : (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Severity</TableCell>
+                      <TableCell>Title</TableCell>
+                      <TableCell>CVE</TableCell>
+                      <TableCell align="right">CVSS</TableCell>
+                      <TableCell>Status</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {findings.map((f) => (
+                      <TableRow
+                        key={f.id} hover
+                        sx={{ cursor: 'pointer' }}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/findings/${f.id}`); }}
+                      >
+                        <TableCell>
+                          <Chip
+                            label={f.severity} size="small"
+                            sx={{ bgcolor: SEVERITY_COLORS[f.severity] ?? '#6b7280', color: '#fff', fontWeight: 600, fontSize: '0.7rem' }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ maxWidth: 400 }} noWrap>{f.title}</Typography>
+                        </TableCell>
+                        <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                          {f.cveId ?? '-'}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600 }}>
+                          {f.cvssScore != null ? f.cvssScore.toFixed(1) : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={f.status.replace('_', ' ')} size="small"
+                            color={f.status === 'open' ? 'error' : f.status === 'resolved' ? 'success' : 'default'}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </Box>
+          </Collapse>
+        </TableCell>
+      </TableRow>
+    </>
   );
 }

@@ -5,7 +5,13 @@ export const CreateEndpointSchema = z.object({
   host: z.string().min(1).max(255),
   port: z.number().int().min(1).max(65535).default(443),
   protocol: z.enum(['https', 'http']).default('https'),
-  checkInterval: z.enum(['1h', '6h', '24h']).default('1h'),
+  uptimeInterval: z.number().int().min(5).max(3600).default(15),
+  uptimeTimeout: z.number().int().min(5).max(120).default(30),
+});
+
+export const UpdateEndpointSchema = z.object({
+  uptimeInterval: z.number().int().min(5).max(3600).optional(),
+  uptimeTimeout: z.number().int().min(5).max(120).optional(),
 });
 
 export const EndpointIdParamsSchema = z.object({

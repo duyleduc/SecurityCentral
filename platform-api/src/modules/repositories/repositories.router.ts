@@ -11,6 +11,7 @@ import {
   RepositoryListQuerySchema,
   TriggerScanSchema,
   ScanHistoryQuerySchema,
+  ScanIdParamsSchema,
 } from './repositories.validation.js';
 
 export const repositoriesRouter = Router();
@@ -104,6 +105,32 @@ repositoriesRouter.get(
         page: result.page,
         limit: result.limit,
       }));
+    } catch (err) { next(err); }
+  },
+);
+
+// GET /api/v1/repositories/:id/scans/:scanId/findings
+repositoriesRouter.get(
+  '/:id/scans/:scanId/findings',
+  requirePermission('view_findings'),
+  validate({ params: ScanIdParamsSchema }),
+  async (req, res, next) => {
+    try {
+      const findings = await reposService.getScanFindings(req.auth!.orgId, req.params.scanId);
+      res.json(successEnvelope(findings));
+    } catch (err) { next(err); }
+  },
+);
+
+// DELETE /api/v1/repositories/:id/scans
+repositoriesRouter.delete(
+  '/:id/scans',
+  requirePermission('manage_integrations'),
+  validate({ params: RepositoryIdParamsSchema }),
+  async (req, res, next) => {
+    try {
+      await reposService.clearScanHistory(req.auth!.orgId, req.params.id);
+      res.json(successEnvelope({ cleared: true }));
     } catch (err) { next(err); }
   },
 );

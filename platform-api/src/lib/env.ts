@@ -19,6 +19,9 @@ const envSchema = z.object({
 
   // sc-scan binary path (optional override)
   SC_SCAN_BINARY: z.string().default(''),
+
+  // sc-monitor API key
+  SC_MONITOR_API_KEY: z.string().default('sc-monitor-dev-key'),
 });
 
 export const env = envSchema.parse(process.env);

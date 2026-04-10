@@ -85,3 +85,40 @@ export async function getScanHistory(orgId: string, repoId: string, page: number
 
   return { items, total, page, limit };
 }
+
+export async function getScanFindings(orgId: string, scanId: string) {
+  const scan = await prisma.scan.findFirst({ where: { id: scanId, orgId } });
+  if (!scan) {
+    throw new AppError('RESOURCE_NOT_FOUND', 'Scan not found');
+  }
+
+  return prisma.finding.findMany({
+    where: { scanId },
+    select: {
+      id: true,
+      severity: true,
+      status: true,
+      title: true,
+      cveId: true,
+      cvssScore: true,
+      source: true,
+      detail: true,
+      createdAt: true,
+    },
+    orderBy: [{ severity: 'asc' }, { createdAt: 'desc' }],
+  });
+}
+
+export async function clearScanHistory(orgId: string, repoId: string) {
+  const repo = await prisma.repository.findFirst({ where: { id: repoId, orgId } });
+  if (!repo) {
+    throw new AppError('RESOURCE_NOT_FOUND', 'Repository not found');
+  }
+
+  // Delete findings linked to scans of this repo, then delete scans
+  await prisma.$transaction([
+    prisma.finding.deleteMany({ where: { repositoryId: repoId } }),
+    prisma.scan.deleteMany({ where: { repositoryId: repoId } }),
+    prisma.repository.update({ where: { id: repoId }, data: { lastScanAt: null } }),
+  ]);
+}

@@ -126,12 +126,26 @@ export function useEndpoint(id: string) {
 export function useCreateEndpoint() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { host: string; port?: number; protocol?: string; checkInterval?: string; projectId?: string }) =>
+    mutationFn: (data: { host: string; port?: number; protocol?: string; uptimeInterval?: number; uptimeTimeout?: number; projectId?: string }) =>
       apiClient<MonitoredEndpoint>('/api/v1/monitoring/endpoints', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['endpoints'] }),
+  });
+}
+
+export function useUpdateEndpoint() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string; uptimeInterval?: number; uptimeTimeout?: number }) =>
+      apiClient<MonitoredEndpoint>(`/api/v1/monitoring/endpoints/${data.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ uptimeInterval: data.uptimeInterval, uptimeTimeout: data.uptimeTimeout }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['endpoints'] });
+    },
   });
 }
 
@@ -432,6 +446,31 @@ export function useRepositoryScans(repoId: string, page = 1, limit = 20) {
     queryFn: () =>
       apiClient<Scan[]>(`/api/v1/repositories/${repoId}/scans?page=${page}&limit=${limit}`),
     enabled: !!repoId,
+  });
+}
+
+export function useScanFindings(repoId: string, scanId: string | null) {
+  return useQuery({
+    queryKey: ['scan-findings', scanId],
+    queryFn: () => apiClient<Array<{
+      id: string; severity: string; status: string; title: string;
+      cveId: string | null; cvssScore: number | null; source: string;
+      detail: Record<string, unknown> | null; createdAt: string;
+    }>>(`/api/v1/repositories/${repoId}/scans/${scanId}/findings`),
+    enabled: !!scanId,
+  });
+}
+
+export function useClearScanHistory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (repoId: string) =>
+      apiClient<void>(`/api/v1/repositories/${repoId}/scans`, { method: 'DELETE' }),
+    onSuccess: (_data, repoId) => {
+      qc.invalidateQueries({ queryKey: ['repository-scans', repoId] });
+      qc.invalidateQueries({ queryKey: ['repositories', repoId] });
+      qc.invalidateQueries({ queryKey: ['findings'] });
+    },
   });
 }
 

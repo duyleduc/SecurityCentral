@@ -4,7 +4,7 @@ import { validate } from '../../middleware/validate.js';
 import { successEnvelope } from '../../middleware/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/rbac.js';
-import { CreateEndpointSchema, EndpointIdParamsSchema, HeartbeatsQuerySchema } from './monitoring.validation.js';
+import { CreateEndpointSchema, UpdateEndpointSchema, EndpointIdParamsSchema, HeartbeatsQuerySchema } from './monitoring.validation.js';
 import * as monitoringService from './monitoring.service.js';
 
 export const monitoringRouter = Router();
@@ -54,6 +54,21 @@ monitoringRouter.get(
   },
 );
 
+// PATCH /api/v1/monitoring/endpoints/:id
+monitoringRouter.patch(
+  '/:id',
+  requirePermission('manage_endpoints'),
+  validate({ params: EndpointIdParamsSchema, body: UpdateEndpointSchema }),
+  async (req, res, next) => {
+    try {
+      const endpoint = await monitoringService.update(req.auth!.orgId, req.params.id, req.body);
+      res.json(successEnvelope(endpoint));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // DELETE /api/v1/monitoring/endpoints/:id
 monitoringRouter.delete(
   '/:id',
@@ -62,7 +77,7 @@ monitoringRouter.delete(
   async (req, res, next) => {
     try {
       await monitoringService.remove(req.auth!.orgId, req.params.id);
-      res.status(204).send();
+      res.json(successEnvelope({ deleted: true }));
     } catch (err) {
       next(err);
     }

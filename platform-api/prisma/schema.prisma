@@ -208,18 +208,24 @@ model ServerMetricSnapshot {
 // ---------------------------------------------------------------------------
 
 model MonitoredEndpoint {
-  id            String   @id @default(uuid()) @db.VarChar(36)
-  orgId         String   @map("org_id") @db.VarChar(36)
-  projectId     String?  @map("project_id") @db.VarChar(36)
-  host          String   @db.VarChar(255)
-  port          Int      @default(443)
-  protocol      String   @default("https") @db.VarChar(10)
-  checkInterval String   @default("1h") @map("check_interval") @db.VarChar(10) // 1h | 6h | 24h
-  status        String   @default("pending") @db.VarChar(20) // healthy | degraded | down | pending
-  lastCheckAt   DateTime? @map("last_check_at") @db.DateTime(3)
-  nextCheckAt   DateTime? @map("next_check_at") @db.DateTime(3)
-  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  id              String   @id @default(uuid()) @db.VarChar(36)
+  orgId           String   @map("org_id") @db.VarChar(36)
+  projectId       String?  @map("project_id") @db.VarChar(36)
+  host            String   @db.VarChar(255)
+  port            Int      @default(443)
+  protocol        String   @default("https") @db.VarChar(10)
+  // Uptime check settings
+  uptimeInterval  Int      @default(15)  @map("uptime_interval")  // seconds between pings
+  uptimeTimeout   Int      @default(30)  @map("uptime_timeout")   // seconds before timeout
+  // SSL/DNS check — runs on create, then daily via scheduler
+  lastSslCheckAt  DateTime? @map("last_ssl_check_at") @db.DateTime(3)
+  // Legacy field kept for backwards compat
+  checkInterval   String   @default("1h") @map("check_interval") @db.VarChar(10)
+  status          String   @default("pending") @db.VarChar(20) // healthy | degraded | down | pending
+  lastCheckAt     DateTime? @map("last_check_at") @db.DateTime(3)
+  nextCheckAt     DateTime? @map("next_check_at") @db.DateTime(3)
+  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.DateTime(3)
 
   project    Project?            @relation(fields: [projectId], references: [id])
   heartbeats EndpointHeartbeat[]

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { setAccessToken, getAccessToken } from '../api/client';
+import { connectSocket, disconnectSocket } from '../ws/client';
 
 interface User {
   id: string;
@@ -42,13 +43,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const body = await res.json();
           if (body.data?.accessToken) {
             setAccessToken(body.data.accessToken);
-            // Decode basic user info from stored state
             const stored = localStorage.getItem('sc_user');
             if (stored) {
               const parsed = JSON.parse(stored);
               setUser(parsed.user);
               setOrg(parsed.org);
             }
+            try { connectSocket(); } catch {}
           }
         }
       } catch {
@@ -74,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(body.data.accessToken);
     setUser(body.data.user);
     localStorage.setItem('sc_user', JSON.stringify({ user: body.data.user, org: body.data.org }));
+    try { connectSocket(); } catch {}
   }, []);
 
   const register = useCallback(async (orgName: string, name: string, email: string, password: string) => {
@@ -91,9 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(body.data.user);
     setOrg(body.data.org);
     localStorage.setItem('sc_user', JSON.stringify({ user: body.data.user, org: body.data.org }));
+    try { connectSocket(); } catch {}
   }, []);
 
   const logout = useCallback(() => {
+    disconnectSocket();
     setAccessToken(null);
     setUser(null);
     setOrg(null);

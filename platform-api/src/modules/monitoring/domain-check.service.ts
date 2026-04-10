@@ -115,7 +115,8 @@ export function checkSsl(host: string, port: number): Promise<SslCheckResult> {
 export function checkHttp(host: string, port: number, protocol: string): Promise<HttpCheckResult> {
   return new Promise((resolve) => {
     const start = performance.now();
-    const url = `${protocol}://${host}:${port}`;
+    const isDefaultPort = (protocol === 'https' && port === 443) || (protocol === 'http' && port === 80);
+    const url = isDefaultPort ? `${protocol}://${host}` : `${protocol}://${host}:${port}`;
     const client = protocol === 'https' ? https : http;
 
     const req = client.get(url, { timeout: 10_000, rejectUnauthorized: false }, (res) => {
@@ -189,7 +190,10 @@ export async function checkDns(host: string): Promise<DnsCheckResult> {
 // Combined domain check
 // ---------------------------------------------------------------------------
 
-export async function checkDomain(host: string, port: number, protocol: string): Promise<DomainCheckResult> {
+export async function checkDomain(rawHost: string, port: number, protocol: string): Promise<DomainCheckResult> {
+  // Extract bare hostname — users may enter full URLs like "https://example.com/path"
+  const host = extractHostname(rawHost);
+
   const [ssl, httpResult, dnsResult] = await Promise.all([
     protocol === 'https' ? checkSsl(host, port) : Promise.resolve(null),
     checkHttp(host, port, protocol),
@@ -197,4 +201,22 @@ export async function checkDomain(host: string, port: number, protocol: string):
   ]);
 
   return { ssl, http: httpResult, dns: dnsResult };
+}
+
+/** Extract bare hostname from a value that might be a full URL or just a hostname. */
+function extractHostname(input: string): string {
+  let s = input.trim();
+  // If it looks like a URL, parse it
+  if (s.startsWith('http://') || s.startsWith('https://')) {
+    try {
+      return new URL(s).hostname;
+    } catch {
+      // fallthrough
+    }
+  }
+  // Strip trailing slashes and paths
+  s = s.split('/')[0];
+  // Strip port if present
+  s = s.split(':')[0];
+  return s;
 }

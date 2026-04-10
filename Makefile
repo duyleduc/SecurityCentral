@@ -18,26 +18,31 @@ restart: stop start
 ensure-mysql:
 	@docker compose exec mysql mysqladmin ping -h localhost -u root -prootpassword --silent 2>/dev/null || $(MAKE) start
 
-# Development (starts infra + API + dashboard)
-dev: ensure-mysql
+# Development (starts infra + API + dashboard + monitor)
+dev: ensure-mysql build-monitor
 	cd platform-api && npm run dev &
 	cd dashboard && npm run dev &
-	@echo "API: http://localhost:3000  Dashboard: http://localhost:5173"
+	cd sc-monitor && ./bin/sc-monitor &
+	@echo "API: http://localhost:3000  Dashboard: http://localhost:5173  Monitor: running"
 
 dev-stop:
 	-@lsof -ti:3000 | xargs kill -9 2>/dev/null || true
 	-@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
+	-@pkill -9 sc-monitor 2>/dev/null || true
 	@sleep 1
 	@echo "Dev servers stopped."
 
 dev-restart:
 	-@lsof -ti:3000 | xargs kill -9 2>/dev/null || true
 	-@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
+	-@pkill -9 sc-monitor 2>/dev/null || true
 	@sleep 1
+	@cd sc-monitor && go build -o bin/sc-monitor ./cmd/sc-monitor
 	@docker compose exec mysql mysqladmin ping -h localhost -u root -prootpassword --silent 2>/dev/null || $(MAKE) start
 	cd platform-api && npm run dev &
 	cd dashboard && npm run dev &
-	@echo "API: http://localhost:3000  Dashboard: http://localhost:5173"
+	cd sc-monitor && ./bin/sc-monitor &
+	@echo "API: http://localhost:3000  Dashboard: http://localhost:5173  Monitor: running"
 
 # Database
 migrate:
@@ -54,7 +59,7 @@ test:
 	cd sc-scan && go test -race ./...
 
 # Build
-build: build-api build-dashboard build-scanner build-agent
+build: build-api build-dashboard build-scanner build-agent build-monitor
 
 build-api:
 	cd platform-api && npm run build
@@ -67,6 +72,9 @@ build-scanner:
 
 build-agent:
 	cd sc-agent && go build -o bin/sc-agent ./cmd/sc-agent
+
+build-monitor:
+	cd sc-monitor && go build -o bin/sc-monitor ./cmd/sc-monitor
 
 build-scanner-all:
 	cd sc-scan && GOOS=linux GOARCH=amd64 go build -o bin/sc-scan-linux-amd64 ./cmd/sc-scan

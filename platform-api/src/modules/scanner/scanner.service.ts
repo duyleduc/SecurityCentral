@@ -148,7 +148,7 @@ async function runScan(
         status: 'completed',
         completedAt,
         duration,
-        findingsTotal: scanResult.findings.length,
+        findingsTotal: created,
         meta: {
           branch: input.branch ?? repo.defaultBranch,
           deltaMode: changedFiles.length > 0,
@@ -156,7 +156,8 @@ async function runScan(
           scannersRun: scanResult.scannersRun,
           scannersSkipped: scanResult.scannersSkipped,
           warnings: scanResult.warnings.length > 0 ? scanResult.warnings : undefined,
-          findingsCreated: created,
+          totalDetected: scanResult.findings.length,
+          newFindings: created,
         },
       },
     });
@@ -733,7 +734,7 @@ async function ingestFindings(
   scanId: string,
   findings: readonly ScanFinding[],
 ): Promise<number> {
-  // Fetch ALL existing findings for this repo (any status) for proper dedup
+  // Fetch ALL existing findings for this repo (any status) for dedup
   const existingFindings = await prisma.finding.findMany({
     where: { repositoryId },
     select: { id: true, title: true, cveId: true, status: true },
@@ -753,10 +754,11 @@ async function ingestFindings(
     const key = dedupKey(f.cve_id, f.title);
     newKeys.add(key);
 
+    // Already exists in this repo — don't count as new
     const existing = existingByKey.get(key);
     if (existing) {
-      // Already exists — if resolved/suppressed/false_positive, reopen it
       if (existing.status !== 'open' && existing.status !== 'in_progress') {
+        // Was resolved/suppressed but scanner found it again — reopen
         await prisma.finding.update({
           where: { id: existing.id },
           data: { status: 'open', scanId, resolvedAt: null },
@@ -772,7 +774,7 @@ async function ingestFindings(
       continue;
     }
 
-    // New finding — create it
+    // Truly new finding — not seen in any previous scan of this repo
     await prisma.finding.create({
       data: {
         orgId, scanId, repositoryId,

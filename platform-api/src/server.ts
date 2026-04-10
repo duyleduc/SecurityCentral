@@ -1,9 +1,17 @@
+import { createServer } from 'node:http';
+
 import { app } from './app.js';
 import { env } from './lib/env.js';
 import { logger } from './lib/logger.js';
 import { startScheduler, stopScheduler } from './scheduler.js';
+import { setupSocketIO } from './ws/server.js';
 
-const server = app.listen(env.PORT, () => {
+const httpServer = createServer(app);
+
+// Attach Socket.IO to the HTTP server
+setupSocketIO(httpServer);
+
+httpServer.listen(env.PORT, () => {
   logger.info(`Platform API listening on port ${env.PORT}`, { env: env.NODE_ENV });
   startScheduler();
 });
@@ -11,7 +19,7 @@ const server = app.listen(env.PORT, () => {
 function shutdown() {
   logger.info('Shutting down...');
   stopScheduler();
-  server.close(() => {
+  httpServer.close(() => {
     logger.info('Server closed');
     process.exit(0);
   });
