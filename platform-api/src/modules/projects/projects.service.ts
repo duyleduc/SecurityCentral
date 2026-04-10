@@ -15,6 +15,7 @@ export async function list(orgId: string) {
         select: {
           servers: true,
           monitoredEndpoints: true,
+          repositories: true,
         },
       },
     },
@@ -32,8 +33,11 @@ export async function getById(orgId: string, id: string) {
       monitoredEndpoints: {
         select: { id: true, host: true, status: true, lastCheckAt: true },
       },
+      repositories: {
+        select: { id: true, owner: true, name: true, provider: true, language: true, lastScanAt: true },
+      },
       _count: {
-        select: { servers: true, monitoredEndpoints: true },
+        select: { servers: true, monitoredEndpoints: true, repositories: true },
       },
     },
   });

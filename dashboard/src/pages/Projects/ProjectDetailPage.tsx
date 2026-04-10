@@ -15,6 +15,8 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DnsIcon from '@mui/icons-material/Dns';
 import StorageIcon from '@mui/icons-material/Storage';
+import CodeIcon from '@mui/icons-material/Code';
+import GitHubIcon from '@mui/icons-material/GitHub';
 import { useProject } from '../../api/hooks';
 
 export function ProjectDetailPage() {
@@ -31,7 +33,8 @@ export function ProjectDetailPage() {
     description: string;
     servers: Array<{ id: string; hostname: string; status: string }>;
     monitoredEndpoints: Array<{ id: string; host: string; status: string }>;
-    _count: { servers: number; monitoredEndpoints: number };
+    repositories: Array<{ id: string; owner: string; name: string; provider: string; language: string | null; lastScanAt: string | null }>;
+    _count: { servers: number; monitoredEndpoints: number; repositories: number };
   };
 
   return (
@@ -50,8 +53,43 @@ export function ProjectDetailPage() {
       )}
 
       <Grid container spacing={3} mb={3}>
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <Card>
+        {/* Repositories */}
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" mb={1}>
+                Repositories ({detail._count.repositories})
+              </Typography>
+              {detail.repositories.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No repositories linked yet
+                </Typography>
+              ) : (
+                <List dense>
+                  {detail.repositories.map((r) => (
+                    <ListItem
+                      key={r.id}
+                      onClick={() => navigate(`/repositories/${r.id}`)}
+                      sx={{ cursor: 'pointer', borderRadius: 1, '&:hover': { bgcolor: 'action.hover' } }}
+                    >
+                      <ListItemIcon>
+                        {r.provider === 'github' ? <GitHubIcon /> : <CodeIcon />}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={`${r.owner}/${r.name}`}
+                        secondary={[r.language, r.lastScanAt ? `Scanned ${new Date(r.lastScanAt).toLocaleDateString()}` : 'Never scanned'].filter(Boolean).join(' · ')}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Servers */}
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <Card sx={{ height: '100%' }}>
             <CardContent>
               <Typography variant="h6" mb={1}>
                 Servers ({detail._count.servers})
@@ -63,7 +101,11 @@ export function ProjectDetailPage() {
               ) : (
                 <List dense>
                   {detail.servers.map((s) => (
-                    <ListItem key={s.id}>
+                    <ListItem
+                      key={s.id}
+                      onClick={() => navigate(`/servers/${s.id}`)}
+                      sx={{ cursor: 'pointer', borderRadius: 1, '&:hover': { bgcolor: 'action.hover' } }}
+                    >
                       <ListItemIcon>
                         <StorageIcon />
                       </ListItemIcon>
@@ -77,8 +119,9 @@ export function ProjectDetailPage() {
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <Card>
+        {/* Domains */}
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <Card sx={{ height: '100%' }}>
             <CardContent>
               <Typography variant="h6" mb={1}>
                 Domains ({detail._count.monitoredEndpoints})

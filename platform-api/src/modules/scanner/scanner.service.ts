@@ -755,7 +755,8 @@ async function ingestFindings(
     created++;
   }
 
-  // Auto-resolve stale findings
+  // Auto-resolve stale findings (only when scan produced results — don't resolve everything on empty scan)
+  if (newKeys.size === 0) return created;
   const staleFindings = existingFindings.filter((f) => !newKeys.has(dedupKey(f.cveId, f.title)));
   if (staleFindings.length > 0) {
     await prisma.finding.updateMany({

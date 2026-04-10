@@ -61,6 +61,7 @@ export function ProjectsPage() {
                     </Typography>
                   )}
                   <Box display="flex" gap={1}>
+                    <Chip label={`${(p._count as any)?.repositories ?? 0} repos`} size="small" />
                     <Chip label={`${p._count?.servers ?? 0} servers`} size="small" />
                     <Chip label={`${p._count?.monitoredEndpoints ?? 0} domains`} size="small" />
                   </Box>
