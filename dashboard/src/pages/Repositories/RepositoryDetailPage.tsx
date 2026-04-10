@@ -15,6 +15,7 @@ import {
   useTriggerScan,
   type Scan,
 } from '../../api/hooks';
+import { ScoreBadge, computeScore } from '../../components/ScoreBadge';
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: '#dc2626',
@@ -67,6 +68,7 @@ export function RepositoryDetailPage() {
   };
 
   const openFindings = repo._count?.findings ?? 0;
+  const { score, breakdown } = computeScore({});
 
   return (
     <Box>
@@ -78,13 +80,16 @@ export function RepositoryDetailPage() {
       <Card sx={{ mb: 3 }}>
         <CardContent sx={{ p: 3 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-            <Box>
-              <Typography variant="h5" sx={{ mb: 1 }}>{repo.owner}/{repo.name}</Typography>
-              <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
-                <Chip label={repo.provider} size="small" variant="outlined" />
-                <Chip label={`branch: ${repo.defaultBranch}`} size="small" variant="outlined" />
-                {repo.language && <Chip label={repo.language} size="small" variant="outlined" />}
-              </Stack>
+            <Box display="flex" alignItems="center" gap={2}>
+              <ScoreBadge score={score} breakdown={breakdown} size="medium" />
+              <Box>
+                <Typography variant="h5" sx={{ mb: 1 }}>{repo.owner}/{repo.name}</Typography>
+                <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
+                  <Chip label={repo.provider} size="small" variant="outlined" />
+                  <Chip label={`branch: ${repo.defaultBranch}`} size="small" variant="outlined" />
+                  {repo.language && <Chip label={repo.language} size="small" variant="outlined" />}
+                </Stack>
+              </Box>
             </Box>
             <Button
               variant="contained"

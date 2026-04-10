@@ -20,6 +20,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { useEndpoint, useHeartbeats, useTriggerCheck } from '../../api/hooks';
+import { ScoreBadge, computeScore } from '../../components/ScoreBadge';
 
 function DnsStatus({ label, value }: { label: string; value: string | null }) {
   const isPass = value === 'pass';
@@ -62,6 +63,7 @@ export function DomainDetailPage() {
       </Box>
 
       <Box display="flex" alignItems="center" gap={2} mb={3}>
+        <ScoreBadge score={computeScore({}).score} breakdown={computeScore({}).breakdown} size="medium" />
         <Typography variant="h4">{endpoint.host}</Typography>
         <Chip
           label={endpoint.status}

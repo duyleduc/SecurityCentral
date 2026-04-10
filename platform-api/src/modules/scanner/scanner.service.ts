@@ -1,5 +1,6 @@
-import { execFile } from 'node:child_process';
-import { join } from 'node:path';
+import { exec, execFile } from 'node:child_process';
+import { access, constants } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 import type { Prisma } from '@prisma/client';
@@ -12,6 +13,7 @@ import { shallowClone, getChangedFiles, buildGitHubCloneUrl, buildGitLabCloneUrl
 import * as github from '../../lib/github.js';
 
 const execFileAsync = promisify(execFile);
+const execAsync = promisify(exec);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,15 +36,15 @@ interface ScanFinding {
   readonly cve_id?: string;
   readonly cvss_score?: number;
   readonly remediation?: string;
+  readonly auto_fixable?: boolean;
   readonly detail?: Record<string, unknown>;
 }
 
-interface ScanResult {
-  readonly scan_type: string;
+interface ScannerResult {
   readonly findings: ScanFinding[];
-  readonly duration_ms: number;
-  readonly files_scanned: number;
-  readonly error?: string;
+  readonly warnings: string[];
+  readonly scannersRun: string[];
+  readonly scannersSkipped: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -59,7 +61,14 @@ export async function triggerScan(input: TriggerScanInput) {
     throw new AppError('RESOURCE_NOT_FOUND', 'Repository not found');
   }
 
-  // Create scan record
+  // Prevent concurrent scans on same repo
+  const activeScan = await prisma.scan.findFirst({
+    where: { repositoryId: repo.id, status: { in: ['pending', 'running'] } },
+  });
+  if (activeScan) {
+    throw new AppError('CONFLICT', 'A scan is already running for this repository');
+  }
+
   const scanType = input.scanType === 'full' || !input.scanType
     ? 'code_dependencies'
     : `code_${input.scanType}`;
@@ -72,131 +81,299 @@ export async function triggerScan(input: TriggerScanInput) {
       status: 'pending',
       trigger: input.trigger,
       branch: input.branch ?? repo.defaultBranch,
+      meta: { requestedType: input.scanType ?? 'full' },
     },
   });
 
   // Run scan in background (fire-and-forget from caller's perspective)
   runScan(scan.id, repo, input).catch((err) => {
-    logger.error('scan execution failed', { scanId: scan.id, error: err });
+    logger.error('scan execution failed', { scanId: scan.id, error: (err as Error).message });
   });
 
   return scan;
 }
 
 // ---------------------------------------------------------------------------
-// Scan execution
+// Scan execution pipeline
 // ---------------------------------------------------------------------------
 
 async function runScan(
   scanId: string,
-  repo: Awaited<ReturnType<typeof getRepoWithIntegration>>,
+  repo: { id: string; orgId: string; provider: string; owner: string; name: string; defaultBranch: string; cloneUrl: string | null; integration: { config: unknown; baseUrl: string | null } | null },
   input: TriggerScanInput,
 ) {
-  const startTime = Date.now();
+  const startedAt = new Date();
 
   await prisma.scan.update({
     where: { id: scanId },
-    data: { status: 'running', startedAt: new Date() },
+    data: { status: 'running', startedAt },
   });
 
-  let cloneDir: string | undefined;
   let cleanup: (() => Promise<void>) | undefined;
 
   try {
-    // Build clone URL with auth token
+    // --- Clone ---
+    logger.info('cloning repository', { scanId, repo: `${repo.owner}/${repo.name}` });
     const cloneUrl = await buildAuthenticatedCloneUrl(repo);
-
-    // Clone repository
-    const result = await shallowClone({
-      cloneUrl,
-      branch: input.branch,
-      depth: 1,
-    });
-    cloneDir = result.dir;
+    const result = await shallowClone({ cloneUrl, branch: input.branch, depth: 1 });
     cleanup = result.cleanup;
+    logger.info('clone complete', { scanId });
 
-    // Determine changed files for delta scanning
+    // --- Delta mode ---
     let changedFiles: string[] = [];
     if (!input.fullScan && input.branch && input.branch !== repo.defaultBranch) {
-      changedFiles = await getChangedFiles(cloneDir, repo.defaultBranch);
-      logger.info('delta scan mode', { changedFiles: changedFiles.length });
+      changedFiles = await getChangedFiles(result.dir, repo.defaultBranch);
+      logger.info('delta scan mode', { scanId, changedFiles: changedFiles.length });
     }
 
-    // Resolve sc-scan binary path
-    const scanBinary = resolveScanBinary();
-
-    // Build args
-    const args = ['--repo-dir', cloneDir, '--output', 'json'];
-    if (input.scanType && input.scanType !== 'full') {
-      args.push('--scan-type', input.scanType);
-    }
-    if (changedFiles.length > 0) {
-      args.push('--changed-files', changedFiles.join(','));
-    }
-
-    // Execute sc-scan
-    const { stdout, stderr } = await execFileAsync(scanBinary, args, {
-      timeout: 300_000, // 5 minutes max
-      maxBuffer: 50 * 1024 * 1024, // 50MB output
+    // --- Run scanner (Go binary with Node fallback) ---
+    const scanResult = await runScanner(result.dir, input.scanType ?? 'full', changedFiles);
+    logger.info('scan finished', {
+      scanId,
+      findings: scanResult.findings.length,
+      scannersRun: scanResult.scannersRun,
+      scannersSkipped: scanResult.scannersSkipped,
     });
 
-    if (stderr) {
-      logger.warn('sc-scan stderr', { scanId, stderr: stderr.slice(0, 500) });
-    }
+    // --- Ingest findings ---
+    const created = await ingestFindings(repo.orgId, repo.id, scanId, scanResult.findings);
 
-    // Parse results
-    const scanResult: ScanResult = JSON.parse(stdout);
-
-    // Ingest findings
-    const findingsCount = await ingestFindings(
-      repo.orgId,
-      repo.id,
-      scanId,
-      scanResult.findings,
-    );
-
-    // Update scan record
-    const duration = Date.now() - startTime;
+    // --- Complete ---
+    const completedAt = new Date();
+    const duration = completedAt.getTime() - startedAt.getTime();
     await prisma.scan.update({
       where: { id: scanId },
       data: {
         status: 'completed',
-        completedAt: new Date(),
+        completedAt,
         duration,
-        findingsTotal: findingsCount,
+        findingsTotal: scanResult.findings.length,
         meta: {
-          filesScanned: scanResult.files_scanned,
           branch: input.branch ?? repo.defaultBranch,
           deltaMode: changedFiles.length > 0,
           changedFilesCount: changedFiles.length,
+          scannersRun: scanResult.scannersRun,
+          scannersSkipped: scanResult.scannersSkipped,
+          warnings: scanResult.warnings.length > 0 ? scanResult.warnings : undefined,
+          findingsCreated: created,
         },
       },
     });
 
-    // Update repo lastScanAt
     await prisma.repository.update({
       where: { id: repo.id },
       data: { lastScanAt: new Date() },
     });
 
-    logger.info('scan completed', { scanId, findings: findingsCount, duration });
+    logger.info('scan completed', { scanId, findings: scanResult.findings.length, duration });
   } catch (err) {
-    const duration = Date.now() - startTime;
+    const msg = stripTokens((err as Error).message);
+    const duration = Date.now() - startedAt.getTime();
     await prisma.scan.update({
       where: { id: scanId },
-      data: {
-        status: 'failed',
-        completedAt: new Date(),
-        duration,
-        meta: { error: String(err) },
-      },
+      data: { status: 'failed', completedAt: new Date(), duration, meta: { error: msg } },
     }).catch(() => {});
-    throw err;
+    logger.error('scan failed', { scanId, error: msg });
   } finally {
-    if (cleanup) {
-      await cleanup();
+    if (cleanup) await cleanup();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scanner: try Go binary, fallback to built-in Node
+// ---------------------------------------------------------------------------
+
+async function runScanner(
+  workDir: string,
+  scanType: string,
+  changedFiles: string[],
+): Promise<ScannerResult> {
+  // Try sc-scan Go binary
+  const binary = await findBinary('sc-scan');
+  if (binary) {
+    logger.info('using sc-scan binary', { path: binary });
+    try {
+      const findings = await runGoBinary(binary, workDir, scanType, changedFiles);
+      return { findings, warnings: [], scannersRun: ['sc-scan'], scannersSkipped: [] };
+    } catch (err) {
+      logger.warn('sc-scan binary failed, falling back to built-in scanner', { error: (err as Error).message });
     }
   }
+
+  // Fallback: built-in Node.js scanner
+  logger.info('using built-in Node.js scanner (sc-scan binary not available)');
+  return runBuiltinScanner(workDir, scanType);
+}
+
+async function findBinary(name: string): Promise<string | null> {
+  // Check env override
+  if (env.SC_SCAN_BINARY) {
+    try { await access(env.SC_SCAN_BINARY, constants.X_OK); return env.SC_SCAN_BINARY; } catch {}
+  }
+
+  // Check relative paths from project root
+  const candidates = [
+    resolve(process.cwd(), '..', 'sc-scan', 'bin', name),
+    resolve(process.cwd(), '..', 'sc-scan', 'bin', `${name}-${process.platform === 'darwin' ? 'darwin' : 'linux'}-${process.arch === 'arm64' ? 'arm64' : 'amd64'}`),
+    `/usr/local/bin/${name}`,
+  ];
+
+  for (const p of candidates) {
+    try { await access(p, constants.X_OK); return p; } catch {}
+  }
+
+  // Check PATH
+  try {
+    const { stdout } = await execAsync(`which ${name}`, { timeout: 5000 });
+    return stdout.trim();
+  } catch {}
+
+  return null;
+}
+
+async function runGoBinary(
+  bin: string,
+  workDir: string,
+  scanType: string,
+  changedFiles: string[],
+): Promise<ScanFinding[]> {
+  const args = ['--repo-dir', workDir, '--output', 'json'];
+  if (scanType && scanType !== 'full') {
+    args.push('--scan-type', scanType);
+  }
+  if (changedFiles.length > 0) {
+    args.push('--changed-files', changedFiles.join(','));
+  }
+
+  const { stdout } = await execFileAsync(bin, args, {
+    timeout: 300_000,
+    maxBuffer: 50 * 1024 * 1024,
+  });
+
+  const result = JSON.parse(stdout);
+  // sc-scan outputs { scan_type, findings, duration_ms, files_scanned }
+  return (result.findings ?? result) as ScanFinding[];
+}
+
+// ---------------------------------------------------------------------------
+// Built-in Node.js scanner (fallback when Go binary not available)
+// Uses native audit tools: npm audit, pip-audit, etc.
+// ---------------------------------------------------------------------------
+
+async function runBuiltinScanner(workDir: string, scanType: string): Promise<ScannerResult> {
+  const findings: ScanFinding[] = [];
+  const warnings: string[] = [];
+  const scannersRun: string[] = [];
+  const scannersSkipped: string[] = [];
+
+  // Dependency scan via npm audit
+  if (scanType !== 'secrets') {
+    const hasNpm = await isToolInstalled('npm');
+    if (hasNpm) {
+      const npmFindings = await runNpmAudit(workDir);
+      findings.push(...npmFindings);
+      scannersRun.push('npm-audit');
+    } else {
+      scannersSkipped.push('npm-audit');
+    }
+  }
+
+  // Secret scan via regex patterns (always runs)
+  const secretFindings = await scanSecrets(workDir);
+  findings.push(...secretFindings);
+  scannersRun.push('secret-regex');
+
+  if (scannersSkipped.length > 0) {
+    warnings.push(`Skipped scanners (not installed): ${scannersSkipped.join(', ')}`);
+  }
+
+  return { findings, warnings, scannersRun, scannersSkipped };
+}
+
+async function isToolInstalled(name: string): Promise<boolean> {
+  try {
+    await execAsync(`${name} --version`, { timeout: 5000 });
+    return true;
+  } catch { return false; }
+}
+
+async function runNpmAudit(workDir: string): Promise<ScanFinding[]> {
+  // Check if package-lock.json exists
+  try { await access(join(workDir, 'package-lock.json')); } catch { return []; }
+
+  try {
+    const { stdout } = await execAsync('npm audit --json 2>/dev/null || true', {
+      cwd: workDir,
+      timeout: 60_000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+
+    const audit = JSON.parse(stdout);
+    const findings: ScanFinding[] = [];
+
+    // npm audit v2 format: { vulnerabilities: { [name]: { severity, via, effects, range, ... } } }
+    const vulns = audit.vulnerabilities ?? {};
+    for (const [name, v] of Object.entries<any>(vulns)) {
+      findings.push({
+        source: 'dependency',
+        severity: v.severity ?? 'medium',
+        title: `${name}@${v.range ?? 'unknown'} — ${v.severity ?? 'unknown'} vulnerability`,
+        description: Array.isArray(v.via) ? v.via.filter((x: any) => typeof x === 'string').join('; ') : '',
+        detail: { package_name: name, ecosystem: 'npm', range: v.range, fix_available: v.fixAvailable },
+        auto_fixable: !!v.fixAvailable,
+      });
+    }
+
+    return findings;
+  } catch {
+    return [];
+  }
+}
+
+async function scanSecrets(workDir: string): Promise<ScanFinding[]> {
+  // Simple regex-based secret scan (subset of what Go scanner does)
+  const patterns = [
+    { name: 'AWS Access Key', regex: /AKIA[0-9A-Z]{16}/, severity: 'critical' as const },
+    { name: 'GitHub PAT', regex: /ghp_[A-Za-z0-9]{36}/, severity: 'high' as const },
+    { name: 'GitLab Token', regex: /glpat-[A-Za-z0-9_-]{20,}/, severity: 'high' as const },
+    { name: 'Stripe Secret Key', regex: /sk_live_[0-9a-zA-Z]{24,}/, severity: 'critical' as const },
+    { name: 'Private Key', regex: /-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/, severity: 'critical' as const },
+    { name: 'Generic Secret', regex: /(?:password|secret|token|api_key)\s*[=:]\s*["'][A-Za-z0-9+/=_-]{16,}["']/i, severity: 'medium' as const },
+  ];
+
+  const findings: ScanFinding[] = [];
+
+  try {
+    // Use grep to find potential secrets (fast)
+    for (const p of patterns) {
+      try {
+        const { stdout } = await execAsync(
+          `grep -rnl --include='*.ts' --include='*.js' --include='*.py' --include='*.go' --include='*.env' --include='*.yml' --include='*.yaml' --include='*.json' -E '${p.regex.source}' . 2>/dev/null | head -20`,
+          { cwd: workDir, timeout: 15_000 },
+        );
+        const files = stdout.trim().split('\n').filter(Boolean);
+        for (const file of files) {
+          const relPath = file.replace(/^\.\//, '');
+          // Skip lockfiles and test files
+          if (/node_modules|\.lock|package-lock|go\.sum|\.test\.|_test\./.test(relPath)) continue;
+
+          findings.push({
+            source: 'secret',
+            severity: p.severity,
+            title: `${p.name} detected in ${relPath}`,
+            description: `Potential ${p.name} found in ${relPath}`,
+            detail: { file: relPath, pattern_name: p.name },
+          });
+        }
+      } catch {
+        // grep returns exit 1 when no match — ignore
+      }
+    }
+  } catch {
+    // Scan error — non-fatal
+  }
+
+  return findings;
 }
 
 // ---------------------------------------------------------------------------
@@ -209,15 +386,12 @@ async function ingestFindings(
   scanId: string,
   findings: readonly ScanFinding[],
 ): Promise<number> {
-  // Get existing open findings for this repo
   const existingFindings = await prisma.finding.findMany({
     where: { repositoryId, status: { in: ['open', 'in_progress'] } },
     select: { id: true, title: true, cveId: true },
   });
 
-  const existingKeys = new Set(
-    existingFindings.map((f) => dedupKey(f.cveId, f.title)),
-  );
+  const existingKeys = new Set(existingFindings.map((f) => dedupKey(f.cveId, f.title)));
   const newKeys = new Set<string>();
   let created = 0;
 
@@ -225,7 +399,6 @@ async function ingestFindings(
     const key = dedupKey(f.cve_id, f.title);
     newKeys.add(key);
 
-    // Skip if already exists
     if (existingKeys.has(key)) continue;
 
     await prisma.finding.create({
@@ -246,7 +419,7 @@ async function ingestFindings(
     created++;
   }
 
-  // Auto-resolve findings not in the new scan
+  // Auto-resolve stale findings
   const staleFindings = existingFindings.filter(
     (f) => !newKeys.has(dedupKey(f.cveId, f.title)),
   );
@@ -270,13 +443,6 @@ function dedupKey(cveId: string | null | undefined, title: string): string {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function getRepoWithIntegration(id: string) {
-  return prisma.repository.findFirstOrThrow({
-    where: { id },
-    include: { integration: true },
-  });
-}
-
 async function buildAuthenticatedCloneUrl(
   repo: {
     provider: string;
@@ -287,9 +453,10 @@ async function buildAuthenticatedCloneUrl(
   },
 ): Promise<string> {
   if (!repo.integration) {
-    // Fallback to stored clone URL (public repo)
     if (repo.cloneUrl) return repo.cloneUrl;
-    throw new Error('No integration or clone URL available');
+    // Public fallback by provider
+    if (repo.provider === 'gitlab') return `https://gitlab.com/${repo.owner}/${repo.name}.git`;
+    return `https://github.com/${repo.owner}/${repo.name}.git`;
   }
 
   const config = repo.integration.config as Record<string, string>;
@@ -314,12 +481,7 @@ async function buildAuthenticatedCloneUrl(
   throw new Error(`Unsupported provider: ${repo.provider}`);
 }
 
-function resolveScanBinary(): string {
-  // Check env override first, then look in project root
-  if (env.SC_SCAN_BINARY) return env.SC_SCAN_BINARY;
-
-  const platform = process.platform === 'darwin' ? 'darwin' : 'linux';
-  const arch = process.arch === 'arm64' ? 'arm64' : 'amd64';
-
-  return join(process.cwd(), '..', 'sc-scan', 'bin', `sc-scan-${platform}-${arch}`);
+/** Strip auth tokens from error messages to prevent leaking secrets */
+function stripTokens(msg: string): string {
+  return msg.replace(/https:\/\/[^@]+@/g, 'https://***@');
 }

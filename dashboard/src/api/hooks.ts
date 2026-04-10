@@ -434,3 +434,101 @@ export function useRepositoryScans(repoId: string, page = 1, limit = 20) {
     enabled: !!repoId,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------------------
+
+export interface DashboardSummary {
+  assets: { projects: number; repositories: number; servers: number; domains: number };
+  findings: { critical: number; high: number; medium: number; low: number; info: number; total: number; last7Days: number };
+  score: { score: number; breakdown: Array<{ severity: string; count: number; deduction: number }> };
+}
+
+export interface DashboardAsset {
+  id: string;
+  type: 'repository' | 'server' | 'endpoint';
+  score: { score: number; breakdown: Array<{ severity: string; count: number; deduction: number }> };
+  [key: string]: unknown;
+}
+
+export interface Finding {
+  id: string;
+  source: string;
+  severity: string;
+  status: string;
+  title: string;
+  description: string | null;
+  cveId: string | null;
+  cvssScore: number | null;
+  createdAt: string;
+  repository?: { id: string; owner: string; name: string } | null;
+  server?: { id: string; hostname: string } | null;
+}
+
+export interface FindingsFilters {
+  severity?: string;
+  status?: string;
+  source?: string;
+  repositoryId?: string;
+  serverId?: string;
+  page?: number;
+  limit?: number;
+}
+
+export function useDashboardSummary() {
+  return useQuery({
+    queryKey: ['dashboard', 'summary'],
+    queryFn: () => apiClient<DashboardSummary>('/api/v1/dashboard/summary'),
+  });
+}
+
+export function useDashboardTopRisks() {
+  return useQuery({
+    queryKey: ['dashboard', 'top-risks'],
+    queryFn: () => apiClient<Finding[]>('/api/v1/dashboard/top-risks'),
+  });
+}
+
+export function useDashboardAssets() {
+  return useQuery({
+    queryKey: ['dashboard', 'assets'],
+    queryFn: () => apiClient<DashboardAsset[]>('/api/v1/dashboard/assets'),
+  });
+}
+
+export function useFindings(filters: FindingsFilters = {}) {
+  const params = new URLSearchParams();
+  if (filters.severity) params.set('severity', filters.severity);
+  if (filters.status) params.set('status', filters.status);
+  if (filters.source) params.set('source', filters.source);
+  if (filters.repositoryId) params.set('repositoryId', filters.repositoryId);
+  if (filters.serverId) params.set('serverId', filters.serverId);
+  if (filters.page) params.set('page', String(filters.page));
+  if (filters.limit) params.set('limit', String(filters.limit));
+  const qs = params.toString();
+  return useQuery({
+    queryKey: ['findings', filters],
+    queryFn: () => apiClient<Finding[]>(`/api/v1/findings${qs ? `?${qs}` : ''}`),
+  });
+}
+
+export function useFinding(id: string) {
+  return useQuery({
+    queryKey: ['findings', id],
+    queryFn: () => apiClient<Finding>(`/api/v1/findings/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useUpdateFinding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { id: string; status: string }) =>
+      apiClient<Finding>(`/api/v1/findings/${data.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: data.status }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['findings'] }),
+  });
+}

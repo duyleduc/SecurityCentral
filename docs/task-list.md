@@ -203,21 +203,21 @@ Connect GitHub → import repo → push to new branch → scan runs on changed f
 
 ### Backend
 
-- [ ] Scoring engine (`lib/scoring.ts`) — calculate score per asset (repository, server, domain) with severity-based deductions, return breakdown
-- [ ] Findings CRUD — `GET /api/v1/findings`, `GET /api/v1/findings/:id`, `PATCH /api/v1/findings/:id` (status transitions)
-- [ ] Auto-create findings from domain checks (SSL issues, DNS gaps, downtime)
-- [ ] Auto-create findings from agent alerts (CPU/RAM/disk threshold breaches)
-- [ ] Auto-create findings from code scans (dependency CVEs, exposed secrets, unsafe configs, risky patterns) — handled by Phase 2.5 scanner ingestion
-- [ ] Dashboard summary — `GET /api/v1/dashboard/summary` (include repository counts and scores)
-- [ ] Dashboard top risks — `GET /api/v1/dashboard/top-risks` (include code scan findings)
-- [ ] Dashboard assets — `GET /api/v1/dashboard/assets` (include repositories)
+- [x] Scoring engine (`lib/scoring.ts`) — calculate score per asset (repository, server, domain) with severity-based deductions, return breakdown
+- [x] Findings CRUD — `GET /api/v1/findings`, `GET /api/v1/findings/:id`, `PATCH /api/v1/findings/:id` (status transitions)
+- [x] Auto-create findings from domain checks (SSL issues, DNS gaps, downtime)
+- [x] Auto-create findings from agent alerts (CPU/RAM/disk threshold breaches)
+- [x] Auto-create findings from code scans (dependency CVEs, exposed secrets, unsafe configs, risky patterns) — handled by Phase 2.5 scanner ingestion
+- [x] Dashboard summary — `GET /api/v1/dashboard/summary` (include repository counts and scores)
+- [x] Dashboard top risks — `GET /api/v1/dashboard/top-risks` (include code scan findings)
+- [x] Dashboard assets — `GET /api/v1/dashboard/assets` (include repositories)
 
 ### Frontend
 
-- [ ] `ScoreBadge` component (color-coded 0–100 with breakdown tooltip)
-- [ ] Dashboard overview page (severity cards, trends line chart, recent alerts, score cards per asset type including repos)
-- [ ] Findings list page (filterable by severity, source, status; drill-down to detail; source filter includes `code_scanner`)
-- [ ] Add scores to server detail, domain detail, and repository detail pages
+- [x] `ScoreBadge` component (color-coded 0–100 with breakdown tooltip)
+- [x] Dashboard overview page (severity cards, trends line chart, recent alerts, score cards per asset type including repos)
+- [x] Findings list page (filterable by severity, source, status; drill-down to detail; source filter includes `code_scanner`)
+- [x] Add scores to server detail, domain detail, and repository detail pages
 
 ### Done when
 

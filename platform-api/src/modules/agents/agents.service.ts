@@ -169,6 +169,11 @@ export async function processHeartbeat(input: HeartbeatInput) {
     }),
   ]);
 
+  // Auto-create findings from alerts
+  if (input.alerts.length > 0) {
+    await createAgentFindings(server.orgId, server.id, server.hostname, input.alerts);
+  }
+
   logger.debug('Heartbeat processed', {
     agentId: input.agentId,
     urgent: input.urgent,
@@ -212,6 +217,55 @@ export async function ingestFindings(input: AgentFindingsInput) {
   });
 
   return { created: created.count };
+}
+
+// ---------------------------------------------------------------------------
+// Agent Key Authentication
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Auto-create findings from heartbeat alerts
+// ---------------------------------------------------------------------------
+
+const ALERT_SEVERITY: Record<string, string> = {
+  cpu_high: 'high',
+  ram_high: 'high',
+  disk_critical: 'critical',
+  disk_high: 'high',
+  port_new: 'medium',
+  service_down: 'critical',
+  io_error: 'high',
+};
+
+async function createAgentFindings(
+  orgId: string,
+  serverId: string,
+  hostname: string,
+  alerts: ReadonlyArray<{ type: string; value: number; threshold: number }>,
+) {
+  for (const alert of alerts) {
+    const severity = ALERT_SEVERITY[alert.type] ?? 'medium';
+    const title = `${alert.type.replace(/_/g, ' ')} on ${hostname} (${alert.value}% > ${alert.threshold}%)`;
+
+    // Dedup: don't create if an open finding with same title exists
+    const existing = await prisma.finding.findFirst({
+      where: { orgId, serverId, title, status: { in: ['open', 'in_progress'] } },
+    });
+    if (existing) continue;
+
+    await prisma.finding.create({
+      data: {
+        orgId,
+        serverId,
+        source: 'infra_agent',
+        severity,
+        status: 'open',
+        title,
+        description: `${alert.type} threshold breached: ${alert.value}% exceeds ${alert.threshold}%`,
+        detail: JSON.parse(JSON.stringify(alert)),
+      },
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------

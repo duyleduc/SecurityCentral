@@ -13,6 +13,8 @@ import { installTokensRouter, agentRouter } from './modules/agents/agents.router
 import { serversRouter } from './modules/servers/servers.router.js';
 import { integrationsRouter, webhookRouter } from './modules/integrations/integrations.router.js';
 import { repositoriesRouter } from './modules/repositories/repositories.router.js';
+import { findingsRouter } from './modules/findings/findings.router.js';
+import { dashboardRouter } from './modules/dashboard/dashboard.router.js';
 
 const app = express();
 
@@ -45,6 +47,8 @@ app.use('/v1/agents', agentRouter);
 app.use('/api/v1/integrations', integrationsRouter);
 app.use('/api/v1/integrations', webhookRouter);
 app.use('/api/v1/repositories', repositoriesRouter);
+app.use('/api/v1/findings', findingsRouter);
+app.use('/api/v1/dashboard', dashboardRouter);
 
 // ---------------------------------------------------------------------------
 // Error handler (must be last)

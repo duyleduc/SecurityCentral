@@ -1,4 +1,4 @@
-.PHONY: start stop restart dev dev-stop dev-restart test build migrate seed
+.PHONY: start stop restart dev dev-stop dev-restart test build migrate seed ensure-mysql
 
 # Infrastructure
 start:
@@ -14,8 +14,12 @@ stop:
 
 restart: stop start
 
+# Ensure MySQL is running (no-op if already up)
+ensure-mysql:
+	@docker compose exec mysql mysqladmin ping -h localhost -u root -prootpassword --silent 2>/dev/null || $(MAKE) start
+
 # Development (starts infra + API + dashboard)
-dev: start
+dev: ensure-mysql
 	cd platform-api && npm run dev &
 	cd dashboard && npm run dev &
 	@echo "API: http://localhost:3000  Dashboard: http://localhost:5173"
