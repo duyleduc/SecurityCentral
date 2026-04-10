@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -51,6 +52,7 @@ export function FindingsPage() {
   const [source, setSource] = useState('all');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
+  const navigate = useNavigate();
 
   const filters: FindingsFilters = {
     ...(severity !== 'all' && { severity }),
@@ -127,7 +129,7 @@ export function FindingsPage() {
                 </TableRow>
               ) : (
                 findings.map((f) => (
-                  <TableRow key={f.id} hover>
+                  <TableRow key={f.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/findings/${f.id}`)}>
                     <TableCell>
                       <Chip
                         label={f.severity}
