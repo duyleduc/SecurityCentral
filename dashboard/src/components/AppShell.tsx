@@ -17,6 +17,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import FolderIcon from '@mui/icons-material/Folder';
 import DnsIcon from '@mui/icons-material/Dns';
 import StorageIcon from '@mui/icons-material/Storage';
+import CodeIcon from '@mui/icons-material/Code';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import SettingsIcon from '@mui/icons-material/Settings';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
   { label: 'Projects', path: '/projects', icon: <FolderIcon /> },
   { label: 'Domains', path: '/domains', icon: <DnsIcon /> },
   { label: 'Servers', path: '/servers', icon: <StorageIcon /> },
+  { label: 'Repositories', path: '/repositories', icon: <CodeIcon /> },
   { label: 'Findings', path: '/findings', icon: <BugReportIcon /> },
   { label: 'Settings', path: '/settings', icon: <SettingsIcon /> },
 ];

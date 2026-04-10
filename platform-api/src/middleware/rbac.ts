@@ -19,6 +19,8 @@ export const PERMISSIONS = {
   'view_dashboard': ['owner', 'admin', 'member', 'viewer'],
   'manage_projects': ['owner', 'admin', 'member'],
   'manage_endpoints': ['owner', 'admin', 'member'],
+  'manage_integrations': ['owner', 'admin'],
+  'manage_repositories': ['owner', 'admin', 'member'],
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;

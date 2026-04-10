@@ -23,6 +23,7 @@ model Organization {
   apiKeys                ApiKey[]
   installTokens          InstallToken[]
   projects               Project[]
+  repositories           Repository[]
   scans                  Scan[]
   findings               Finding[]
   integrations           Integration[]
@@ -114,6 +115,7 @@ model Project {
   servers           Server[]
   monitoredEndpoints MonitoredEndpoint[]
   installTokens     InstallToken[]
+  repositories      Repository[]
 
   @@index([orgId])
   @@map("projects")
@@ -145,6 +147,40 @@ model Server {
   @@index([orgId])
   @@index([projectId])
   @@map("servers")
+}
+
+// ---------------------------------------------------------------------------
+// Repository (code scanning target)
+// ---------------------------------------------------------------------------
+
+model Repository {
+  id            String    @id @default(uuid()) @db.VarChar(36)
+  orgId         String    @map("org_id") @db.VarChar(36)
+  projectId     String?   @map("project_id") @db.VarChar(36)
+  integrationId String?   @map("integration_id") @db.VarChar(36)
+  provider      String    @db.VarChar(20) // github | gitlab
+  providerId    String    @map("provider_id") @db.VarChar(100)
+  owner         String    @db.VarChar(255)
+  name          String    @db.VarChar(255)
+  defaultBranch String    @default("main") @map("default_branch") @db.VarChar(100)
+  language      String?   @db.VarChar(50)
+  cloneUrl      String?   @map("clone_url") @db.VarChar(500)
+  lastScanAt    DateTime? @map("last_scan_at") @db.DateTime(3)
+  settings      Json      @default("{}") @db.Json
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+
+  org         Organization @relation(fields: [orgId], references: [id])
+  project     Project?     @relation(fields: [projectId], references: [id])
+  integration Integration? @relation(fields: [integrationId], references: [id])
+  scans       Scan[]
+  findings    Finding[]
+
+  @@unique([orgId, provider, providerId])
+  @@index([orgId])
+  @@index([projectId])
+  @@index([integrationId])
+  @@map("repositories")
 }
 
 // ---------------------------------------------------------------------------
@@ -229,9 +265,11 @@ model EndpointHeartbeat {
 model Scan {
   id            String    @id @default(uuid()) @db.VarChar(36)
   orgId         String    @map("org_id") @db.VarChar(36)
-  type          String    @db.VarChar(30)   // code_dependencies | code_secrets | infra_packages | infra_compliance | cert_discovery | cert_check
+  repositoryId  String?   @map("repository_id") @db.VarChar(36)
+  type          String    @db.VarChar(30)   // code_dependencies | code_secrets | code_configs | code_patterns | infra_packages | infra_compliance | cert_discovery | cert_check
   status        String    @default("pending") @db.VarChar(20) // pending | running | completed | failed | cancelled
   trigger       String    @default("manual") @db.VarChar(20) // manual | scheduled | webhook
+  branch        String?   @db.VarChar(255)
   duration      Int?      // milliseconds
   findingsTotal Int       @default(0) @map("findings_total")
   meta          Json?     @db.Json
@@ -239,10 +277,12 @@ model Scan {
   completedAt   DateTime? @map("completed_at") @db.DateTime(3)
   createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
 
-  org      Organization @relation(fields: [orgId], references: [id])
-  findings Finding[]
+  org        Organization @relation(fields: [orgId], references: [id])
+  repository Repository?  @relation(fields: [repositoryId], references: [id])
+  findings   Finding[]
 
   @@index([orgId])
+  @@index([repositoryId])
   @@map("scans")
 }
 
@@ -251,30 +291,33 @@ model Scan {
 // ---------------------------------------------------------------------------
 
 model Finding {
-  id          String    @id @default(uuid()) @db.VarChar(36)
-  orgId       String    @map("org_id") @db.VarChar(36)
-  scanId      String?   @map("scan_id") @db.VarChar(36)
-  serverId    String?   @map("server_id") @db.VarChar(36)
-  endpointId  String?   @map("endpoint_id") @db.VarChar(36)
-  source      String    @db.VarChar(30) // code_scanner | infra_agent | cert_monitor
-  severity    String    @db.VarChar(10) // critical | high | medium | low | info
-  status      String    @default("open") @db.VarChar(20) // open | in_progress | resolved | suppressed | false_positive
-  title       String    @db.VarChar(500)
-  description String?   @db.Text
-  cveId       String?   @map("cve_id") @db.VarChar(30)
-  cvssScore   Float?    @map("cvss_score")
-  detail      Json?     @db.Json
-  resolvedAt  DateTime? @map("resolved_at") @db.DateTime(3)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  id           String    @id @default(uuid()) @db.VarChar(36)
+  orgId        String    @map("org_id") @db.VarChar(36)
+  scanId       String?   @map("scan_id") @db.VarChar(36)
+  repositoryId String?   @map("repository_id") @db.VarChar(36)
+  serverId     String?   @map("server_id") @db.VarChar(36)
+  endpointId   String?   @map("endpoint_id") @db.VarChar(36)
+  source       String    @db.VarChar(30) // code_scanner | infra_agent | cert_monitor
+  severity     String    @db.VarChar(10) // critical | high | medium | low | info
+  status       String    @default("open") @db.VarChar(20) // open | in_progress | resolved | suppressed | false_positive
+  title        String    @db.VarChar(500)
+  description  String?   @db.Text
+  cveId        String?   @map("cve_id") @db.VarChar(30)
+  cvssScore    Float?    @map("cvss_score")
+  detail       Json?     @db.Json
+  resolvedAt   DateTime? @map("resolved_at") @db.DateTime(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
 
-  org    Organization @relation(fields: [orgId], references: [id])
-  scan   Scan?        @relation(fields: [scanId], references: [id])
-  server Server?      @relation(fields: [serverId], references: [id])
+  org        Organization @relation(fields: [orgId], references: [id])
+  scan       Scan?        @relation(fields: [scanId], references: [id])
+  repository Repository?  @relation(fields: [repositoryId], references: [id])
+  server     Server?      @relation(fields: [serverId], references: [id])
 
   @@index([orgId])
   @@index([orgId, severity])
   @@index([orgId, status])
+  @@index([repositoryId])
   @@map("findings")
 }
 
@@ -283,15 +326,20 @@ model Finding {
 // ---------------------------------------------------------------------------
 
 model Integration {
-  id         String   @id @default(uuid()) @db.VarChar(36)
-  orgId      String   @map("org_id") @db.VarChar(36)
-  provider   String   @db.VarChar(20)
-  config     Json     @db.Json
-  enabled    Boolean  @default(true)
-  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  id            String   @id @default(uuid()) @db.VarChar(36)
+  orgId         String   @map("org_id") @db.VarChar(36)
+  provider      String   @db.VarChar(20) // github | gitlab
+  config        Json     @db.Json // encrypted tokens, appId, installationId, etc.
+  baseUrl       String?  @map("base_url") @db.VarChar(500) // self-hosted URL (null = cloud)
+  verifySsl     Boolean  @default(true) @map("verify_ssl")
+  webhookSecret String?  @map("webhook_secret") @db.VarChar(255)
+  status        String   @default("active") @db.VarChar(20) // active | error | revoked
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.DateTime(3)
 
-  org Organization @relation(fields: [orgId], references: [id])
+  org          Organization @relation(fields: [orgId], references: [id])
+  repositories Repository[]
 
   @@unique([orgId, provider])
   @@map("integrations")

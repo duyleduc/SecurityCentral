@@ -16,7 +16,10 @@ import { DomainDetailPage } from './pages/Monitoring/DomainDetailPage';
 import { ServersPage } from './pages/Servers/ServersPage';
 import { ServerDetailPage } from './pages/Servers/ServerDetailPage';
 import { FindingsPage } from './pages/Findings/FindingsPage';
+import { RepositoriesPage } from './pages/Repositories/RepositoriesPage';
+import { RepositoryDetailPage } from './pages/Repositories/RepositoryDetailPage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
+import { RepoSelectionPage } from './pages/Settings/RepoSelectionPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,8 +55,11 @@ export default function App() {
                 <Route path="/domains/:id" element={<DomainDetailPage />} />
                 <Route path="/servers" element={<ServersPage />} />
                 <Route path="/servers/:id" element={<ServerDetailPage />} />
+                <Route path="/repositories" element={<RepositoriesPage />} />
+                <Route path="/repositories/:id" element={<RepositoryDetailPage />} />
                 <Route path="/findings" element={<FindingsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/integrations/:provider/repos" element={<RepoSelectionPage />} />
               </Route>
             </Routes>
           </AuthProvider>

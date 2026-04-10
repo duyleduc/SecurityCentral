@@ -245,3 +245,181 @@ export function useInstallTokens() {
     queryFn: () => apiClient<InstallToken[]>('/api/v1/install-tokens'),
   });
 }
+
+// ---------------------------------------------------------------------------
+// Integrations
+// ---------------------------------------------------------------------------
+
+export interface Integration {
+  id: string;
+  provider: 'github' | 'gitlab';
+  baseUrl: string | null;
+  verifySsl: boolean;
+  status: string;
+  enabled: boolean;
+  createdAt: string;
+  _count?: { repositories: number };
+}
+
+export interface ProviderRepo {
+  id: number;
+  name: string;
+  fullName: string;
+  owner: string;
+  defaultBranch: string;
+  language: string | null;
+  cloneUrl: string;
+  private: boolean;
+}
+
+export function useIntegrations() {
+  return useQuery({
+    queryKey: ['integrations'],
+    queryFn: () => apiClient<Integration[]>('/api/v1/integrations'),
+  });
+}
+
+export function useConnectGitHub() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { installationId: string; appId?: string }) =>
+      apiClient<Integration>('/api/v1/integrations/github', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['integrations'] }),
+  });
+}
+
+export function useConnectGitLab() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { accessToken: string; baseUrl?: string; verifySsl?: boolean }) =>
+      apiClient<Integration>('/api/v1/integrations/gitlab', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['integrations'] }),
+  });
+}
+
+export function useDeleteIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<void>(`/api/v1/integrations/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['integrations'] }),
+  });
+}
+
+export function useGitHubRepos(page = 1, perPage = 30) {
+  return useQuery({
+    queryKey: ['github-repos', page, perPage],
+    queryFn: () =>
+      apiClient<ProviderRepo[]>(`/api/v1/integrations/github/repos?page=${page}&perPage=${perPage}`),
+  });
+}
+
+export function useGitLabRepos(page = 1, perPage = 30, search = '') {
+  return useQuery({
+    queryKey: ['gitlab-repos', page, perPage, search],
+    queryFn: () =>
+      apiClient<ProviderRepo[]>(
+        `/api/v1/integrations/gitlab/repos?page=${page}&perPage=${perPage}&search=${encodeURIComponent(search)}`,
+      ),
+  });
+}
+
+export function useSyncRepos() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { provider: string; repos: ProviderRepo[]; projectId?: string }) =>
+      apiClient<void>(`/api/v1/integrations/${data.provider}/repos/sync`, {
+        method: 'POST',
+        body: JSON.stringify({ repos: data.repos, projectId: data.projectId }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['repositories'] }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Repositories
+// ---------------------------------------------------------------------------
+
+export interface Repository {
+  id: string;
+  provider: 'github' | 'gitlab';
+  owner: string;
+  name: string;
+  defaultBranch: string;
+  language: string | null;
+  lastScanAt: string | null;
+  createdAt: string;
+  project?: { id: string; name: string } | null;
+  integration?: { id: string; provider: string; status: string } | null;
+  _count?: { scans: number; findings: number };
+}
+
+export interface Scan {
+  id: string;
+  type: string;
+  status: string;
+  trigger: string;
+  branch: string | null;
+  duration: number | null;
+  findingsTotal: number;
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export function useRepositories(projectId?: string, provider?: string) {
+  const params = new URLSearchParams();
+  if (projectId) params.set('projectId', projectId);
+  if (provider) params.set('provider', provider);
+  const qs = params.toString();
+  return useQuery({
+    queryKey: ['repositories', { projectId, provider }],
+    queryFn: () => apiClient<Repository[]>(`/api/v1/repositories${qs ? `?${qs}` : ''}`),
+  });
+}
+
+export function useRepository(id: string) {
+  return useQuery({
+    queryKey: ['repositories', id],
+    queryFn: () => apiClient<Repository>(`/api/v1/repositories/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useDeleteRepository() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<void>(`/api/v1/repositories/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['repositories'] }),
+  });
+}
+
+export function useTriggerScan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { repoId: string; scanType: string; branch?: string }) =>
+      apiClient<Scan>(`/api/v1/repositories/${data.repoId}/scan`, {
+        method: 'POST',
+        body: JSON.stringify({ scanType: data.scanType, branch: data.branch }),
+      }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['repository-scans', variables.repoId] });
+      qc.invalidateQueries({ queryKey: ['repositories', variables.repoId] });
+    },
+  });
+}
+
+export function useRepositoryScans(repoId: string, page = 1, limit = 20) {
+  return useQuery({
+    queryKey: ['repository-scans', repoId, page, limit],
+    queryFn: () =>
+      apiClient<Scan[]>(`/api/v1/repositories/${repoId}/scans?page=${page}&limit=${limit}`),
+    enabled: !!repoId,
+  });
+}

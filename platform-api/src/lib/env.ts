@@ -11,6 +11,14 @@ const envSchema = z.object({
   JWT_SECRET: z.string().default('change-me-in-production'),
   JWT_REFRESH_SECRET: z.string().default('change-me-refresh-in-production'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+
+  // GitHub App
+  GITHUB_APP_ID: z.string().default(''),
+  GITHUB_APP_PRIVATE_KEY: z.string().default(''),
+  GITHUB_WEBHOOK_SECRET: z.string().default(''),
+
+  // sc-scan binary path (optional override)
+  SC_SCAN_BINARY: z.string().default(''),
 });
 
 export const env = envSchema.parse(process.env);
