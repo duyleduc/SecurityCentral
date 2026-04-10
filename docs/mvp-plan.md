@@ -24,16 +24,21 @@ SecurityCentral is a lightweight infrastructure security and monitoring platform
 - Domain SSL/TLS, DNS security (SPF/DKIM/DMARC), uptime monitoring
 - Server metrics (CPU/RAM/disk) via Go agent with adaptive heartbeat
 - Server OS/patch visibility
+- Repository code scanning — dependency SCA, secrets, unsafe configs, risky patterns (delta scanning on new branches)
+- GitHub + GitLab integration (cloud + self-hosted) with webhook-triggered scans
 - Basic security scoring (0–100 per asset)
 - Dashboard with drill-down
 - Projects to group assets
 
 **Deferred:**
 - Redis + BullMQ (async jobs run in-process for MVP)
-- Code scanning (repo dependencies, secrets)
+- Bitbucket integration
 - OpenSearch / Elasticsearch
 - mTLS agent authentication
 - Binary signing (Ed25519)
+- Auto-fix PR creation
+- License risk scanning
+- SAST (advanced static analysis)
 - Compliance reports, automated remediation, team roles
 
 ### Key Decisions (changed from v1)
@@ -44,7 +49,9 @@ SecurityCentral is a lightweight infrastructure security and monitoring platform
 | No Redis/BullMQ for MVP | Async work runs in-process; add Redis later for scaling |
 | No OpenSearch for MVP | MySQL queries sufficient, reduces infrastructure |
 | API key auth for agents (not mTLS) | Simpler onboarding, mTLS added in phase 2 |
-| No code scanning in MVP | Focus on infrastructure monitoring first |
+| Delta code scanning (new branch only) | Full repo scans are slow; scan changed files on feature branches, full scan on first import + default branch pushes |
+| GitHub App + GitLab PAT (same as v1) | Proven auth patterns from archived implementation; supports cloud + self-hosted |
+| In-process scanning (no BullMQ) | Scanner runs in-process for MVP; extract to queue later for scaling |
 | Adaptive heartbeat (new design) | Faster anomaly detection without flooding the server |
 
 ---
@@ -116,13 +123,14 @@ Organization (multi-tenant root)
 ├── ApiKey (hashed, scoped, prefix-based)
 ├── InstallToken (agent provisioning, one-time use)
 ├── Project (logical asset grouping)
+│   ├── Repository (provider, owner, name, defaultBranch, language, lastScanAt)
 │   ├── Server (hostname, agentId, osFamily, lastHeartbeat)
 │   └── MonitoredEndpoint (host, port, checkInterval)
-├── Scan (type, status, trigger, duration, findingsTotal)
-├── Finding (source, severity, status, cveId, cvssScore, detail JSON)
-├── ServerMetricSnapshot (NEW — time-series CPU/RAM/disk from heartbeats)
+├── Scan (type, status, trigger, duration, findingsTotal, repositoryId?)
+├── Finding (source, severity, status, cveId, cvssScore, repositoryId?, detail JSON)
+├── ServerMetricSnapshot (time-series CPU/RAM/disk from heartbeats)
 ├── EndpointHeartbeat (uptime check results)
-├── Integration (provider: github | gitlab | slack)
+├── Integration (provider, baseUrl?, verifySsl?, webhookSecret?, status)
 ├── AuditLog (actor, action, entityType, old/new values)
 └── NotificationPreference (channel, eventType)
 ```
@@ -147,11 +155,42 @@ model ServerMetricSnapshot {
 }
 ```
 
+**New Model — Repository:**
+
+```prisma
+model Repository {
+  id            String    @id @default(uuid()) @db.VarChar(36)
+  orgId         String    @map("org_id") @db.VarChar(36)
+  projectId     String?   @map("project_id") @db.VarChar(36)
+  provider      String    @db.VarChar(20)  // github | gitlab
+  providerId    String    @map("provider_id") @db.VarChar(100)
+  owner         String    @db.VarChar(255)
+  name          String    @db.VarChar(255)
+  defaultBranch String    @default("main") @map("default_branch") @db.VarChar(100)
+  language      String?   @db.VarChar(50)
+  cloneUrl      String?   @map("clone_url") @db.VarChar(500)
+  lastScanAt    DateTime? @map("last_scan_at") @db.DateTime(3)
+  settings      Json      @default("{}") @db.Json
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+
+  org      Organization @relation(fields: [orgId], references: [id])
+  project  Project?     @relation(fields: [projectId], references: [id])
+  scans    Scan[]
+  findings Finding[]
+
+  @@unique([orgId, provider, providerId])
+  @@index([orgId])
+  @@index([projectId])
+  @@map("repositories")
+}
+```
+
 **Enums:**
 - `FindingSource`: code_scanner | infra_agent | cert_monitor
 - `SeverityLevel`: critical | high | medium | low | info
 - `FindingStatus`: open | in_progress | resolved | suppressed | false_positive
-- `ScanType`: code_dependencies | code_secrets | infra_packages | infra_compliance | cert_discovery | cert_check
+- `ScanType`: code_dependencies | code_secrets | code_configs | code_patterns | infra_packages | infra_compliance | cert_discovery | cert_check
 - `ScanStatus`: pending | running | completed | failed | cancelled
 
 ---
@@ -310,6 +349,24 @@ Agents
   GET    /api/v1/install-tokens
   POST   /api/v1/install-tokens
 
+Integrations
+  GET    /api/v1/integrations
+  POST   /api/v1/integrations/github          # GitHub App (installationId, appId)
+  POST   /api/v1/integrations/gitlab          # GitLab PAT (accessToken, baseUrl?, verifySsl?)
+  DELETE /api/v1/integrations/:id
+  GET    /api/v1/integrations/github/repos    # List repos from GitHub installation
+  GET    /api/v1/integrations/gitlab/repos    # List repos from GitLab
+  POST   /api/v1/integrations/:provider/repos/sync   # Import selected repos
+  POST   /api/v1/integrations/github/webhook  # GitHub push events (public, signature-verified)
+  POST   /api/v1/integrations/gitlab/webhook  # GitLab push events (public, token-verified)
+
+Repositories
+  GET    /api/v1/repositories
+  GET    /api/v1/repositories/:id
+  DELETE /api/v1/repositories/:id
+  POST   /api/v1/repositories/:id/scan        # Manual scan trigger
+  GET    /api/v1/repositories/:id/scans       # Scan history
+
 Findings
   GET    /api/v1/findings
   GET    /api/v1/findings/:id
@@ -434,17 +491,58 @@ Clients join org-scoped rooms. JWT validated in Socket.IO handshake. Single-inst
 
 ---
 
+### Phase 2.5: Repositories + Code Scanning
+**Goal:** Connect GitHub/GitLab (cloud + self-hosted), clone repos, scan new code for vulnerabilities and secrets.
+
+**Scanning approach:** Delta scanning only — on push to a new branch, scan only changed files (`git diff --name-only origin/{defaultBranch}...HEAD`). Full scan of default branch on first import.
+
+**Scan types (full spec):**
+1. **Dependency vulnerabilities (SCA)** — lockfile parsing (npm, yarn, pnpm, pip, poetry, maven, gradle), CVE matching
+2. **Secrets exposure** — 50+ regex patterns + Shannon entropy filtering (>4.5 threshold)
+3. **Unsafe configurations** — debug flags, insecure CORS, permissive security headers
+4. **Known risky patterns** — `eval`, insecure crypto, SQL concatenation
+
+| Component | What |
+|-----------|------|
+| Schema | Add `Repository` model, expand `Integration` (baseUrl, verifySsl, webhookSecret, status), add `repositoryId` FK to Finding + Scan |
+| Backend — Integrations | GitHub App auth (JWT + installation tokens), GitLab PAT + self-hosted base URL, provider repo listing, webhook receivers with signature verification |
+| Backend — Repositories | CRUD, link to project, manual scan trigger, scan history |
+| Backend — Scanner | In-process: shallow clone with token-in-URL auth, run `sc-scan` Go binary, delta mode (`--changed-files`), finding ingestion with dedup + auto-resolve stale |
+| Go Scanner (sc-scan) | Port from archived: dependency lockfile parser, secrets regex scanner, unsafe config detection, risky pattern detection, `.securitycentral.yml` config support |
+| Frontend | Integrations settings (connect GitHub/GitLab, self-hosted toggle), repo import picker, repo list/detail pages, scan history |
+
+**Git provider auth (same as archived):**
+
+| Provider | Cloud | Self-Hosted |
+|----------|-------|-------------|
+| GitHub | GitHub App (installation token via JWT) | GitHub Enterprise Server — same App flow, custom `baseUrl` |
+| GitLab | PAT or OAuth token | GitLab CE/EE — PAT + custom `baseUrl` + `verifySsl` flag |
+
+**Clone URL format:**
+- GitHub: `https://x-access-token:{token}@{host}/{owner}/{name}.git`
+- GitLab: `https://oauth2:{access_token}@{host}/{owner}/{name}.git`
+
+**Webhook triggers:**
+- GitHub: `push` event on default branch → full scan; `push` on feature branch → delta scan
+- GitLab: `Push Hook` on default branch → full scan; feature branch → delta scan
+
+**Done when:** Connect GitHub → import repo → push to new branch → scan runs on changed files only → findings appear with severity and fix recommendations
+
+---
+
 ### Phase Dependency Graph
 
 ```
 Phase 0 (Foundation)
   ├── Phase 1 (Projects + Domains) ──┐
-  │                                   ├── Phase 3 (Scoring + Findings)
+  │                                   ├── Phase 2.5 (Repos + Code Scanning)
   └── Phase 2 (Servers + Agent) ─────┘         │
+                                          Phase 3 (Scoring + Findings)
+                                                │
                                           Phase 4 (Real-Time + Polish)
 ```
 
-Phases 1 and 2 can be built in parallel. Phase 3 requires both.
+Phases 1 and 2 can be built in parallel. Phase 2.5 requires both (needs Projects from Phase 1 and the Go scanner build pattern from Phase 2). Phase 3 requires Phase 2.5.
 
 ---
 
@@ -475,7 +573,10 @@ SecurityCentral/
 │       │   ├── prisma.ts
 │       │   ├── jwt.ts
 │       │   ├── logger.ts
-│       │   └── scoring.ts
+│       │   ├── scoring.ts
+│       │   ├── github.ts               # GitHub App JWT, installation token exchange
+│       │   ├── gitlab.ts               # GitLab API client (cloud + self-hosted)
+│       │   └── clone.ts                # Shallow clone with token auth, cleanup
 │       ├── middleware/
 │       │   ├── auth.ts
 │       │   ├── errors.ts
@@ -490,7 +591,9 @@ SecurityCentral/
 │       │   ├── projects/
 │       │   ├── monitoring/
 │       │   ├── agents/
-│       │   ├── assets/
+│       │   ├── integrations/           # GitHub/GitLab setup, webhook handlers, repo listing
+│       │   ├── repositories/           # Repository CRUD, scan trigger, scan history
+│       │   ├── scanner/                # In-process scan orchestration, finding ingestion
 │       │   ├── findings/
 │       │   ├── dashboard/
 │       │   ├── notifications/
@@ -528,36 +631,59 @@ SecurityCentral/
 │           ├── Projects/
 │           ├── Monitoring/
 │           ├── Servers/
+│           ├── Repositories/
 │           ├── Findings/
-│           ├── Settings/
+│           ├── Settings/               # Includes Integrations sub-section
 │           └── Onboarding/
-└── sc-agent/
+├── sc-agent/
+│   ├── go.mod
+│   ├── Makefile
+│   ├── cmd/
+│   │   └── sc-agent/
+│   │       └── main.go
+│   ├── internal/
+│   │   ├── agent/
+│   │   │   ├── heartbeat.go
+│   │   │   ├── collector.go
+│   │   │   ├── thresholds.go
+│   │   │   ├── scheduler.go
+│   │   │   ├── status.go
+│   │   │   └── shutdown.go
+│   │   ├── sysinfo/
+│   │   │   ├── sysinfo.go
+│   │   │   └── resources.go
+│   │   ├── config/
+│   │   │   └── agentconfig.go
+│   │   ├── platform/
+│   │   │   └── client.go
+│   │   └── logging/
+│   │       └── logging.go
+│   └── pkg/
+│       └── models/
+│           ├── finding.go
+│           └── scan.go
+└── sc-scan/                             # Code scanner (ported from archived)
     ├── go.mod
     ├── Makefile
     ├── cmd/
-    │   └── sc-agent/
-    │       └── main.go
-    ├── internal/
-    │   ├── agent/
-    │   │   ├── heartbeat.go
-    │   │   ├── collector.go
-    │   │   ├── thresholds.go
-    │   │   ├── scheduler.go
-    │   │   ├── status.go
-    │   │   └── shutdown.go
-    │   ├── sysinfo/
-    │   │   ├── sysinfo.go
-    │   │   └── resources.go
-    │   ├── config/
-    │   │   └── agentconfig.go
-    │   ├── platform/
-    │   │   └── client.go
-    │   └── logging/
-    │       └── logging.go
-    └── pkg/
-        └── models/
-            ├── finding.go
-            └── scan.go
+    │   └── sc-scan/
+    │       └── main.go                  # CLI: sc-scan --repo-dir <path> [--changed-files <list>]
+    └── internal/
+        ├── scanner/
+        │   ├── deps/                    # Dependency lockfile parsing + CVE matching
+        │   │   └── deps.go
+        │   ├── secrets/                 # Regex patterns + Shannon entropy
+        │   │   └── secrets.go
+        │   ├── configs/                 # Unsafe config detection
+        │   │   └── configs.go
+        │   └── patterns/                # Risky code patterns (eval, SQL concat, etc.)
+        │       └── patterns.go
+        ├── config/
+        │   └── scanconfig.go            # .securitycentral.yml parser
+        ├── output/
+        │   └── json.go                  # JSON output format for platform ingestion
+        └── vulndb/
+            └── vulndb.go                # CVE/vulnerability database lookup
 ```
 
 ---
