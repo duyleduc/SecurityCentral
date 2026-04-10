@@ -4,56 +4,112 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SecurityCentral is a lightweight infrastructure security and monitoring platform for small companies. It provides a unified view of code repositories (security scanning), servers (health + security posture), and domains (SSL/TLS, DNS, uptime). Designed for non-security teams — emphasis on clarity, low setup friction, and actionable alerts.
+SecurityCentral is a lightweight infrastructure security and monitoring platform for small companies. Unified view of code repositories (security scanning), servers (health + security posture), and domains (SSL/TLS, DNS, uptime). Designed for non-security teams — emphasis on clarity, low setup friction, and actionable alerts.
 
-Product spec: `docs/securitycentral-spec.md`
+Product spec: `docs/securitycentral-spec.md`  
+MVP plan: `docs/mvp-plan.md`  
+Task tracking: `docs/task-list.md`
 
 ## Current State
 
-The project is being rebuilt from scratch. Previous implementation is preserved in `archived/` for reference only — do not modify files there. New code goes in the project root.
+Rebuilding from scratch. Previous implementation preserved in `archived/` for reference only — do not modify files there. New code goes in the project root.
 
-### Archived Reference (`archived/`)
+**Completed:** Phase 0 (Foundation) + Phase 1 (Projects + Domains) + Phase 2 (Servers + Go Agent)  
+**Next:** Phase 2.5 (Repos + Code Scanning) → Phase 3 (Scoring + Findings) → Phase 4 (Real-Time + Polish)  
+**Note:** Initial Prisma migration has not been run yet.
 
-The previous implementation used this architecture (reference only):
+## Dev Commands
 
-| Component | Stack | Directory |
-|-----------|-------|-----------|
-| Platform API | Node.js, TypeScript, Express, Prisma, BullMQ | `archived/platform-api/` |
-| Dashboard | React 18, TypeScript, Vite, MUI, React Query | `archived/dashboard/` |
-| Code Scanner | Go, Cobra CLI | `archived/go/cmd/sc-scan/` |
-| Infra Agent | Go (systemd binary) | `archived/go/cmd/sc-agent/` |
-| Cert Monitor | Go (CronJob) | `archived/go/cmd/sc-certmon/` |
+```bash
+# Start MySQL (required first)
+make start                    # docker compose up -d + wait for healthy
 
-Key decisions from v1 worth preserving:
-- Monolith-first, modular boundaries for future extraction
-- PostgreSQL + Prisma ORM, Redis + BullMQ for async jobs
-- Go single-binary scanners/agents with shared `internal/` packages
-- Socket.IO for real-time updates, mTLS for agent communication
-- Ed25519 binary signing for agent verification
+# Platform API (port 3000)
+cd platform-api && npm run dev          # tsx watch src/server.ts
+cd platform-api && npm test             # vitest run
+cd platform-api && npm run test:watch   # vitest (watch mode)
+cd platform-api && npx prisma migrate dev   # run migrations
+cd platform-api && npx prisma db seed       # seed test data
 
-### Infrastructure (from archived docker-compose)
+# Dashboard (port 5173)
+cd dashboard && npm run dev             # vite dev server
+cd dashboard && npm test                # vitest run
 
-| Service | Port |
-|---------|------|
-| PostgreSQL 16 | 5432 |
-| Redis 7 | 6379 |
-| OpenSearch 2.12 | 9200 |
-| Platform API | 3000 |
-| Dashboard (Vite) | 5173 |
+# Go Agent
+cd sc-agent && go build -o bin/sc-agent ./cmd/sc-agent
+cd sc-agent && go test -race ./...
 
-DB credentials: `securitycentral:securitycentral@localhost:5432/securitycentral`
+# All at once
+make dev                      # start infra + API + dashboard
+make dev-stop                 # kill dev servers
+make test                     # run all tests
+make build                    # build all components
+make stop                     # stop everything including docker
+```
+
+## Architecture
+
+Three deployable components in a monorepo:
+
+### platform-api (Node.js + TypeScript + Express 4)
+- **Entry:** `src/server.ts` → `src/app.ts` (Express setup) + `src/scheduler.ts` (in-process cron)
+- **Modules pattern:** Each domain in `src/modules/<name>/` with `*.router.ts`, `*.service.ts`, `*.validation.ts`, `index.ts`
+- **Middleware stack** (order matters in `app.ts`): cors → json → cookie → requestId → requestLogger → rateLimit → routes → errorHandler
+- **Auth:** JWT Bearer for browser, API key (`X-Agent-Key`) for Go agents. Middleware in `src/middleware/auth.ts` + `rbac.ts`
+- **Validation:** Zod schemas in `*.validation.ts`, applied via `src/middleware/validate.ts`
+- **Error handling:** `AppError` class with typed error codes in `src/middleware/errors.ts`. All responses wrapped in `successEnvelope()` / error envelope `{ data, meta, errors }`
+- **Database:** MySQL 8 via Prisma ORM. Schema at `prisma/schema.prisma`. Client singleton in `src/lib/prisma.ts`
+- **Env config:** Zod-validated in `src/lib/env.ts` (dotenv loaded)
+- **Scheduled tasks:** In-process `setInterval` in `src/scheduler.ts` (domain checks, offline detection). No Redis/BullMQ for MVP.
+
+### dashboard (React 18 + TypeScript + Vite)
+- MUI v7 for components, React Query v5 for data fetching, Recharts for charts, React Router v7
+- API client with interceptors in `src/api/client.ts`
+- Auth context + protected routes in `src/auth/`
+- Pages organized by feature in `src/pages/`
+
+### sc-agent (Go 1.22 + Cobra CLI)
+- Single binary, designed for systemd deployment on customer servers
+- **Adaptive heartbeat:** Collect metrics every 1s, send normal heartbeat every 60s, urgent heartbeat (15s debounce) on threshold breach (CPU >85%, RAM >85%, disk >90%)
+- Entry: `cmd/sc-agent/main.go` → `internal/agent/` (heartbeat, collector, thresholds, scheduler, shutdown)
+- System info: `internal/sysinfo/` (gopsutil)
+- Platform client: `internal/platform/client.go`
+
+### sc-scan (Go — not yet implemented)
+- Code scanner binary to be ported from `archived/go/cmd/sc-scan/`
+- Dependency SCA, secrets regex + entropy, unsafe config detection, risky pattern detection
+- Invoked by platform-api in-process, outputs JSON findings
+
+## Key Technical Decisions (differs from archived v1)
+
+| Decision | Rationale |
+|----------|-----------|
+| MySQL 8 instead of PostgreSQL | Cloud SQL MySQL, team familiarity |
+| No Redis/BullMQ for MVP | Async work runs in-process; add later for scaling |
+| Express 4 (not 5) | Stable types, Express 5 types not yet mature |
+| API key auth for agents (not mTLS) | Simpler onboarding |
+| Delta code scanning | Scan changed files on feature branches, full scan on default branch pushes |
+| GitHub App + GitLab PAT | Supports cloud + self-hosted (same pattern as archived) |
 
 ## Entity Model
 
-Three asset types, each with a Security Score (0–100):
+Three asset types, each scored 0–100 (severity-based deduction):
 - **Repository** — dependency vulnerabilities, secrets exposure, unsafe configs
-- **Server** — OS patches, open ports, SSH config, firewall, user access
+- **Server** — OS patches, open ports, SSH config, firewall
 - **Domain** — SSL certs, TLS config, DNS security (SPF/DKIM/DMARC), HTTP headers, uptime
 
-Assets are grouped under **Projects**. Scoring is explainable ("why" behind each score).
+Assets grouped under **Projects** within an **Organization** (multi-tenant).
 
-## MVP Scope
+## Adding a New API Module
 
-In: dependency scanning, secrets detection, server metrics + thresholds, domain SSL + uptime, basic scoring, dashboard with drill-down.
+1. Create `src/modules/<name>/` with router, service, validation, index files
+2. Zod schemas in `*.validation.ts`, use `validate()` middleware in router
+3. Use `AppError` for error responses, `successEnvelope()` for success
+4. Register router in `src/app.ts`
+5. Protect routes with `requireAuth` + `requirePermission()` middleware
 
-Deferred: SAST, container/IaC scanning, compliance reports, automated remediation, team roles.
+## Infrastructure
+
+- **MySQL 8** on Docker: `localhost:3306`, credentials `securitycentral:securitycentral`
+- DB connection string: `mysql://securitycentral:securitycentral@localhost:3306/securitycentral`
+- Docker init script: `docker/mysql/init.sql`
