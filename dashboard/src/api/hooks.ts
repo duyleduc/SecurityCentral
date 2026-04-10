@@ -336,7 +336,18 @@ export function useSyncRepos() {
     mutationFn: (data: { provider: string; repos: ProviderRepo[]; projectId?: string }) =>
       apiClient<void>(`/api/v1/integrations/${data.provider}/repos/sync`, {
         method: 'POST',
-        body: JSON.stringify({ repos: data.repos, projectId: data.projectId }),
+        body: JSON.stringify({
+          repos: data.repos.map((r) => ({
+            providerId: String(r.id),
+            name: r.name,
+            owner: r.owner,
+            defaultBranch: r.defaultBranch,
+            language: r.language,
+            cloneUrl: r.cloneUrl,
+            private: r.private,
+          })),
+          projectId: data.projectId,
+        }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['repositories'] }),
   });
