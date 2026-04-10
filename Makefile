@@ -42,8 +42,30 @@ seed:
 test:
 	cd platform-api && npm test
 	cd dashboard && npm test
+	cd sc-agent && go test -race ./...
+	cd sc-scan && go test -race ./...
 
 # Build
-build:
+build: build-api build-dashboard build-scanner build-agent
+
+build-api:
 	cd platform-api && npm run build
+
+build-dashboard:
 	cd dashboard && npm run build
+
+build-scanner:
+	cd sc-scan && go build -o bin/sc-scan ./cmd/sc-scan
+
+build-agent:
+	cd sc-agent && go build -o bin/sc-agent ./cmd/sc-agent
+
+build-scanner-all:
+	cd sc-scan && GOOS=linux GOARCH=amd64 go build -o bin/sc-scan-linux-amd64 ./cmd/sc-scan
+	cd sc-scan && GOOS=linux GOARCH=arm64 go build -o bin/sc-scan-linux-arm64 ./cmd/sc-scan
+	cd sc-scan && GOOS=darwin GOARCH=amd64 go build -o bin/sc-scan-darwin-amd64 ./cmd/sc-scan
+	cd sc-scan && GOOS=darwin GOARCH=arm64 go build -o bin/sc-scan-darwin-arm64 ./cmd/sc-scan
+
+build-agent-all:
+	cd sc-agent && GOOS=linux GOARCH=amd64 go build -o bin/sc-agent-linux-amd64 ./cmd/sc-agent
+	cd sc-agent && GOOS=linux GOARCH=arm64 go build -o bin/sc-agent-linux-arm64 ./cmd/sc-agent

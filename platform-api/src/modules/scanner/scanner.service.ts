@@ -1,7 +1,8 @@
 import { exec, execFile } from 'node:child_process';
-import { access, constants } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { access, constants, readdir, readFile } from 'node:fs/promises';
+import { join, resolve, relative, basename } from 'node:path';
 import { promisify } from 'node:util';
+import type { Dirent } from 'node:fs';
 
 import type { Prisma } from '@prisma/client';
 
@@ -29,22 +30,22 @@ interface TriggerScanInput {
 }
 
 interface ScanFinding {
-  readonly source: string;
-  readonly severity: string;
-  readonly title: string;
-  readonly description: string;
-  readonly cve_id?: string;
-  readonly cvss_score?: number;
-  readonly remediation?: string;
-  readonly auto_fixable?: boolean;
-  readonly detail?: Record<string, unknown>;
+  type: string;
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  title: string;
+  description?: string;
+  cve_id?: string;
+  cvss_score?: number;
+  detail: Record<string, unknown>;
+  remediation?: string;
+  auto_fixable: boolean;
 }
 
 interface ScannerResult {
-  readonly findings: ScanFinding[];
-  readonly warnings: string[];
-  readonly scannersRun: string[];
-  readonly scannersSkipped: string[];
+  findings: ScanFinding[];
+  warnings: string[];
+  scannersRun: string[];
+  scannersSkipped: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -85,7 +86,7 @@ export async function triggerScan(input: TriggerScanInput) {
     },
   });
 
-  // Run scan in background (fire-and-forget from caller's perspective)
+  // Run scan in background
   runScan(scan.id, repo, input).catch((err) => {
     logger.error('scan execution failed', { scanId: scan.id, error: (err as Error).message });
   });
@@ -117,7 +118,6 @@ async function runScan(
     const cloneUrl = await buildAuthenticatedCloneUrl(repo);
     const result = await shallowClone({ cloneUrl, branch: input.branch, depth: 1 });
     cleanup = result.cleanup;
-    logger.info('clone complete', { scanId });
 
     // --- Delta mode ---
     let changedFiles: string[] = [];
@@ -126,8 +126,9 @@ async function runScan(
       logger.info('delta scan mode', { scanId, changedFiles: changedFiles.length });
     }
 
-    // --- Run scanner (Go binary with Node fallback) ---
-    const scanResult = await runScanner(result.dir, input.scanType ?? 'full', changedFiles);
+    // --- Run scanner ---
+    const requestedType = (input.scanType === 'secrets') ? 'code_secrets' : 'code_dependencies';
+    const scanResult = await runScanner(result.dir, requestedType);
     logger.info('scan finished', {
       scanId,
       findings: scanResult.findings.length,
@@ -180,85 +181,116 @@ async function runScan(
 }
 
 // ---------------------------------------------------------------------------
-// Scanner: try Go binary, fallback to built-in Node
+// Scanner: try Go binary, fallback to built-in Node (v1 architecture)
 // ---------------------------------------------------------------------------
 
-async function runScanner(
-  workDir: string,
-  scanType: string,
-  changedFiles: string[],
-): Promise<ScannerResult> {
-  // Try sc-scan Go binary
+async function runScanner(workDir: string, scanType: string): Promise<ScannerResult> {
+  // Try sc-scan Go binary first
   const binary = await findBinary('sc-scan');
   if (binary) {
     logger.info('using sc-scan binary', { path: binary });
     try {
-      const findings = await runGoBinary(binary, workDir, scanType, changedFiles);
+      const findings = await runGoBinary(binary, workDir, scanType);
       return { findings, warnings: [], scannersRun: ['sc-scan'], scannersSkipped: [] };
     } catch (err) {
       logger.warn('sc-scan binary failed, falling back to built-in scanner', { error: (err as Error).message });
     }
   }
 
-  // Fallback: built-in Node.js scanner
-  logger.info('using built-in Node.js scanner (sc-scan binary not available)');
+  // Fallback: built-in Node.js scanner (uses native audit tools)
+  logger.info('using built-in Node.js scanner');
   return runBuiltinScanner(workDir, scanType);
 }
 
 async function findBinary(name: string): Promise<string | null> {
-  // Check env override
   if (env.SC_SCAN_BINARY) {
     try { await access(env.SC_SCAN_BINARY, constants.X_OK); return env.SC_SCAN_BINARY; } catch {}
   }
-
-  // Check relative paths from project root
   const candidates = [
     resolve(process.cwd(), '..', 'sc-scan', 'bin', name),
     resolve(process.cwd(), '..', 'sc-scan', 'bin', `${name}-${process.platform === 'darwin' ? 'darwin' : 'linux'}-${process.arch === 'arm64' ? 'arm64' : 'amd64'}`),
     `/usr/local/bin/${name}`,
   ];
-
   for (const p of candidates) {
     try { await access(p, constants.X_OK); return p; } catch {}
   }
-
-  // Check PATH
   try {
     const { stdout } = await execAsync(`which ${name}`, { timeout: 5000 });
     return stdout.trim();
   } catch {}
-
   return null;
 }
 
-async function runGoBinary(
-  bin: string,
-  workDir: string,
-  scanType: string,
-  changedFiles: string[],
-): Promise<ScanFinding[]> {
+async function runGoBinary(bin: string, workDir: string, scanType: string): Promise<ScanFinding[]> {
   const args = ['--repo-dir', workDir, '--output', 'json'];
-  if (scanType && scanType !== 'full') {
-    args.push('--scan-type', scanType);
+  if (scanType === 'code_secrets') {
+    args.push('--scan-type', 'secrets');
   }
-  if (changedFiles.length > 0) {
-    args.push('--changed-files', changedFiles.join(','));
-  }
-
-  const { stdout } = await execFileAsync(bin, args, {
-    timeout: 300_000,
-    maxBuffer: 50 * 1024 * 1024,
-  });
-
+  const { stdout } = await execFileAsync(bin, args, { timeout: 300_000, maxBuffer: 50 * 1024 * 1024 });
   const result = JSON.parse(stdout);
   // sc-scan outputs { scan_type, findings, duration_ms, files_scanned }
-  return (result.findings ?? result) as ScanFinding[];
+  // findings can be null when no issues found
+  return (Array.isArray(result.findings) ? result.findings : Array.isArray(result) ? result : []) as ScanFinding[];
 }
 
-// ---------------------------------------------------------------------------
-// Built-in Node.js scanner (fallback when Go binary not available)
-// Uses native audit tools: npm audit, pip-audit, etc.
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// Built-in Node.js scanner (ported from archived v1)
+// Uses native audit tools for real-time vulnerability databases.
+// ===========================================================================
+
+const SKIP_DIRS = new Set([
+  '.git', 'node_modules', 'vendor', '__pycache__', '.tox', '.venv',
+  'venv', 'dist', 'build', '.next', '.nuxt', 'target', 'coverage',
+]);
+const MAX_DETECT_DEPTH = 10;
+
+interface EcoScanner {
+  manifests: string[];
+  name: string;
+  tool: string;
+  installHint: string;
+  run: (dir: string) => Promise<ScanFinding[]>;
+  skipIf?: string[];
+}
+
+const ECO_SCANNERS: EcoScanner[] = [
+  {
+    manifests: ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'],
+    name: 'npm', tool: 'npm', installHint: 'Install Node.js: https://nodejs.org',
+    run: runNpmAudit,
+  },
+  {
+    manifests: ['requirements.txt', 'Pipfile.lock', 'poetry.lock'],
+    name: 'pip', tool: 'pip-audit', installHint: 'pip install pip-audit',
+    run: runPipAudit,
+  },
+  {
+    manifests: ['composer.lock'],
+    name: 'composer', tool: 'composer', installHint: 'Install Composer: https://getcomposer.org',
+    run: runComposerAudit,
+  },
+  {
+    manifests: ['go.sum'],
+    name: 'go', tool: 'govulncheck', installHint: 'go install golang.org/x/vuln/cmd/govulncheck@latest',
+    run: runGoVulncheck,
+  },
+  {
+    manifests: ['Gemfile.lock'],
+    name: 'bundler', tool: 'bundle-audit', installHint: 'gem install bundler-audit',
+    run: runBundleAudit,
+  },
+  {
+    manifests: ['pom.xml'],
+    name: 'maven', tool: 'mvn', installHint: 'Install Maven or osv-scanner',
+    run: (dir) => runOsvScanner(dir, 'maven'),
+  },
+  {
+    manifests: ['build.gradle', 'build.gradle.kts'],
+    name: 'gradle', tool: 'gradle', installHint: 'Install Gradle or osv-scanner',
+    run: (dir) => runOsvScanner(dir, 'gradle'),
+    skipIf: ['maven'],
+  },
+];
 
 async function runBuiltinScanner(workDir: string, scanType: string): Promise<ScannerResult> {
   const findings: ScanFinding[] = [];
@@ -266,111 +298,418 @@ async function runBuiltinScanner(workDir: string, scanType: string): Promise<Sca
   const scannersRun: string[] = [];
   const scannersSkipped: string[] = [];
 
-  // Dependency scan via npm audit
-  if (scanType !== 'secrets') {
-    const hasNpm = await isToolInstalled('npm');
-    if (hasNpm) {
-      const npmFindings = await runNpmAudit(workDir);
-      findings.push(...npmFindings);
-      scannersRun.push('npm-audit');
-    } else {
-      scannersSkipped.push('npm-audit');
-    }
+  // 1. Dependency scan (SCA) — recursive manifest discovery + native audit tools
+  if (scanType !== 'code_secrets') {
+    const depResult = await scanDependencies(workDir);
+    findings.push(...depResult.findings);
+    warnings.push(...depResult.warnings);
+    scannersRun.push(...depResult.scannersRun);
+    scannersSkipped.push(...depResult.scannersSkipped);
   }
 
-  // Secret scan via regex patterns (always runs)
+  // 2. Secrets scan — regex patterns (always runs)
   const secretFindings = await scanSecrets(workDir);
   findings.push(...secretFindings);
   scannersRun.push('secret-regex');
 
-  if (scannersSkipped.length > 0) {
-    warnings.push(`Skipped scanners (not installed): ${scannersSkipped.join(', ')}`);
+  return { findings, warnings, scannersRun, scannersSkipped };
+}
+
+// ---------------------------------------------------------------------------
+// Dependency scanning: discover manifests recursively, run native tools
+// ---------------------------------------------------------------------------
+
+async function scanDependencies(workDir: string): Promise<ScannerResult> {
+  const findings: ScanFinding[] = [];
+  const warnings: string[] = [];
+  const scannersRun: string[] = [];
+  const scannersSkipped: string[] = [];
+
+  // Discover all directories with manifest files
+  const targets = await discoverManifestDirs(workDir);
+  logger.info('discovered manifests', {
+    count: targets.length,
+    dirs: targets.map((t) => ({ dir: relative(workDir, t.dir) || '.', scanner: t.scanner.name })),
+  });
+
+  // Run scanners
+  for (const { dir, scanner } of targets) {
+    const relDir = relative(workDir, dir) || '.';
+    logger.info(`running ${scanner.name} dependency scan`, { dir: relDir });
+
+    const ecoFindings = await scanner.run(dir);
+
+    // Tag findings with subdirectory context
+    for (const f of ecoFindings) {
+      if (relDir !== '.') {
+        f.title = `[${relDir}] ${f.title}`;
+        f.detail.subdir = relDir;
+      }
+    }
+    findings.push(...ecoFindings);
+
+    if (ecoFindings.length === 0) {
+      const hasNativeTool = await isToolInstalled(scanner.tool);
+      if (!hasNativeTool) {
+        const label = relDir === '.' ? scanner.name : `${scanner.name} (${relDir})`;
+        scannersSkipped.push(label);
+        warnings.push(`${label}: no scanning tool available. ${scanner.installHint}`);
+      } else {
+        scannersRun.push(relDir === '.' ? scanner.name : `${scanner.name} (${relDir})`);
+      }
+    } else {
+      scannersRun.push(relDir === '.' ? scanner.name : `${scanner.name} (${relDir})`);
+    }
   }
 
   return { findings, warnings, scannersRun, scannersSkipped };
 }
 
-async function isToolInstalled(name: string): Promise<boolean> {
-  try {
-    await execAsync(`${name} --version`, { timeout: 5000 });
-    return true;
-  } catch { return false; }
-}
+interface ManifestTarget { dir: string; scanner: EcoScanner }
 
-async function runNpmAudit(workDir: string): Promise<ScanFinding[]> {
-  // Check if package-lock.json exists
-  try { await access(join(workDir, 'package-lock.json')); } catch { return []; }
+async function discoverManifestDirs(workDir: string): Promise<ManifestTarget[]> {
+  const targets: ManifestTarget[] = [];
+  const seen = new Set<string>();
 
-  try {
-    const { stdout } = await execAsync('npm audit --json 2>/dev/null || true', {
-      cwd: workDir,
-      timeout: 60_000,
-      maxBuffer: 10 * 1024 * 1024,
-    });
+  async function walk(dir: string, depth: number) {
+    if (depth > MAX_DETECT_DEPTH) return;
 
-    const audit = JSON.parse(stdout);
-    const findings: ScanFinding[] = [];
+    let entries: Dirent[];
+    try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
 
-    // npm audit v2 format: { vulnerabilities: { [name]: { severity, via, effects, range, ... } } }
-    const vulns = audit.vulnerabilities ?? {};
-    for (const [name, v] of Object.entries<any>(vulns)) {
-      findings.push({
-        source: 'dependency',
-        severity: v.severity ?? 'medium',
-        title: `${name}@${v.range ?? 'unknown'} — ${v.severity ?? 'unknown'} vulnerability`,
-        description: Array.isArray(v.via) ? v.via.filter((x: any) => typeof x === 'string').join('; ') : '',
-        detail: { package_name: name, ecosystem: 'npm', range: v.range, fix_available: v.fixAvailable },
-        auto_fixable: !!v.fixAvailable,
-      });
+    const fileNames = entries.filter((e) => e.isFile()).map((e) => e.name);
+    const fileNameSet = new Set(fileNames);
+    const scannersInDir = new Set<string>();
+
+    for (const scanner of ECO_SCANNERS) {
+      const hasManifest = scanner.manifests.some((m) =>
+        m.startsWith('*') ? fileNames.some((f) => f.endsWith(m.slice(1))) : fileNameSet.has(m),
+      );
+      if (!hasManifest) continue;
+      if (scanner.skipIf?.some((s) => scannersInDir.has(s))) continue;
+
+      const key = `${scanner.name}:${dir}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        targets.push({ dir, scanner });
+        scannersInDir.add(scanner.name);
+      }
     }
 
+    for (const e of entries) {
+      if (e.isDirectory() && !SKIP_DIRS.has(e.name)) {
+        await walk(join(dir, e.name), depth + 1);
+      }
+    }
+  }
+
+  await walk(workDir, 0);
+  return targets;
+}
+
+async function isToolInstalled(name: string): Promise<boolean> {
+  try { await execAsync(`${name} --version`, { timeout: 5000 }); return true; } catch { return false; }
+}
+
+async function fileExists(p: string): Promise<boolean> {
+  try { await access(p); return true; } catch { return false; }
+}
+
+// ---------------------------------------------------------------------------
+// npm audit --json
+// ---------------------------------------------------------------------------
+
+async function runNpmAudit(workDir: string): Promise<ScanFinding[]> {
+  try {
+    const { stdout } = await execAsync('npm audit --json 2>/dev/null || true', {
+      cwd: workDir, timeout: 120_000, maxBuffer: 50 * 1024 * 1024,
+    });
+    if (!stdout.trim()) return [];
+
+    const audit = JSON.parse(stdout);
+    const vulns: Record<string, any> = audit.vulnerabilities ?? {};
+    const findings: ScanFinding[] = [];
+
+    for (const [pkgName, vuln] of Object.entries(vulns)) {
+      const advisory = Array.isArray(vuln.via)
+        ? vuln.via.find((v: any) => typeof v !== 'string' && v.title)
+        : null;
+
+      const cveUrl = advisory?.url ?? '';
+      const cveId = cveUrl.match(/CVE-\d{4}-\d+/)?.[0] ?? cveUrl.match(/GHSA-[a-z0-9-]+/)?.[0] ?? '';
+      const fixInfo = typeof vuln.fixAvailable === 'object' ? vuln.fixAvailable : null;
+
+      findings.push({
+        type: 'package_vulnerability',
+        severity: mapNpmSeverity(vuln.severity),
+        title: `${advisory?.title ?? 'Vulnerability'} in ${pkgName}`,
+        description: `Package ${pkgName} (${vuln.range}) is vulnerable.${cveUrl ? ` Advisory: ${cveUrl}` : ''}`,
+        cve_id: cveId || undefined,
+        cvss_score: advisory?.cvss?.score,
+        detail: { package_name: pkgName, ecosystem: 'npm', affected_range: vuln.range, advisory_url: cveUrl },
+        remediation: fixInfo
+          ? `Upgrade ${fixInfo.name} to ${fixInfo.version}: npm install ${fixInfo.name}@${fixInfo.version}`
+          : 'No fix available yet.',
+        auto_fixable: !!vuln.fixAvailable,
+      });
+    }
     return findings;
-  } catch {
-    return [];
+  } catch { return []; }
+}
+
+function mapNpmSeverity(s: string): ScanFinding['severity'] {
+  switch (s) {
+    case 'critical': return 'critical';
+    case 'high': return 'high';
+    case 'moderate': return 'medium';
+    case 'low': return 'low';
+    default: return 'info';
   }
 }
 
-async function scanSecrets(workDir: string): Promise<ScanFinding[]> {
-  // Simple regex-based secret scan (subset of what Go scanner does)
-  const patterns = [
-    { name: 'AWS Access Key', regex: /AKIA[0-9A-Z]{16}/, severity: 'critical' as const },
-    { name: 'GitHub PAT', regex: /ghp_[A-Za-z0-9]{36}/, severity: 'high' as const },
-    { name: 'GitLab Token', regex: /glpat-[A-Za-z0-9_-]{20,}/, severity: 'high' as const },
-    { name: 'Stripe Secret Key', regex: /sk_live_[0-9a-zA-Z]{24,}/, severity: 'critical' as const },
-    { name: 'Private Key', regex: /-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/, severity: 'critical' as const },
-    { name: 'Generic Secret', regex: /(?:password|secret|token|api_key)\s*[=:]\s*["'][A-Za-z0-9+/=_-]{16,}["']/i, severity: 'medium' as const },
-  ];
+// ---------------------------------------------------------------------------
+// pip-audit --json (Python)
+// ---------------------------------------------------------------------------
 
-  const findings: ScanFinding[] = [];
+async function runPipAudit(workDir: string): Promise<ScanFinding[]> {
+  for (const cmd of ['pip-audit', 'python3 -m pip_audit']) {
+    try {
+      const reqFile = (await fileExists(join(workDir, 'requirements.txt'))) ? '-r requirements.txt' : '';
+      if (!reqFile) return [];
 
-  try {
-    // Use grep to find potential secrets (fast)
-    for (const p of patterns) {
-      try {
-        const { stdout } = await execAsync(
-          `grep -rnl --include='*.ts' --include='*.js' --include='*.py' --include='*.go' --include='*.env' --include='*.yml' --include='*.yaml' --include='*.json' -E '${p.regex.source}' . 2>/dev/null | head -20`,
-          { cwd: workDir, timeout: 15_000 },
-        );
-        const files = stdout.trim().split('\n').filter(Boolean);
-        for (const file of files) {
-          const relPath = file.replace(/^\.\//, '');
-          // Skip lockfiles and test files
-          if (/node_modules|\.lock|package-lock|go\.sum|\.test\.|_test\./.test(relPath)) continue;
+      const { stdout } = await execAsync(
+        `${cmd} ${reqFile} --format json 2>/dev/null || true`,
+        { cwd: workDir, timeout: 120_000, maxBuffer: 10 * 1024 * 1024 },
+      );
+      if (!stdout.trim() || stdout.trim() === '[]') return [];
 
+      const results = JSON.parse(stdout) as Array<{
+        name: string; version: string;
+        vulns: Array<{ id: string; description: string; fix_versions: string[]; aliases: string[] }>;
+      }>;
+
+      const findings: ScanFinding[] = [];
+      for (const pkg of results) {
+        for (const vuln of pkg.vulns ?? []) {
+          const cveId = vuln.aliases?.find((a) => a.startsWith('CVE-')) ?? vuln.id;
+          const fixVersion = vuln.fix_versions?.[0];
           findings.push({
-            source: 'secret',
-            severity: p.severity,
-            title: `${p.name} detected in ${relPath}`,
-            description: `Potential ${p.name} found in ${relPath}`,
-            detail: { file: relPath, pattern_name: p.name },
+            type: 'package_vulnerability',
+            severity: 'high',
+            title: `${cveId} in ${pkg.name}@${pkg.version}`,
+            description: vuln.description || `Vulnerability ${vuln.id} in ${pkg.name}`,
+            cve_id: cveId.startsWith('CVE-') ? cveId : undefined,
+            detail: { package_name: pkg.name, installed_version: pkg.version, ecosystem: 'pypi', vuln_id: vuln.id },
+            remediation: fixVersion ? `Upgrade: pip install ${pkg.name}==${fixVersion}` : 'No fix available.',
+            auto_fixable: !!fixVersion,
           });
         }
-      } catch {
-        // grep returns exit 1 when no match — ignore
+      }
+      return findings;
+    } catch { /* try next cmd */ }
+  }
+  return [];
+}
+
+// ---------------------------------------------------------------------------
+// composer audit --format=json (PHP)
+// ---------------------------------------------------------------------------
+
+async function runComposerAudit(workDir: string): Promise<ScanFinding[]> {
+  try {
+    const { stdout } = await execAsync('composer audit --format=json 2>/dev/null || true', {
+      cwd: workDir, timeout: 60_000, maxBuffer: 10 * 1024 * 1024,
+    });
+    if (!stdout.trim()) return [];
+
+    const audit = JSON.parse(stdout);
+    const advisories: Record<string, Array<{ advisoryId: string; packageName: string; title: string; cve: string; affectedVersions: string }>> = audit.advisories ?? {};
+    const findings: ScanFinding[] = [];
+
+    for (const [, advList] of Object.entries(advisories)) {
+      for (const adv of advList) {
+        findings.push({
+          type: 'package_vulnerability', severity: 'high',
+          title: `${adv.cve || adv.advisoryId}: ${adv.title}`,
+          description: adv.title,
+          cve_id: adv.cve || undefined,
+          detail: { package_name: adv.packageName, ecosystem: 'composer', affected_versions: adv.affectedVersions },
+          remediation: `Update ${adv.packageName}: composer update ${adv.packageName}`,
+          auto_fixable: true,
+        });
       }
     }
-  } catch {
-    // Scan error — non-fatal
+    return findings;
+  } catch { return []; }
+}
+
+// ---------------------------------------------------------------------------
+// govulncheck -json (Go)
+// ---------------------------------------------------------------------------
+
+async function runGoVulncheck(workDir: string): Promise<ScanFinding[]> {
+  if (!(await isToolInstalled('govulncheck'))) return [];
+
+  try {
+    const { stdout } = await execAsync('govulncheck -json ./... 2>/dev/null || true', {
+      cwd: workDir, timeout: 180_000, maxBuffer: 50 * 1024 * 1024,
+      env: { ...process.env, GOFLAGS: '-mod=readonly' },
+    });
+    if (!stdout.trim()) return [];
+
+    const findings: ScanFinding[] = [];
+    for (const line of stdout.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line);
+        const vuln = entry.finding;
+        if (!vuln) continue;
+        const osv = entry.osv ?? {};
+        const cveId = (osv.aliases ?? []).find((a: string) => a.startsWith('CVE-')) ?? osv.id ?? '';
+
+        findings.push({
+          type: 'package_vulnerability',
+          severity: mapGoSeverity(osv.database_specific?.severity ?? ''),
+          title: `${cveId || osv.id}: ${osv.summary ?? 'Go vulnerability'}`,
+          description: osv.details ?? osv.summary ?? '',
+          cve_id: cveId || undefined,
+          detail: { package_name: vuln.trace?.[0]?.module ?? 'unknown', ecosystem: 'go', osv_id: osv.id },
+          remediation: osv.affected?.[0]?.ranges?.[0]?.events?.find((e: any) => e.fixed)?.fixed
+            ? `Update module to ${osv.affected[0].ranges[0].events.find((e: any) => e.fixed).fixed}`
+            : 'No fix available.',
+          auto_fixable: !!osv.affected?.[0]?.ranges?.[0]?.events?.find((e: any) => e.fixed),
+        });
+      } catch { /* skip unparseable lines */ }
+    }
+    return findings;
+  } catch { return []; }
+}
+
+function mapGoSeverity(s: string): ScanFinding['severity'] {
+  switch (s.toUpperCase()) {
+    case 'CRITICAL': return 'critical';
+    case 'HIGH': return 'high';
+    case 'MODERATE': case 'MEDIUM': return 'medium';
+    case 'LOW': return 'low';
+    default: return 'high';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// bundle-audit (Ruby)
+// ---------------------------------------------------------------------------
+
+async function runBundleAudit(workDir: string): Promise<ScanFinding[]> {
+  if (!(await isToolInstalled('bundle-audit'))) return [];
+
+  try {
+    const { stdout } = await execAsync('bundle-audit check --format json 2>/dev/null || true', {
+      cwd: workDir, timeout: 60_000, maxBuffer: 10 * 1024 * 1024,
+    });
+    if (!stdout.trim()) return [];
+
+    const results = JSON.parse(stdout);
+    const vulns = results.results ?? results.advisories ?? [];
+    return vulns.map((v: any) => ({
+      type: 'package_vulnerability',
+      severity: v.criticality === 'critical' ? 'critical' : v.criticality === 'high' ? 'high' : 'medium' as const,
+      title: `${v.cve || v.advisory}: ${v.title ?? 'Vulnerability'} in ${v.gem ?? v.name ?? 'unknown'}`,
+      cve_id: v.cve || undefined,
+      detail: { package_name: v.gem ?? v.name, ecosystem: 'rubygems' },
+      remediation: v.patched_versions ? `Update to: ${v.patched_versions}` : 'No fix available.',
+      auto_fixable: !!v.patched_versions,
+    }));
+  } catch { return []; }
+}
+
+// ---------------------------------------------------------------------------
+// osv-scanner fallback (any ecosystem)
+// ---------------------------------------------------------------------------
+
+async function runOsvScanner(workDir: string, ecosystem: string): Promise<ScanFinding[]> {
+  if (!(await isToolInstalled('osv-scanner'))) return [];
+
+  try {
+    const { stdout } = await execAsync('osv-scanner --json -r . 2>/dev/null || true', {
+      cwd: workDir, timeout: 180_000, maxBuffer: 50 * 1024 * 1024,
+    });
+    if (!stdout.trim()) return [];
+
+    const results = JSON.parse(stdout);
+    const findings: ScanFinding[] = [];
+    for (const r of results.results ?? []) {
+      for (const pkg of r.packages ?? []) {
+        for (const v of pkg.vulnerabilities ?? []) {
+          const cveId = (v.aliases ?? []).find((a: string) => a.startsWith('CVE-')) ?? v.id;
+          findings.push({
+            type: 'package_vulnerability', severity: 'high',
+            title: `${cveId}: ${v.summary ?? 'Vulnerability'} in ${pkg.package?.name ?? 'unknown'}`,
+            description: v.details ?? v.summary ?? '',
+            cve_id: cveId.startsWith('CVE-') ? cveId : undefined,
+            detail: { package_name: pkg.package?.name, ecosystem, osv_id: v.id },
+            remediation: 'Check advisory for upgrade instructions.',
+            auto_fixable: false,
+          });
+        }
+      }
+    }
+    return findings;
+  } catch { return []; }
+}
+
+// ---------------------------------------------------------------------------
+// Secret scanning — regex patterns
+// ---------------------------------------------------------------------------
+
+interface SecretPattern {
+  name: string;
+  regex: RegExp;
+  severity: ScanFinding['severity'];
+}
+
+const SECRET_PATTERNS: SecretPattern[] = [
+  { name: 'AWS Access Key', regex: /AKIA[0-9A-Z]{16}/, severity: 'critical' },
+  { name: 'AWS Secret Key', regex: /(?:aws_secret_access_key|secret_access_key)\s*[=:]\s*["']?[A-Za-z0-9/+=]{40}/i, severity: 'critical' },
+  { name: 'GitHub PAT', regex: /ghp_[A-Za-z0-9]{36}/, severity: 'high' },
+  { name: 'GitLab Token', regex: /glpat-[A-Za-z0-9_-]{20,}/, severity: 'high' },
+  { name: 'Stripe Secret Key', regex: /sk_live_[0-9a-zA-Z]{24,}/, severity: 'critical' },
+  { name: 'RSA Private Key', regex: /-----BEGIN RSA PRIVATE KEY-----/, severity: 'critical' },
+  { name: 'EC Private Key', regex: /-----BEGIN EC PRIVATE KEY-----/, severity: 'critical' },
+  { name: 'Generic Private Key', regex: /-----BEGIN PRIVATE KEY-----/, severity: 'critical' },
+  { name: 'Slack Token', regex: /xox[bporas]-[0-9]{10,}-[A-Za-z0-9-]+/, severity: 'high' },
+  { name: 'SendGrid Key', regex: /SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}/, severity: 'high' },
+  { name: 'Database URI', regex: /(?:postgres|mysql|mongodb)(?:\+srv)?:\/\/[^:]+:[^@]+@[^\s]+/, severity: 'high' },
+  { name: 'Generic Secret', regex: /(?:password|secret|token|api_key|apikey)\s*[=:]\s*["'][A-Za-z0-9+/=_-]{16,}["']/i, severity: 'medium' },
+];
+
+const SECRET_FILE_EXTS = ['ts', 'js', 'py', 'go', 'rb', 'php', 'java', 'env', 'yml', 'yaml', 'json', 'toml', 'cfg', 'conf', 'ini'];
+const SECRET_SKIP_PATTERNS = /node_modules|\.lock$|package-lock|go\.sum|\.test\.|_test\.|\.spec\.|\.min\.|dist\/|build\//;
+
+async function scanSecrets(workDir: string): Promise<ScanFinding[]> {
+  const findings: ScanFinding[] = [];
+  const extArgs = SECRET_FILE_EXTS.map((e) => `--include='*.${e}'`).join(' ');
+
+  for (const p of SECRET_PATTERNS) {
+    try {
+      const { stdout } = await execAsync(
+        `grep -rnl ${extArgs} -E '${p.regex.source}' . 2>/dev/null | head -30`,
+        { cwd: workDir, timeout: 15_000 },
+      );
+      const files = stdout.trim().split('\n').filter(Boolean);
+      for (const file of files) {
+        const relPath = file.replace(/^\.\//, '');
+        if (SECRET_SKIP_PATTERNS.test(relPath)) continue;
+
+        findings.push({
+          type: 'secret',
+          severity: p.severity,
+          title: `${p.name} detected in ${relPath}`,
+          description: `Potential ${p.name} found in ${relPath}`,
+          detail: { file: relPath, pattern_name: p.name },
+          auto_fixable: false,
+        });
+      }
+    } catch { /* grep exit 1 = no match */ }
   }
 
   return findings;
@@ -398,14 +737,11 @@ async function ingestFindings(
   for (const f of findings) {
     const key = dedupKey(f.cve_id, f.title);
     newKeys.add(key);
-
     if (existingKeys.has(key)) continue;
 
     await prisma.finding.create({
       data: {
-        orgId,
-        scanId,
-        repositoryId,
+        orgId, scanId, repositoryId,
         source: 'code_scanner',
         severity: f.severity,
         status: 'open',
@@ -420,10 +756,7 @@ async function ingestFindings(
   }
 
   // Auto-resolve stale findings
-  const staleFindings = existingFindings.filter(
-    (f) => !newKeys.has(dedupKey(f.cveId, f.title)),
-  );
-
+  const staleFindings = existingFindings.filter((f) => !newKeys.has(dedupKey(f.cveId, f.title)));
   if (staleFindings.length > 0) {
     await prisma.finding.updateMany({
       where: { id: { in: staleFindings.map((f) => f.id) } },
@@ -443,18 +776,12 @@ function dedupKey(cveId: string | null | undefined, title: string): string {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function buildAuthenticatedCloneUrl(
-  repo: {
-    provider: string;
-    owner: string;
-    name: string;
-    cloneUrl: string | null;
-    integration: { config: unknown; baseUrl: string | null } | null;
-  },
-): Promise<string> {
+async function buildAuthenticatedCloneUrl(repo: {
+  provider: string; owner: string; name: string; cloneUrl: string | null;
+  integration: { config: unknown; baseUrl: string | null } | null;
+}): Promise<string> {
   if (!repo.integration) {
     if (repo.cloneUrl) return repo.cloneUrl;
-    // Public fallback by provider
     if (repo.provider === 'gitlab') return `https://gitlab.com/${repo.owner}/${repo.name}.git`;
     return `https://github.com/${repo.owner}/${repo.name}.git`;
   }
@@ -465,10 +792,8 @@ async function buildAuthenticatedCloneUrl(
   if (repo.provider === 'github') {
     const host = baseUrl ? new URL(baseUrl).host : 'github.com';
     const { token } = await github.getInstallationToken(
-      config.installationId,
-      config.appId ?? env.GITHUB_APP_ID,
-      env.GITHUB_APP_PRIVATE_KEY,
-      baseUrl ?? undefined,
+      config.installationId, config.appId ?? env.GITHUB_APP_ID,
+      env.GITHUB_APP_PRIVATE_KEY, baseUrl ?? undefined,
     );
     return buildGitHubCloneUrl(token, host, repo.owner, repo.name);
   }
@@ -481,7 +806,6 @@ async function buildAuthenticatedCloneUrl(
   throw new Error(`Unsupported provider: ${repo.provider}`);
 }
 
-/** Strip auth tokens from error messages to prevent leaking secrets */
 function stripTokens(msg: string): string {
   return msg.replace(/https:\/\/[^@]+@/g, 'https://***@');
 }
