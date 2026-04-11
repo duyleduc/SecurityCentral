@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errors.js';
-import { checkSsl, checkHttp, checkDns, checkDomain, type DomainCheckResult } from './domain-check.service.js';
+import { checkSsl, checkHttp, checkDns, checkDomain, checkHttpRedirect, enrichSslWithHttpHeaders, type DomainCheckResult } from './domain-check.service.js';
 
 // ---------------------------------------------------------------------------
 // CRUD
@@ -89,6 +89,21 @@ export async function triggerCheck(orgId: string, id: string) {
   return result;
 }
 
+export async function triggerSslCheck(orgId: string, id: string) {
+  const endpoint = await prisma.monitoredEndpoint.findFirst({ where: { id, orgId } });
+  if (!endpoint) {
+    throw new AppError('RESOURCE_NOT_FOUND', 'Endpoint not found');
+  }
+  await performSslCheck(endpoint.id);
+
+  // Return the latest SSL heartbeat with full details
+  const sslHb = await prisma.endpointHeartbeat.findFirst({
+    where: { endpointId: id, sslValid: { not: null } },
+    orderBy: { createdAt: 'desc' },
+  });
+  return sslHb;
+}
+
 export async function getHeartbeats(orgId: string, endpointId: string, limit: number, offset: number) {
   const endpoint = await prisma.monitoredEndpoint.findFirst({ where: { id: endpointId, orgId } });
   if (!endpoint) {
@@ -144,21 +159,28 @@ export async function performUptimeCheck(endpointId: string): Promise<void> {
 
 export async function performSslCheck(endpointId: string): Promise<void> {
   const endpoint = await prisma.monitoredEndpoint.findUniqueOrThrow({ where: { id: endpointId } });
+  const host = extractHostnameHelper(endpoint.host);
 
-  const [ssl, dnsResult] = await Promise.all([
-    endpoint.protocol === 'https' ? checkSsl(endpoint.host, endpoint.port) : Promise.resolve(null),
-    checkDns(endpoint.host),
+  // Run SSL + HTTP (for headers) + DNS + redirect check in parallel
+  const [rawSsl, httpResult, dnsResult, httpRedirect] = await Promise.all([
+    endpoint.protocol === 'https' ? checkSsl(host, endpoint.port) : Promise.resolve(null),
+    checkHttp(host, endpoint.port, endpoint.protocol),
+    checkDns(host),
+    checkHttpRedirect(host),
   ]);
 
-  // Store SSL result as a heartbeat with SSL fields
+  // Enrich SSL with HTTP security headers + redirect info
+  const ssl = rawSsl ? enrichSslWithHttpHeaders(rawSsl, httpResult, httpRedirect) : null;
+
+  // Store SSL result as a heartbeat with full details
   if (ssl) {
     await prisma.endpointHeartbeat.create({
       data: {
         endpointId,
-        isUp: true, // SSL check is not an uptime check
+        isUp: true,
         sslValid: ssl.valid,
         sslExpiry: ssl.expiry,
-        sslIssuer: ssl.issuer,
+        sslIssuer: ssl.issuerCn,
         sslDaysLeft: ssl.daysLeft,
         tlsVersion: ssl.tlsVersion,
         dnsSpf: dnsResult.spf,
@@ -179,8 +201,19 @@ export async function performSslCheck(endpointId: string): Promise<void> {
     data: { lastSslCheckAt: new Date(), status },
   });
 
-  // Auto-create findings from SSL/DNS issues
+  // Auto-create findings
   await createDomainFindings(endpoint.orgId, endpointId, endpoint.host, ssl, dnsResult);
+}
+
+/** Extract bare hostname from host field (may be full URL). */
+function extractHostnameHelper(input: string): string {
+  let s = input.trim();
+  if (s.startsWith('http://') || s.startsWith('https://')) {
+    try { return new URL(s).hostname; } catch {}
+  }
+  s = s.split('/')[0];
+  s = s.split(':')[0];
+  return s;
 }
 
 // ---------------------------------------------------------------------------
@@ -246,34 +279,76 @@ async function createDomainFindings(
 ): Promise<void> {
   const findings: Array<{ title: string; severity: string; description: string }> = [];
 
-  if (ssl && !ssl.valid) {
-    findings.push({
-      title: `Invalid SSL certificate for ${host}`,
-      severity: 'high',
-      description: ssl.error ?? 'SSL certificate is invalid or expired',
-    });
-  } else if (ssl && ssl.daysLeft <= 7) {
-    findings.push({
-      title: `SSL certificate for ${host} expires in ${ssl.daysLeft} days`,
-      severity: 'critical',
-      description: `Certificate issued by ${ssl.issuer} expires on ${ssl.expiry.toISOString()}`,
-    });
-  } else if (ssl && ssl.daysLeft <= 30) {
-    findings.push({
-      title: `SSL certificate for ${host} expires in ${ssl.daysLeft} days`,
-      severity: 'medium',
-      description: `Certificate issued by ${ssl.issuer} expires on ${ssl.expiry.toISOString()}`,
-    });
+  if (ssl) {
+    // Certificate expiry
+    if (ssl.daysLeft <= 0) {
+      findings.push({ title: `SSL certificate for ${host} has expired`, severity: 'critical', description: `Certificate expired ${Math.abs(ssl.daysLeft)} days ago. Browsers will block access.` });
+    } else if (ssl.daysLeft <= 7) {
+      findings.push({ title: `SSL certificate for ${host} expires in ${ssl.daysLeft} days`, severity: 'critical', description: `Issued by ${ssl.issuerCn}. Renew immediately to avoid downtime.` });
+    } else if (ssl.daysLeft <= 30) {
+      findings.push({ title: `SSL certificate for ${host} expires in ${ssl.daysLeft} days`, severity: 'medium', description: `Issued by ${ssl.issuerCn}. Renew soon.` });
+    }
+
+    // Invalid certificate
+    if (!ssl.valid && ssl.daysLeft > 0) {
+      findings.push({ title: `Invalid SSL certificate for ${host}`, severity: 'high', description: ssl.error ?? 'Certificate is not trusted by the system.' });
+    }
+
+    // Weak protocol
+    if (['SSLv2', 'SSLv3'].includes(ssl.tlsVersion)) {
+      findings.push({ title: `Critical: ${host} uses ${ssl.tlsVersion}`, severity: 'critical', description: `${ssl.tlsVersion} is obsolete and has known vulnerabilities (POODLE). Upgrade to TLS 1.2+.` });
+    } else if (['TLSv1', 'TLSv1.1'].includes(ssl.tlsVersion)) {
+      findings.push({ title: `Deprecated TLS version on ${host}: ${ssl.tlsVersion}`, severity: 'high', description: `${ssl.tlsVersion} is deprecated. Upgrade to TLS 1.2 or 1.3.` });
+    }
+
+    // Weak cipher
+    const weakCiphers = ['RC4', '3DES', 'DES', 'EXPORT', 'NULL', 'ANON'];
+    if (weakCiphers.some((wc) => ssl.cipherName.toUpperCase().includes(wc))) {
+      findings.push({ title: `Weak cipher suite on ${host}: ${ssl.cipherName}`, severity: 'high', description: 'Switch to AES-GCM or ChaCha20-Poly1305.' });
+    }
+
+    // No forward secrecy
+    if (!ssl.forwardSecrecy) {
+      findings.push({ title: `No forward secrecy on ${host}`, severity: 'medium', description: 'Past traffic can be decrypted if the private key is compromised. Use ECDHE key exchange.' });
+    }
+
+    // Weak key
+    if (ssl.keyBits != null) {
+      if (ssl.keyAlgorithm.includes('RSA') && ssl.keyBits < 2048) {
+        findings.push({ title: `Weak RSA key on ${host}: ${ssl.keyBits} bits`, severity: 'high', description: 'Minimum 2048 bits required for RSA.' });
+      } else if (ssl.keyAlgorithm.includes('ECDSA') && ssl.keyBits < 256) {
+        findings.push({ title: `Weak ECDSA key on ${host}: ${ssl.keyBits} bits`, severity: 'high', description: 'Minimum 256 bits required for ECDSA.' });
+      }
+    }
+
+    // Self-signed
+    if (ssl.isSelfSigned) {
+      findings.push({ title: `Self-signed certificate on ${host}`, severity: 'medium', description: 'Browsers will show a security warning. Use a trusted CA.' });
+    }
+
+    // Chain invalid
+    if (!ssl.chainValid && !ssl.isSelfSigned) {
+      findings.push({ title: `Incomplete certificate chain on ${host}`, severity: 'medium', description: 'May break connections on mobile or older browsers. Ensure all intermediate certs are included.' });
+    }
+
+    // Missing HSTS
+    if (!ssl.hsts) {
+      findings.push({ title: `Missing HSTS header on ${host}`, severity: 'low', description: 'Strict-Transport-Security header not found. Users may be vulnerable to protocol downgrade attacks.' });
+    }
   }
 
+  // DNS findings
   if (dns.spf === 'missing') {
-    findings.push({ title: `Missing SPF record for ${host}`, severity: 'medium', description: 'No SPF DNS record found.' });
+    findings.push({ title: `Missing SPF record for ${host}`, severity: 'medium', description: 'No SPF DNS record. Email spoofing is possible.' });
   }
   if (dns.dmarc === 'missing') {
-    findings.push({ title: `Missing DMARC record for ${host}`, severity: 'medium', description: 'No DMARC DNS record found.' });
+    findings.push({ title: `Missing DMARC record for ${host}`, severity: 'medium', description: 'No DMARC DNS record. Email authentication policy not enforced.' });
   }
   if (dns.dkim === 'missing') {
     findings.push({ title: `Missing DKIM record for ${host}`, severity: 'low', description: 'No DKIM DNS record found.' });
+  }
+  if (dns.caa === 'missing') {
+    findings.push({ title: `Missing CAA record for ${host}`, severity: 'low', description: 'No CAA DNS record. Any CA can issue certificates for this domain.' });
   }
 
   for (const f of findings) {

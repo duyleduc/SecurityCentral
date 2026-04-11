@@ -99,6 +99,21 @@ monitoringRouter.post(
   },
 );
 
+// POST /api/v1/monitoring/endpoints/:id/ssl-scan — trigger SSL/DNS scan, return full report
+monitoringRouter.post(
+  '/:id/ssl-scan',
+  requirePermission('trigger_scans'),
+  validate({ params: EndpointIdParamsSchema }),
+  async (req, res, next) => {
+    try {
+      const result = await monitoringService.triggerSslCheck(req.auth!.orgId, req.params.id);
+      res.json(successEnvelope(result));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // GET /api/v1/monitoring/endpoints/:id/heartbeats
 monitoringRouter.get(
   '/:id/heartbeats',

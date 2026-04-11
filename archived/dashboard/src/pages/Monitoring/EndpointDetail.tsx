@@ -275,7 +275,7 @@ function computeSslGrade(tls: TlsScanInfo): { grade: string; color: string; bg: 
   if (criticals > 0) return { grade: 'F', color: '#991b1b', bg: '#fef2f2', note: 'Critical issues — immediate action required' };
   if (highs > 0) return { grade: 'C', color: '#c2410c', bg: '#fff7ed', note: 'Significant weaknesses found' };
   if (mediums > 2) return { grade: 'B-', color: '#a16207', bg: '#fefce8', note: 'Several improvements recommended' };
-  if (mediums > 0) return { grade: 'B+', color: '#1d4ed8', bg: '#eff6ff', note: 'Good, minor improvements possible' };
+  if (mediums > 0) return { grade: 'B+', color: '#1dd881', bg: '#eff6ff', note: 'Good, minor improvements possible' };
   if (tls.tlsVersion === 'TLSv1.3' && tls.forwardSecrecy && tls.hsts) return { grade: 'A+', color: '#15803d', bg: '#f0fdf4', note: 'Excellent — best practices met' };
   return { grade: 'A', color: '#16a34a', bg: '#f0fdf4', note: 'Strong configuration' };
 }

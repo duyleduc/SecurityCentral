@@ -39,6 +39,7 @@ export interface EndpointHeartbeat {
   dnsDkim: string | null;
   dnsDmarc: string | null;
   error: string | null;
+  details: Record<string, unknown> | null;
   createdAt: string;
 }
 
@@ -163,6 +164,18 @@ export function useTriggerCheck() {
   return useMutation({
     mutationFn: (id: string) =>
       apiClient<DomainCheckResult>(`/api/v1/monitoring/endpoints/${id}/check`, { method: 'POST' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['endpoints'] });
+      qc.invalidateQueries({ queryKey: ['heartbeats'] });
+    },
+  });
+}
+
+export function useTriggerSslScan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<any>(`/api/v1/monitoring/endpoints/${id}/ssl-scan`, { method: 'POST' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['endpoints'] });
       qc.invalidateQueries({ queryKey: ['heartbeats'] });
