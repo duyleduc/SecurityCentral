@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errors.js';
 import { calculateScore, type ScoreResult } from '../../lib/scoring.js';
+import { emitFindingUpdated, emitFindingResolved } from '../../ws/hooks.js';
 
 // ---------------------------------------------------------------------------
 // Findings CRUD
@@ -70,7 +71,15 @@ export async function updateStatus(orgId: string, id: string, status: string) {
     data.resolvedAt = null;
   }
 
-  return prisma.finding.update({ where: { id }, data });
+  const updated = await prisma.finding.update({ where: { id }, data });
+
+  if (status === 'resolved') {
+    emitFindingResolved(orgId, { id, title: existing.title });
+  } else {
+    emitFindingUpdated(orgId, { id, status });
+  }
+
+  return updated;
 }
 
 // ---------------------------------------------------------------------------

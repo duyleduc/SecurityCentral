@@ -96,6 +96,14 @@ export function useCreateProject() {
   });
 }
 
+export function useTagKeys(projectId?: string) {
+  return useQuery({
+    queryKey: ['tag-keys', projectId],
+    queryFn: () => apiClient<string[]>(`/api/v1/projects/${projectId}/tag-keys`),
+    enabled: !!projectId,
+  });
+}
+
 export function useDeleteProject() {
   const qc = useQueryClient();
   return useMutation({
@@ -127,7 +135,7 @@ export function useEndpoint(id: string) {
 export function useCreateEndpoint() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { host: string; port?: number; protocol?: string; uptimeInterval?: number; uptimeTimeout?: number; projectId?: string }) =>
+    mutationFn: (data: { host: string; port?: number; protocol?: string; uptimeInterval?: number; uptimeTimeout?: number; projectId?: string; tags?: Array<{ key: string; value: string }> }) =>
       apiClient<MonitoredEndpoint>('/api/v1/monitoring/endpoints', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -171,14 +179,23 @@ export function useTriggerCheck() {
   });
 }
 
+export function useLatestSslScan(endpointId: string) {
+  return useQuery({
+    queryKey: ['ssl-scan', endpointId],
+    queryFn: () => apiClient<EndpointHeartbeat | null>(`/api/v1/monitoring/endpoints/${endpointId}/ssl-scan`),
+    enabled: !!endpointId,
+  });
+}
+
 export function useTriggerSslScan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       apiClient<any>(`/api/v1/monitoring/endpoints/${id}/ssl-scan`, { method: 'POST' }),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ['endpoints'] });
       qc.invalidateQueries({ queryKey: ['heartbeats'] });
+      qc.invalidateQueries({ queryKey: ['ssl-scan', id] });
     },
   });
 }
@@ -257,7 +274,7 @@ export function useServerMetrics(id: string, hours = 24) {
 export function useCreateInstallToken() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { label?: string; projectId?: string; expiresInHours?: number }) =>
+    mutationFn: (data: { label?: string; projectId?: string; expiresInHours?: number; tags?: Array<{ key: string; value: string }> }) =>
       apiClient<InstallToken>('/api/v1/install-tokens', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -582,5 +599,92 @@ export function useUpdateFinding() {
         body: JSON.stringify({ status: data.status }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['findings'] }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Organization
+// ---------------------------------------------------------------------------
+
+export function useOrganization() {
+  return useQuery({
+    queryKey: ['organization'],
+    queryFn: () => apiClient<any>('/api/v1/organization'),
+  });
+}
+
+export function useUpdateOrganization() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string }) =>
+      apiClient<any>('/api/v1/organization', { method: 'PATCH', body: JSON.stringify(data) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['organization'] }),
+  });
+}
+
+export function useMembers() {
+  return useQuery({
+    queryKey: ['organization', 'members'],
+    queryFn: () => apiClient<any[]>('/api/v1/organization/members'),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// API Keys
+// ---------------------------------------------------------------------------
+
+export function useApiKeys() {
+  return useQuery({
+    queryKey: ['api-keys'],
+    queryFn: () => apiClient<any[]>('/api/v1/api-keys'),
+  });
+}
+
+export function useCreateApiKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; expiresInDays?: number }) =>
+      apiClient<any>('/api/v1/api-keys', { method: 'POST', body: JSON.stringify(data) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['api-keys'] }),
+  });
+}
+
+export function useRevokeApiKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<any>(`/api/v1/api-keys/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['api-keys'] }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Notification Preferences
+// ---------------------------------------------------------------------------
+
+export function useNotificationPreferences() {
+  return useQuery({
+    queryKey: ['notification-preferences'],
+    queryFn: () => apiClient<any[]>('/api/v1/notifications/preferences'),
+  });
+}
+
+export function useUpsertNotificationPref() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { channel: string; eventType: string; enabled: boolean }) =>
+      apiClient<any>('/api/v1/notifications/preferences', { method: 'PUT', body: JSON.stringify(data) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notification-preferences'] }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Audit Logs
+// ---------------------------------------------------------------------------
+
+export function useAuditLogs(page = 1, limit = 50) {
+  return useQuery({
+    queryKey: ['audit-logs', page, limit],
+    queryFn: () => apiClient<any[]>(`/api/v1/audit-logs?page=${page}&limit=${limit}`),
   });
 }

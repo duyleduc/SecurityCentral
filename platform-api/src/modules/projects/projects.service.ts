@@ -107,3 +107,28 @@ export async function getSummary(orgId: string, id: string) {
     findings: findingsBySeverity,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Tag keys — collect distinct tag keys from all assets in a project (or org-wide)
+// ---------------------------------------------------------------------------
+
+export async function getTagKeys(orgId: string, projectId?: string): Promise<string[]> {
+  const where = projectId ? { projectId } : { orgId };
+
+  const [endpoints, servers] = await Promise.all([
+    prisma.monitoredEndpoint.findMany({ where: { ...where, orgId }, select: { tags: true } }),
+    prisma.server.findMany({ where: { ...where, orgId }, select: { tags: true } }),
+  ]);
+
+  const keys = new Set<string>();
+  for (const item of [...endpoints, ...servers]) {
+    const tags = item.tags as Array<{ key: string; value: string }> | null;
+    if (Array.isArray(tags)) {
+      for (const t of tags) {
+        if (t.key) keys.add(t.key);
+      }
+    }
+  }
+
+  return Array.from(keys).sort();
+}

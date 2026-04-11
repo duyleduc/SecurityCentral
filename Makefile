@@ -72,6 +72,8 @@ build-scanner:
 
 build-agent:
 	cd sc-agent && go build -o bin/sc-agent ./cmd/sc-agent
+	cd sc-agent && GOOS=linux GOARCH=amd64 go build -o bin/sc-agent-linux-amd64 ./cmd/sc-agent
+	cd sc-agent && GOOS=linux GOARCH=arm64 go build -o bin/sc-agent-linux-arm64 ./cmd/sc-agent
 
 build-monitor:
 	cd sc-monitor && go build -o bin/sc-monitor ./cmd/sc-monitor

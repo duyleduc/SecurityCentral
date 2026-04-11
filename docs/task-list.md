@@ -231,25 +231,27 @@ Repositories, domains, and servers show scores with "why" breakdown. Dashboard s
 
 ### Backend
 
-- [ ] Socket.IO server setup (`ws/server.ts`) — JWT handshake, org-scoped rooms
-- [ ] WebSocket event hooks (`ws/hooks.ts`) — emit `finding:new`, `finding:resolved`, `scan:completed`, `agent:connected`, `agent:disconnected`, `cert:expiring`
-- [ ] Offline detection — `setInterval` every 5 min, flag agents that missed heartbeats
-- [ ] Org settings + notification preferences module
-- [ ] Audit log module
+- [x] Socket.IO server setup (`ws/server.ts`) — JWT handshake, org-scoped rooms
+- [x] WebSocket event hooks (`ws/hooks.ts`) — emit `finding:new`, `finding:resolved`, `scan:completed`, `agent:connected`, `agent:disconnected`, `cert:expiring`, `audit:new`, `server:metrics`, `endpoint:status-change`
+- [x] Offline detection — `setInterval` every 5 min, flag agents that missed heartbeats, emit `agent:disconnected`
+- [x] Org settings module (`modules/organizations/`) — org CRUD, member management, role updates
+- [x] Notification preferences module (`modules/notifications/`) — CRUD per channel + event type
+- [x] API keys management module (`modules/apikeys/`) — create (raw key shown once), list, revoke
+- [x] Audit log module (`modules/audit/`) — create entries, list with filters
 
 ### Frontend
 
-- [ ] WebSocket client (`ws/client.ts`) — connect, reconnect, handle events
-- [ ] Real-time React Query invalidation on WebSocket events
-- [ ] Settings page (org settings, notification preferences, API keys management)
-- [ ] Onboarding wizard (create project → add domain → install agent)
+- [x] WebSocket client (`ws/client.ts`) — connect, reconnect, handle events
+- [x] Real-time React Query invalidation on WebSocket events (`ws/useRealtimeEvents.ts` — mounted in AppShell)
+- [x] Settings page — 4 tabs: Organization (name, plan, team members), Integrations (GitHub/GitLab), API Keys (create/revoke), Notifications (event x channel toggle matrix)
+- [x] Onboarding wizard (`pages/Onboarding/`) — 3-step stepper: create project → add domain → install agent
 
 ### Deployment
 
-- [ ] Dockerfile for platform-api
-- [ ] Dockerfile for dashboard
-- [ ] Go cross-compile in Makefile (`linux/amd64` + `linux/arm64`)
-- [ ] Update `docker-compose.yml` to boot entire stack
+- [x] Dockerfile for platform-api (multi-stage: build + production alpine)
+- [x] Dockerfile for dashboard (multi-stage: build + nginx with SPA fallback + API proxy)
+- [x] Go cross-compile in Makefile (`linux/amd64` + `linux/arm64`)
+- [x] Update `docker-compose.yml` to boot entire stack (mysql + platform-api + dashboard)
 
 ### Done when
 

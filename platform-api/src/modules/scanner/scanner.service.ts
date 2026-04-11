@@ -8,6 +8,7 @@ import type { Prisma } from '@prisma/client';
 
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
+import { emitScanStarted, emitScanCompleted } from '../../ws/hooks.js';
 import { env } from '../../lib/env.js';
 import { AppError } from '../../middleware/errors.js';
 import { shallowClone, getChangedFiles, buildGitHubCloneUrl, buildGitLabCloneUrl } from '../../lib/clone.js';
@@ -110,6 +111,8 @@ async function runScan(
     data: { status: 'running', startedAt },
   });
 
+  emitScanStarted(repo.orgId, { id: scanId, repositoryId: repo.id, type: input.scanType ?? 'full' });
+
   let cleanup: (() => Promise<void>) | undefined;
 
   try {
@@ -167,6 +170,7 @@ async function runScan(
       data: { lastScanAt: new Date() },
     });
 
+    emitScanCompleted(repo.orgId, { id: scanId, repositoryId: repo.id, findingsTotal: created, status: 'completed' });
     logger.info('scan completed', { scanId, findings: scanResult.findings.length, duration });
   } catch (err) {
     const msg = stripTokens((err as Error).message);

@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errors.js';
 import { logger } from '../../lib/logger.js';
+import { emitAgentConnected, emitServerMetrics } from '../../ws/hooks.js';
 
 // ---------------------------------------------------------------------------
 // Install Tokens
@@ -13,6 +14,7 @@ interface CreateInstallTokenInput {
   readonly projectId?: string;
   readonly label: string;
   readonly expiresInHours: number;
+  readonly tags?: ReadonlyArray<{ key: string; value: string }>;
 }
 
 export async function createInstallToken(input: CreateInstallTokenInput) {
@@ -25,6 +27,7 @@ export async function createInstallToken(input: CreateInstallTokenInput) {
       projectId: input.projectId,
       tokenHash,
       label: input.label,
+      tags: input.tags ? JSON.parse(JSON.stringify(input.tags)) : [],
       expiresAt: new Date(Date.now() + input.expiresInHours * 60 * 60 * 1000),
     },
   });
@@ -100,11 +103,14 @@ export async function registerAgent(input: AgentRegisterInput) {
         osFamily: input.osFamily,
         osVersion: input.osVersion,
         status: 'online',
+        tags: installToken.tags ?? [],
         lastHeartbeat: new Date(),
         apiKeyHash,
       },
     });
   });
+
+  emitAgentConnected(installToken.orgId, { id: server.id, hostname: input.hostname });
 
   return {
     serverId: server.id,
@@ -168,6 +174,14 @@ export async function processHeartbeat(input: HeartbeatInput) {
       },
     }),
   ]);
+
+  emitServerMetrics(server.orgId, {
+    serverId: server.id,
+    cpu: input.metrics.cpu.avg,
+    memory: input.metrics.ram.avg,
+    disk: input.metrics.disk.usage,
+    urgent: input.urgent,
+  });
 
   // Auto-create findings from alerts
   if (input.alerts.length > 0) {

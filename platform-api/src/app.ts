@@ -16,6 +16,10 @@ import { repositoriesRouter } from './modules/repositories/repositories.router.j
 import { findingsRouter } from './modules/findings/findings.router.js';
 import { dashboardRouter } from './modules/dashboard/dashboard.router.js';
 import { monitorRouter } from './modules/monitor/monitor.router.js';
+import { auditRouter } from './modules/audit/audit.router.js';
+import { notificationsRouter } from './modules/notifications/notifications.router.js';
+import { apiKeysRouter } from './modules/apikeys/apikeys.router.js';
+import { organizationsRouter } from './modules/organizations/organizations.router.js';
 
 const app = express();
 
@@ -51,6 +55,10 @@ app.use('/api/v1/repositories', repositoriesRouter);
 app.use('/api/v1/findings', findingsRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
 app.use('/v1/monitor', monitorRouter);
+app.use('/api/v1/audit-logs', auditRouter);
+app.use('/api/v1/notifications', notificationsRouter);
+app.use('/api/v1/api-keys', apiKeysRouter);
+app.use('/api/v1/organization', organizationsRouter);
 
 // ---------------------------------------------------------------------------
 // Error handler (must be last)

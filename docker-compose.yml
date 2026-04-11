@@ -21,5 +21,30 @@ services:
       start_period: 10s
     command: --default-authentication-plugin=mysql_native_password
 
+  platform-api:
+    build: ./platform-api
+    container_name: sc-api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql://securitycentral:securitycentral@mysql:3306/securitycentral
+      JWT_SECRET: change-me-in-production
+      PORT: "3000"
+      NODE_ENV: production
+      CORS_ORIGINS: http://localhost,http://localhost:80
+    ports:
+      - "3000:3000"
+
+  dashboard:
+    build: ./dashboard
+    container_name: sc-dashboard
+    restart: unless-stopped
+    depends_on:
+      - platform-api
+    ports:
+      - "80:80"
+
 volumes:
   mysql-data:

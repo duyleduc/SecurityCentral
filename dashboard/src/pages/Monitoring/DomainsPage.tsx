@@ -11,8 +11,9 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import LockIcon from '@mui/icons-material/Lock';
-import { useEndpoints, useCreateEndpoint, useDeleteEndpoint, useTriggerCheck, useProjects } from '../../api/hooks';
+import { useEndpoints, useCreateEndpoint, useDeleteEndpoint, useTriggerCheck, useProjects, useTagKeys } from '../../api/hooks';
 import { useRealtimeHeartbeat } from '../../ws/useRealtimeHeartbeat';
+import { TagsInput, type Tag } from '../../components/TagsInput';
 
 const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
   healthy: { color: '#16a34a', label: 'Healthy' },
@@ -82,6 +83,7 @@ export function DomainsPage() {
               <TableRow>
                 <TableCell sx={{ width: 30 }} />
                 <TableCell>Endpoint</TableCell>
+                <TableCell align="center">Status</TableCell>
                 <TableCell align="center">SSL</TableCell>
                 <TableCell>Last Checked</TableCell>
                 <TableCell align="right">Response</TableCell>
@@ -93,7 +95,7 @@ export function DomainsPage() {
               {endpoints.map((ep) => {
                 const cfg = STATUS_CONFIG[ep.status] ?? STATUS_CONFIG.pending;
                 const lastHb = ep.heartbeats?.[0];
-                const sslDays = lastHb?.sslDaysLeft;
+                const ssl = (ep as any).latestSsl;
 
                 return (
                   <TableRow
@@ -112,13 +114,32 @@ export function DomainsPage() {
                             <Typography variant="caption" color="text.secondary">:{ep.port}</Typography>
                           )}
                         </Box>
-                        {ep.project && (
-                          <Chip label={ep.project.name} size="small" variant="outlined" sx={{ fontSize: '0.7rem', ml: 1 }} />
-                        )}
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                          {ep.project && (
+                            <Chip label={ep.project.name} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
+                          )}
+                          {((ep as any).tags as Array<{ key: string; value: string }> | undefined)?.map((t) => (
+                            <Chip key={t.key} label={t.value ? `${t.key}:${t.value}` : t.key} size="small"
+                              sx={{ fontSize: '0.65rem', height: 20, bgcolor: 'action.selected' }} />
+                          ))}
+                        </Stack>
                       </Stack>
                     </TableCell>
                     <TableCell align="center">
-                      <SslBadge daysLeft={sslDays} valid={lastHb?.sslValid} />
+                      <Chip
+                        label={cfg.label}
+                        size="small"
+                        sx={{
+                          bgcolor: cfg.color,
+                          color: '#fff',
+                          fontWeight: 600,
+                          fontSize: '0.65rem',
+                          height: 22,
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell align="center">
+                      <SslGradeBadge grade={ssl?.sslGrade} gradeColor={ssl?.sslGradeColor} daysLeft={ssl?.sslDaysLeft} valid={ssl?.sslValid} />
                     </TableCell>
                     <TableCell sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
                       {relativeTime(ep.lastCheckAt)}
@@ -182,26 +203,39 @@ export function DomainsPage() {
 }
 
 // ---------------------------------------------------------------------------
-// SSL Badge — mini grade indicator
+// SSL Grade Badge — shows actual grade from scan
 // ---------------------------------------------------------------------------
 
-function SslBadge({ daysLeft, valid }: { daysLeft?: number | null; valid?: boolean | null }) {
-  if (valid == null) {
-    return <Typography variant="caption" color="text.disabled">--</Typography>;
+function SslGradeBadge({ grade, gradeColor, daysLeft, valid }: {
+  grade?: string | null; gradeColor?: string | null; daysLeft?: number | null; valid?: boolean | null;
+}) {
+  if (!grade) {
+    return (
+      <Tooltip title="No SSL scan yet">
+        <Typography variant="caption" color="text.disabled">--</Typography>
+      </Tooltip>
+    );
   }
-  const expired = daysLeft != null && daysLeft <= 0;
-  const warning = daysLeft != null && daysLeft <= 30 && !expired;
-  const color = !valid || expired ? '#dc2626' : warning ? '#d97706' : '#16a34a';
-  const label = !valid || expired ? 'F' : warning ? 'B' : 'A';
+
+  const color = gradeColor ?? '#9e9e9e';
+  const tooltip = valid === false
+    ? 'Invalid certificate'
+    : daysLeft != null && daysLeft <= 0
+      ? 'Certificate expired'
+      : daysLeft != null
+        ? `${daysLeft} days remaining`
+        : grade;
 
   return (
-    <Tooltip title={!valid ? 'Invalid certificate' : expired ? 'Certificate expired' : `${daysLeft} days remaining`}>
+    <Tooltip title={tooltip}>
       <Box sx={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        width: 28, height: 28, borderRadius: '50%',
-        border: `2px solid ${color}`, fontWeight: 800, fontSize: '0.7rem', color,
+        width: 30, height: 30, borderRadius: '50%',
+        bgcolor: color, color: '#fff',
+        fontWeight: 800, fontSize: '0.7rem',
+        boxShadow: `0 0 0 3px ${color}22`,
       }}>
-        {label}
+        {grade}
       </Box>
     </Tooltip>
   );
@@ -219,7 +253,9 @@ function AddDomainsForm({ projects, onDone }: { projects: Array<{ id: string; na
   const [projectId, setProjectId] = useState('');
   const [interval, setInterval] = useState(15);
   const [timeout, setTimeout] = useState(30);
+  const [tags, setTags] = useState<Tag[]>([]);
   const createEndpoint = useCreateEndpoint();
+  const { data: existingKeys } = useTagKeys(projectId || undefined);
   const [result, setResult] = useState<{ count: number; error?: string } | null>(null);
 
   const handleSubmit = async () => {
@@ -242,6 +278,7 @@ function AddDomainsForm({ projects, onDone }: { projects: Array<{ id: string; na
           projectId: projectId || undefined,
           uptimeInterval: interval,
           uptimeTimeout: timeout,
+          tags: tags.length > 0 ? tags : undefined,
         });
         created++;
       } catch (err) {
@@ -299,6 +336,10 @@ function AddDomainsForm({ projects, onDone }: { projects: Array<{ id: string; na
             </Select>
           </FormControl>
         )}
+
+        <Box sx={{ mt: 1.5 }}>
+          <TagsInput tags={tags} onChange={setTags} existingKeys={existingKeys ?? []} />
+        </Box>
 
         {result && (
           <Alert severity={result.error ? 'warning' : 'success'} sx={{ mt: 1.5 }} onClose={() => setResult(null)}>

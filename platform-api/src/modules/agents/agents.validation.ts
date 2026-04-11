@@ -1,9 +1,15 @@
 import { z } from 'zod';
 
+const TagSchema = z.object({
+  key: z.string().min(1).max(50),
+  value: z.string().max(255).default(''),
+});
+
 export const CreateInstallTokenSchema = z.object({
   projectId: z.string().uuid().optional(),
   label: z.string().max(100).default(''),
   expiresInHours: z.number().int().min(1).max(168).default(24), // max 7 days
+  tags: z.array(TagSchema).max(20).default([]),
 });
 
 export const AgentRegisterSchema = z.object({

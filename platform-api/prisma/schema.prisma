@@ -86,6 +86,7 @@ model InstallToken {
   projectId String?   @map("project_id") @db.VarChar(36)
   tokenHash String    @map("token_hash") @db.VarChar(64)
   label     String    @default("") @db.VarChar(100)
+  tags      Json      @default("[]") @db.Json
   usedAt    DateTime? @map("used_at") @db.DateTime(3)
   usedBy    String?   @map("used_by") @db.VarChar(36)
   expiresAt DateTime  @map("expires_at") @db.DateTime(3)
@@ -135,6 +136,7 @@ model Server {
   osFamily      String?   @map("os_family") @db.VarChar(50)
   osVersion     String?   @map("os_version") @db.VarChar(50)
   status        String    @default("offline") @db.VarChar(20) // online | offline | warning | critical
+  tags          Json      @default("[]") @db.Json
   lastHeartbeat DateTime? @map("last_heartbeat") @db.DateTime(3)
   apiKeyHash    String?   @map("api_key_hash") @db.VarChar(64)
   createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
@@ -214,6 +216,8 @@ model MonitoredEndpoint {
   host            String   @db.VarChar(255)
   port            Int      @default(443)
   protocol        String   @default("https") @db.VarChar(10)
+  // Tags — [{key: "env", value: "prod"}, ...]
+  tags            Json     @default("[]") @db.Json
   // Uptime check settings
   uptimeInterval  Int      @default(15)  @map("uptime_interval")  // seconds between pings
   uptimeTimeout   Int      @default(30)  @map("uptime_timeout")   // seconds before timeout

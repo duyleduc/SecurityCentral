@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -15,11 +15,16 @@ import {
   DialogActions,
   TextField,
   Alert,
+  Tabs,
+  Tab,
+  IconButton,
+  Stack,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import StorageIcon from '@mui/icons-material/Storage';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useServers, useCreateInstallToken, type InstallToken } from '../../api/hooks';
+import { TagsInput, type Tag } from '../../components/TagsInput';
 
 function StatusColor(status: string): 'success' | 'warning' | 'error' | 'default' {
   switch (status) {
@@ -36,24 +41,64 @@ export function ServersPage() {
   const navigate = useNavigate();
 
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
   const [label, setLabel] = useState('');
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [arch, setArch] = useState<'amd64' | 'arm64'>('amd64');
   const [token, setToken] = useState<InstallToken | null>(null);
   const [copied, setCopied] = useState(false);
+  const [expiresIn, setExpiresIn] = useState('');
 
-  const handleCreate = async () => {
-    const result = await createToken.mutateAsync({ label: label || 'New server' });
+  const apiUrl = (import.meta.env.VITE_API_URL as string) || 'http://localhost:3000';
+
+  // Countdown timer
+  useEffect(() => {
+    if (step !== 2 || !token?.expiresAt) return;
+    const update = () => {
+      const diff = new Date(token.expiresAt).getTime() - Date.now();
+      if (diff <= 0) { setExpiresIn('Expired'); return; }
+      setExpiresIn(`${Math.floor(diff / 60000)}m ${Math.floor((diff % 60000) / 1000)}s`);
+    };
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [step, token?.expiresAt]);
+
+  const handleGenerate = async () => {
+    const result = await createToken.mutateAsync({
+      label: label || 'New server',
+      tags: tags.length > 0 ? tags : undefined,
+    });
     setToken(result);
+    setStep(2);
   };
 
   const handleClose = () => {
     setOpen(false);
+    setStep(1);
     setToken(null);
     setLabel('');
+    setTags([]);
     setCopied(false);
+    setExpiresIn('');
   };
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const installCommand = token
+    ? [
+        `# Download the agent binary (${arch})`,
+        `curl -fsSL -o sc-agent ${apiUrl}/v1/agents/download?arch=${arch}`,
+        ``,
+        `# Install and register`,
+        `chmod +x sc-agent`,
+        `sudo ./sc-agent install --token ${token.rawToken} --api-url ${apiUrl}`,
+        ``,
+        `# Start the agent`,
+        `sudo ./sc-agent run`,
+      ].join('\n')
+    : '';
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(installCommand);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -108,6 +153,10 @@ export function ServersPage() {
                     <Chip label={srv.status} size="small" color={StatusColor(srv.status)} />
                     {srv.osFamily && <Chip label={srv.osFamily} size="small" variant="outlined" />}
                     {srv.agentVersion && <Chip label={`v${srv.agentVersion}`} size="small" variant="outlined" />}
+                    {((srv as any).tags as Array<{ key: string; value: string }> | undefined)?.map((t) => (
+                      <Chip key={t.key} label={t.value ? `${t.key}:${t.value}` : t.key} size="small"
+                        sx={{ fontSize: '0.65rem', bgcolor: 'action.selected' }} />
+                    ))}
                   </Box>
                   {srv.lastHeartbeat && (
                     <Typography variant="caption" color="text.secondary">
@@ -125,60 +174,60 @@ export function ServersPage() {
       <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
         <DialogTitle>Add Server</DialogTitle>
         <DialogContent>
-          {!token ? (
-            <>
-              <Typography variant="body2" color="text.secondary" mb={2}>
-                Generate an install token, then run the agent install command on your server.
+          {step === 1 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                Configure your server, then generate an install command to run on the target machine.
               </Typography>
               <TextField
-                fullWidth
+                fullWidth size="small"
                 label="Label (optional)"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                margin="normal"
                 placeholder="e.g., prod-web-1"
               />
-            </>
-          ) : (
-            <>
-              <Alert severity="success" sx={{ mb: 2 }}>
-                Install token created! Copy the command below and run it on your server.
+              <TagsInput tags={tags} onChange={setTags} existingKeys={[]} />
+
+              {createToken.isError && (
+                <Alert severity="error">Failed to create install token. Please try again.</Alert>
+              )}
+            </Box>
+          )}
+
+          {step === 2 && token && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+              <Alert severity="info">
+                Run this command on the target server. Token expires in <strong>{expiresIn}</strong>.
               </Alert>
 
-              <Typography variant="subtitle2" mb={1}>Install command:</Typography>
-              <Box
-                sx={{
-                  bgcolor: 'background.default',
-                  p: 2,
-                  borderRadius: 1,
-                  fontFamily: 'monospace',
-                  fontSize: 13,
-                  position: 'relative',
-                  wordBreak: 'break-all',
-                }}
-              >
-                sc-agent install --token {token.rawToken} --api-url http://YOUR_API_HOST:3000
-                <Button
-                  size="small"
-                  startIcon={<ContentCopyIcon />}
-                  onClick={() => handleCopy(`sc-agent install --token ${token.rawToken} --api-url http://YOUR_API_HOST:3000`)}
-                  sx={{ position: 'absolute', top: 4, right: 4 }}
-                >
-                  {copied ? 'Copied!' : 'Copy'}
-                </Button>
-              </Box>
+              <Tabs value={arch} onChange={(_, v) => setArch(v)} sx={{ minHeight: 36 }}>
+                <Tab label="Linux amd64" value="amd64" sx={{ minHeight: 36, py: 0 }} />
+                <Tab label="Linux arm64" value="arm64" sx={{ minHeight: 36, py: 0 }} />
+              </Tabs>
 
-              <Typography variant="body2" color="text.secondary" mt={2}>
-                Token expires: {new Date(token.expiresAt).toLocaleString()}
+              <Box sx={{ position: 'relative' }}>
+                <TextField
+                  multiline fullWidth minRows={3}
+                  value={installCommand}
+                  slotProps={{ input: { readOnly: true, sx: { fontFamily: 'monospace', fontSize: 13 } } }}
+                />
+                <IconButton size="small" onClick={handleCopy} sx={{ position: 'absolute', top: 8, right: 8 }} title="Copy to clipboard">
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </Box>
+              {copied && <Typography variant="caption" color="success.main">Copied to clipboard</Typography>}
+
+              <Typography variant="body2" color="text.secondary">
+                The agent binary handles everything: registration, config creation, and systemd service setup.
               </Typography>
-            </>
+            </Box>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleClose}>Close</Button>
-          {!token && (
-            <Button variant="contained" onClick={handleCreate} disabled={createToken.isPending}>
-              Generate Token
+          <Button onClick={handleClose}>{step === 2 ? 'Done' : 'Cancel'}</Button>
+          {step === 1 && (
+            <Button variant="contained" onClick={handleGenerate} disabled={createToken.isPending}>
+              {createToken.isPending ? 'Generating...' : 'Generate Install Command'}
             </Button>
           )}
         </DialogActions>

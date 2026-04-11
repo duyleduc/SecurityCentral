@@ -14,10 +14,11 @@ interface CreateEndpointInput {
   readonly protocol: string;
   readonly uptimeInterval?: number;
   readonly uptimeTimeout?: number;
+  readonly tags?: ReadonlyArray<{ key: string; value: string }>;
 }
 
 export async function list(orgId: string) {
-  return prisma.monitoredEndpoint.findMany({
+  const endpoints = await prisma.monitoredEndpoint.findMany({
     where: { orgId },
     include: {
       project: { select: { id: true, name: true } },
@@ -28,6 +29,36 @@ export async function list(orgId: string) {
     },
     orderBy: { createdAt: 'desc' },
   });
+
+  if (endpoints.length === 0) return endpoints;
+
+  // Fetch latest SSL heartbeat per endpoint
+  const sslHbs = await Promise.all(
+    endpoints.map((ep) =>
+      prisma.endpointHeartbeat.findFirst({
+        where: { endpointId: ep.id, sslValid: { not: null } },
+        orderBy: { createdAt: 'desc' },
+        select: { endpointId: true, sslValid: true, sslDaysLeft: true, details: true },
+      }),
+    ),
+  );
+
+  const sslByEndpoint = new Map<string, { sslValid: boolean | null; sslDaysLeft: number | null; sslGrade: string | null; sslGradeColor: string | null }>();
+  for (const hb of sslHbs) {
+    if (!hb) continue;
+    const details = hb.details as any;
+    sslByEndpoint.set(hb.endpointId, {
+      sslValid: hb.sslValid,
+      sslDaysLeft: hb.sslDaysLeft,
+      sslGrade: details?.ssl?.grade ?? null,
+      sslGradeColor: details?.ssl?.gradeColor ?? null,
+    });
+  }
+
+  return endpoints.map((ep) => ({
+    ...ep,
+    latestSsl: sslByEndpoint.get(ep.id) ?? null,
+  }));
 }
 
 export async function getById(orgId: string, id: string) {
@@ -53,6 +84,7 @@ export async function create(input: CreateEndpointInput) {
       protocol: input.protocol,
       uptimeInterval: input.uptimeInterval ?? 15,
       uptimeTimeout: input.uptimeTimeout ?? 30,
+      tags: input.tags ? JSON.parse(JSON.stringify(input.tags)) : [],
       nextCheckAt: new Date(now.getTime() + 1000), // first uptime check almost immediately
     },
   });
@@ -63,12 +95,16 @@ export async function create(input: CreateEndpointInput) {
   return endpoint;
 }
 
-export async function update(orgId: string, id: string, data: { uptimeInterval?: number; uptimeTimeout?: number }) {
+export async function update(orgId: string, id: string, data: { uptimeInterval?: number; uptimeTimeout?: number; tags?: Array<{ key: string; value: string }> }) {
   const existing = await prisma.monitoredEndpoint.findFirst({ where: { id, orgId } });
   if (!existing) {
     throw new AppError('RESOURCE_NOT_FOUND', 'Endpoint not found');
   }
-  return prisma.monitoredEndpoint.update({ where: { id }, data });
+  const updateData: Record<string, unknown> = {};
+  if (data.uptimeInterval !== undefined) updateData.uptimeInterval = data.uptimeInterval;
+  if (data.uptimeTimeout !== undefined) updateData.uptimeTimeout = data.uptimeTimeout;
+  if (data.tags !== undefined) updateData.tags = JSON.parse(JSON.stringify(data.tags));
+  return prisma.monitoredEndpoint.update({ where: { id }, data: updateData });
 }
 
 export async function remove(orgId: string, id: string) {
@@ -87,6 +123,18 @@ export async function triggerCheck(orgId: string, id: string) {
   // Run both checks
   const result = await performFullCheck(endpoint.id);
   return result;
+}
+
+export async function getLatestSslScan(orgId: string, id: string) {
+  const endpoint = await prisma.monitoredEndpoint.findFirst({ where: { id, orgId } });
+  if (!endpoint) {
+    throw new AppError('RESOURCE_NOT_FOUND', 'Endpoint not found');
+  }
+  const sslHb = await prisma.endpointHeartbeat.findFirst({
+    where: { endpointId: id, sslValid: { not: null } },
+    orderBy: { createdAt: 'desc' },
+  });
+  return sslHb;
 }
 
 export async function triggerSslCheck(orgId: string, id: string) {

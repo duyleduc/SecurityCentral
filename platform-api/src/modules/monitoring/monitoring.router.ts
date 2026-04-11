@@ -99,6 +99,21 @@ monitoringRouter.post(
   },
 );
 
+// GET /api/v1/monitoring/endpoints/:id/ssl-scan — get latest SSL scan result
+monitoringRouter.get(
+  '/:id/ssl-scan',
+  requirePermission('view_dashboard'),
+  validate({ params: EndpointIdParamsSchema }),
+  async (req, res, next) => {
+    try {
+      const result = await monitoringService.getLatestSslScan(req.auth!.orgId, req.params.id);
+      res.json(successEnvelope(result));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // POST /api/v1/monitoring/endpoints/:id/ssl-scan — trigger SSL/DNS scan, return full report
 monitoringRouter.post(
   '/:id/ssl-scan',

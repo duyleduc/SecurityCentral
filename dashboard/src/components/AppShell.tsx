@@ -24,6 +24,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import LogoutIcon from '@mui/icons-material/Logout';
 import ShieldIcon from '@mui/icons-material/Shield';
 import { useAuth } from '../auth/AuthContext';
+import { useRealtimeEvents } from '../ws/useRealtimeEvents';
 
 const DRAWER_WIDTH = 240;
 
@@ -42,6 +43,9 @@ export function AppShell() {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Subscribe to all real-time WebSocket events
+  useRealtimeEvents();
 
   const drawer = (
     <Box>

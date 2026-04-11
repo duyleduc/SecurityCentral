@@ -21,6 +21,7 @@ import { RepositoriesPage } from './pages/Repositories/RepositoriesPage';
 import { RepositoryDetailPage } from './pages/Repositories/RepositoryDetailPage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
 import { RepoSelectionPage } from './pages/Settings/RepoSelectionPage';
+import { OnboardingPage } from './pages/Onboarding/OnboardingPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,6 +63,7 @@ export default function App() {
                 <Route path="/findings/:id" element={<FindingDetailPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/integrations/:provider/repos" element={<RepoSelectionPage />} />
+                <Route path="/onboarding" element={<OnboardingPage />} />
               </Route>
             </Routes>
           </AuthProvider>

@@ -13,7 +13,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import WarningIcon from '@mui/icons-material/Warning';
-import { useEndpoint, useHeartbeats, useTriggerCheck, useTriggerSslScan, useUpdateEndpoint } from '../../api/hooks';
+import { useEndpoint, useHeartbeats, useTriggerCheck, useTriggerSslScan, useLatestSslScan, useUpdateEndpoint } from '../../api/hooks';
 import { useRealtimeHeartbeat } from '../../ws/useRealtimeHeartbeat';
 
 const STATUS_LABEL: Record<string, { color: string; text: string }> = {
@@ -28,6 +28,7 @@ export function DomainDetailPage() {
   const navigate = useNavigate();
   const { data: endpoint, isLoading } = useEndpoint(id ?? '');
   const { data: heartbeats } = useHeartbeats(id ?? '', 100);
+  const { data: latestSslHb } = useLatestSslScan(id ?? '');
   const triggerCheck = useTriggerCheck();
   const sslScan = useTriggerSslScan();
   const updateEndpoint = useUpdateEndpoint();
@@ -46,9 +47,9 @@ export function DomainDetailPage() {
 
   const ep = endpoint as any;
   const statusInfo = STATUS_LABEL[ep.status] ?? STATUS_LABEL.pending;
-  const sslHb = heartbeats?.find((h) => h.sslValid != null);
-  const sslDetails = sslHb?.details as any;
+  const sslDetails = latestSslHb?.details as any;
   const sslInfo = sslDetails?.ssl;
+  const dnsInfo = sslDetails?.dns;
   const upCount = uptimeBeats.filter((h) => h.isUp).length;
   const latestBeat = uptimeBeats[0];
   const uptimePct = uptimeBeats.length > 0 ? ((upCount / uptimeBeats.length) * 100).toFixed(1) : null;
@@ -188,7 +189,7 @@ export function DomainDetailPage() {
 
       {/* SSL Report Dialog */}
       {sslInfo && (
-        <SslReportDialog open={sslReportOpen} onClose={() => setSslReportOpen(false)} ssl={sslInfo} dns={sslDetails?.dns} />
+        <SslReportDialog open={sslReportOpen} onClose={() => setSslReportOpen(false)} ssl={sslInfo} dns={dnsInfo} />
       )}
 
       {/* Settings Dialog */}

@@ -84,6 +84,21 @@ projectsRouter.delete(
   },
 );
 
+// GET /api/v1/projects/:id/tag-keys — distinct tag keys across all assets in a project
+projectsRouter.get(
+  '/:id/tag-keys',
+  requirePermission('view_dashboard'),
+  validate({ params: ProjectIdParamsSchema }),
+  async (req, res, next) => {
+    try {
+      const keys = await projectsService.getTagKeys(req.auth!.orgId, req.params.id);
+      res.json(successEnvelope(keys));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // GET /api/v1/projects/:id/summary
 projectsRouter.get(
   '/:id/summary',

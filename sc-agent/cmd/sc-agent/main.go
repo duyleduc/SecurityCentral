@@ -8,8 +8,8 @@ import (
 
 	"github.com/securitycentral/sc-agent/internal/agent"
 	"github.com/securitycentral/sc-agent/internal/config"
+	"github.com/securitycentral/sc-agent/internal/install"
 	"github.com/securitycentral/sc-agent/internal/logging"
-	"github.com/securitycentral/sc-agent/internal/platform"
 	"github.com/securitycentral/sc-agent/internal/sysinfo"
 )
 
@@ -76,58 +76,15 @@ func installCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "install",
-		Short: "Register this agent with the platform using an install token",
+		Short: "Register this agent with the platform, install binary, and start systemd service",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if token == "" {
 				return fmt.Errorf("--token is required")
 			}
-
-			log := logging.New(logging.LevelInfo)
-			sys := sysinfo.GetSystemInfo()
-
 			if apiURL == "" {
 				apiURL = "http://localhost:3000"
 			}
-
-			client := platform.NewClient(apiURL, "")
-			resp, err := client.Register(platform.RegisterRequest{
-				Token:        token,
-				Hostname:     sys.Hostname,
-				OSFamily:     sys.OS,
-				OSVersion:    sys.Version,
-				AgentVersion: version,
-			})
-			if err != nil {
-				return fmt.Errorf("registration failed: %w", err)
-			}
-
-			cfg := config.DefaultConfig()
-			cfg.APIBaseURL = apiURL
-			cfg.AgentID = resp.AgentID
-			cfg.APIKey = resp.APIKey
-
-			if err := os.MkdirAll("/etc/securitycentral", 0755); err != nil {
-				// Try local dir as fallback
-				configPath = "./agent.json"
-			}
-
-			if err := cfg.SaveToFile(configPath); err != nil {
-				return fmt.Errorf("save config: %w", err)
-			}
-
-			log.Info("agent registered", map[string]interface{}{
-				"serverId": resp.ServerID,
-				"agentId":  resp.AgentID,
-				"config":   configPath,
-			})
-
-			fmt.Printf("Agent registered successfully!\n")
-			fmt.Printf("  Server ID: %s\n", resp.ServerID)
-			fmt.Printf("  Agent ID:  %s\n", resp.AgentID)
-			fmt.Printf("  Config:    %s\n", configPath)
-			fmt.Printf("\nStart the agent with: sc-agent run\n")
-
-			return nil
+			return install.Run(token, apiURL)
 		},
 	}
 
