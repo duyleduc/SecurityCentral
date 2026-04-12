@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { existsSync, createReadStream } from 'node:fs';
+import { existsSync, createReadStream, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { validate } from '../../middleware/validate.js';
@@ -57,6 +57,18 @@ installTokensRouter.get('/', requirePermission('manage_projects'), async (req, r
 // ---------------------------------------------------------------------------
 // Agent Routes (no JWT auth — agents use their own key or install token)
 // ---------------------------------------------------------------------------
+
+// GET /v1/agents/version — return latest agent version (no auth, used by sc-agent update)
+agentRouter.get('/version', (req, res) => {
+  const versionFile = resolve(process.cwd(), '..', 'sc-agent', 'VERSION');
+  let version = 'unknown';
+  try {
+    version = readFileSync(versionFile, 'utf-8').trim();
+  } catch {
+    logger.warn('agent VERSION file not found', { path: versionFile });
+  }
+  res.json(successEnvelope({ version, changelog: '' }));
+});
 
 // GET /v1/agents/download?arch=amd64|arm64 — serve Linux agent binary (no auth)
 agentRouter.get('/download', (req, res) => {

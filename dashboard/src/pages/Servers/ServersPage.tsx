@@ -25,7 +25,8 @@ import AddIcon from '@mui/icons-material/Add';
 import StorageIcon from '@mui/icons-material/Storage';
 import FolderIcon from '@mui/icons-material/Folder';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import { useServers, useProjects, useCreateInstallToken, type InstallToken } from '../../api/hooks';
+import UpgradeIcon from '@mui/icons-material/SystemUpdateAlt';
+import { useServers, useProjects, useCreateInstallToken, useAgentLatestVersion, type InstallToken } from '../../api/hooks';
 import { TagsInput, type Tag } from '../../components/TagsInput';
 
 function StatusColor(status: string): 'success' | 'warning' | 'error' | 'default' {
@@ -42,6 +43,7 @@ function StatusColor(status: string): 'success' | 'warning' | 'error' | 'default
 export function ServersPage() {
   const { data: servers, isLoading } = useServers();
   const { data: projects } = useProjects();
+  const { data: latestAgent } = useAgentLatestVersion();
   const createToken = useCreateInstallToken();
   const navigate = useNavigate();
 
@@ -164,6 +166,9 @@ export function ServersPage() {
                     )}
                     {srv.osFamily && <Chip label={srv.osFamily} size="small" variant="outlined" />}
                     {srv.agentVersion && <Chip label={`v${srv.agentVersion}`} size="small" variant="outlined" />}
+                    {srv.agentVersion && latestAgent?.version && srv.agentVersion !== latestAgent.version && srv.agentVersion !== 'dev' && (
+                      <Chip icon={<UpgradeIcon sx={{ fontSize: 14 }} />} label="update" size="small" color="info" variant="outlined" />
+                    )}
                   </Box>
                   {srv.tags.length > 0 && (
                     <Box display="flex" gap={0.5} flexWrap="wrap" mb={1}>

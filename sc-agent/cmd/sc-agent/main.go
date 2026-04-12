@@ -11,9 +11,19 @@ import (
 	"github.com/securitycentral/sc-agent/internal/install"
 	"github.com/securitycentral/sc-agent/internal/logging"
 	"github.com/securitycentral/sc-agent/internal/sysinfo"
+	"github.com/securitycentral/sc-agent/internal/updater"
 )
 
-const version = "0.1.0"
+// Version is injected at build time via -ldflags:
+//
+//	go build -ldflags "-X main.version=1.2.3" ./cmd/sc-agent
+//
+// Falls back to "dev" for local development builds.
+var version = "dev"
+
+// GetVersion returns the build-time version string.
+// Exported so other packages can access it.
+func GetVersion() string { return version }
 
 var configPath string
 
@@ -29,6 +39,8 @@ func main() {
 	rootCmd.AddCommand(runCmd())
 	rootCmd.AddCommand(installCmd())
 	rootCmd.AddCommand(statusCmd())
+	rootCmd.AddCommand(updateCmd())
+	rootCmd.AddCommand(uninstallCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -59,6 +71,7 @@ func runCmd() *cobra.Command {
 			ctx, cancel := agent.WaitForShutdown(log)
 			defer cancel()
 
+			agent.Version = version
 			a := agent.New(cfg, log)
 			a.Run(ctx)
 
@@ -97,7 +110,7 @@ func installCmd() *cobra.Command {
 func statusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
-		Short: "Show agent status and last heartbeat info",
+		Short: "Show agent status and current metrics",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.LoadFromFile(configPath)
 			if err != nil {
@@ -106,6 +119,7 @@ func statusCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Agent Status\n")
+			fmt.Printf("  Version:   %s\n", version)
 			fmt.Printf("  Agent ID:  %s\n", cfg.AgentID)
 			fmt.Printf("  API URL:   %s\n", cfg.APIBaseURL)
 			fmt.Printf("  Config:    %s\n", configPath)
@@ -119,6 +133,35 @@ func statusCmd() *cobra.Command {
 			}
 
 			return nil
+		},
+	}
+}
+
+func updateCmd() *cobra.Command {
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:   "update",
+		Short: "Check for and apply agent updates from the platform",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromFile(configPath)
+			if err != nil {
+				return fmt.Errorf("load config: %w", err)
+			}
+			return updater.Update(cfg.APIBaseURL, version, force)
+		},
+	}
+
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "force update even if already on latest version")
+	return cmd
+}
+
+func uninstallCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "uninstall",
+		Short: "Stop the agent service, remove binary and config",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return updater.Uninstall()
 		},
 	}
 }

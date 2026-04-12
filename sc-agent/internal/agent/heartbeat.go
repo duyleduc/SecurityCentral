@@ -11,6 +11,9 @@ import (
 	"github.com/securitycentral/sc-agent/internal/sysinfo"
 )
 
+// Version is set by main at startup. Used in heartbeat system data.
+var Version = "dev"
+
 const (
 	normalInterval = 60 * time.Second
 	urgentDebounce = 15 * time.Second
@@ -221,7 +224,7 @@ func (a *Agent) sendLoop(ctx context.Context) {
 		OSVersion:    sysInfo.Version,
 		Kernel:       sysInfo.Kernel,
 		Arch:         sysInfo.Arch,
-		AgentVersion: "0.2.0",
+		AgentVersion: Version,
 		CPUCores:     sysInfo.CPUCores,
 		CPUModel:     sysInfo.CPUModel,
 		TotalRAMMB:   sysInfo.TotalRAMMB,

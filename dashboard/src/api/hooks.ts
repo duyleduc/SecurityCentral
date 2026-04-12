@@ -380,6 +380,14 @@ export function usePackageInventory(id: string) {
   });
 }
 
+export function useAgentLatestVersion() {
+  return useQuery({
+    queryKey: ['agent-version'],
+    queryFn: () => apiClient<{ version: string; changelog: string }>('/v1/agents/version'),
+    staleTime: 5 * 60_000,
+  });
+}
+
 export function useUpdateServer() {
   const qc = useQueryClient();
   return useMutation({

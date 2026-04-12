@@ -45,6 +45,8 @@ func (c *auditCollector) Collect() (*Snapshot, error) {
 	results = append(results, auditUsers()...)
 	results = append(results, auditFilesystem()...)
 	results = append(results, auditContainerRuntime()...)
+	results = append(results, auditSSHDeep()...)
+	results = append(results, auditServices()...)
 
 	return &Snapshot{Key: "audit", Data: AuditData{Results: results}, At: time.Now()}, nil
 }
@@ -465,5 +467,347 @@ func auditContainerRuntime() []AuditResult {
 		}
 	}
 
+	return r
+}
+
+// ---------------------------------------------------------------------------
+// SSH deep config audit (ciphers, MACs, KEX, host keys)
+// ---------------------------------------------------------------------------
+
+// Weak algorithms that should be rejected.
+var (
+	weakCiphers = map[string]bool{
+		"arcfour": true, "arcfour128": true, "arcfour256": true,
+		"3des-cbc": true, "blowfish-cbc": true, "cast128-cbc": true,
+		"aes128-cbc": true, "aes192-cbc": true, "aes256-cbc": true,
+	}
+	weakMACs = map[string]bool{
+		"hmac-md5": true, "hmac-md5-96": true,
+		"hmac-sha1": true, "hmac-sha1-96": true,
+		"hmac-ripemd160": true,
+	}
+	weakKEX = map[string]bool{
+		"diffie-hellman-group1-sha1":         true,
+		"diffie-hellman-group14-sha1":        true,
+		"diffie-hellman-group-exchange-sha1": true,
+	}
+	weakHostKeys = map[string]bool{
+		"ssh-dss": true,
+	}
+)
+
+func auditSSHDeep() []AuditResult {
+	var r []AuditResult
+
+	out, err := exec.Command("sshd", "-T").CombinedOutput()
+	if err != nil {
+		r = append(r, AuditResult{ID: "ssh.deep_config", Category: "SSH", Title: "SSH effective config",
+			Status: "warn", Severity: "low", Detail: "Could not read sshd -T: " + err.Error()})
+		return r
+	}
+
+	config := make(map[string]string)
+	for _, line := range strings.Split(string(out), "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), " ", 2)
+		if len(parts) == 2 {
+			config[strings.ToLower(parts[0])] = parts[1]
+		}
+	}
+
+	// Ciphers
+	if ciphers, ok := config["ciphers"]; ok {
+		found := findWeakItems(ciphers, weakCiphers)
+		if len(found) > 0 {
+			r = append(r, AuditResult{ID: "ssh.weak_ciphers", Category: "SSH", Title: "SSH weak ciphers",
+				Status: "fail", Severity: "critical", Detail: fmt.Sprintf("Weak ciphers enabled: %s", strings.Join(found, ", "))})
+		} else {
+			r = append(r, AuditResult{ID: "ssh.weak_ciphers", Category: "SSH", Title: "SSH ciphers",
+				Status: "pass", Severity: "critical", Detail: "No weak ciphers enabled"})
+		}
+	}
+
+	// MACs
+	if macs, ok := config["macs"]; ok {
+		found := findWeakItems(macs, weakMACs)
+		if len(found) > 0 {
+			r = append(r, AuditResult{ID: "ssh.weak_macs", Category: "SSH", Title: "SSH weak MACs",
+				Status: "fail", Severity: "critical", Detail: fmt.Sprintf("Weak MACs enabled: %s", strings.Join(found, ", "))})
+		} else {
+			r = append(r, AuditResult{ID: "ssh.weak_macs", Category: "SSH", Title: "SSH MACs",
+				Status: "pass", Severity: "critical", Detail: "No weak MACs enabled"})
+		}
+	}
+
+	// KEX algorithms
+	if kex, ok := config["kexalgorithms"]; ok {
+		found := findWeakItems(kex, weakKEX)
+		if len(found) > 0 {
+			r = append(r, AuditResult{ID: "ssh.weak_kex", Category: "SSH", Title: "SSH weak KEX algorithms",
+				Status: "fail", Severity: "critical", Detail: fmt.Sprintf("Weak KEX algorithms: %s", strings.Join(found, ", "))})
+		} else {
+			r = append(r, AuditResult{ID: "ssh.weak_kex", Category: "SSH", Title: "SSH KEX algorithms",
+				Status: "pass", Severity: "critical", Detail: "No weak KEX algorithms enabled"})
+		}
+	}
+
+	// Host key algorithms
+	if hka, ok := config["hostkeyalgorithms"]; ok {
+		found := findWeakItems(hka, weakHostKeys)
+		if len(found) > 0 {
+			r = append(r, AuditResult{ID: "ssh.weak_hostkey", Category: "SSH", Title: "SSH weak host key algorithms",
+				Status: "fail", Severity: "critical", Detail: fmt.Sprintf("Weak host key algorithms: %s (DSA is broken)", strings.Join(found, ", "))})
+		} else {
+			r = append(r, AuditResult{ID: "ssh.weak_hostkey", Category: "SSH", Title: "SSH host key algorithms",
+				Status: "pass", Severity: "critical", Detail: "No weak host key algorithms (no DSA)"})
+		}
+	}
+
+	// MaxAuthTries
+	if val, ok := config["maxauthtries"]; ok {
+		n, _ := strconv.Atoi(val)
+		if n > 4 {
+			r = append(r, AuditResult{ID: "ssh.max_auth_tries", Category: "SSH", Title: "SSH MaxAuthTries",
+				Status: "fail", Severity: "medium", Detail: fmt.Sprintf("MaxAuthTries=%d (should be <= 4)", n)})
+		} else {
+			r = append(r, AuditResult{ID: "ssh.max_auth_tries", Category: "SSH", Title: "SSH MaxAuthTries",
+				Status: "pass", Severity: "medium", Detail: fmt.Sprintf("MaxAuthTries=%d", n)})
+		}
+	}
+
+	// X11Forwarding
+	if val, ok := config["x11forwarding"]; ok && val == "yes" {
+		r = append(r, AuditResult{ID: "ssh.x11forwarding", Category: "SSH", Title: "SSH X11 forwarding",
+			Status: "fail", Severity: "medium", Detail: "X11Forwarding is enabled (should be no unless needed)"})
+	} else {
+		r = append(r, AuditResult{ID: "ssh.x11forwarding", Category: "SSH", Title: "SSH X11 forwarding",
+			Status: "pass", Severity: "medium", Detail: "X11Forwarding is disabled"})
+	}
+
+	// AllowTcpForwarding
+	if val, ok := config["allowtcpforwarding"]; ok && val == "yes" {
+		r = append(r, AuditResult{ID: "ssh.tcp_forwarding", Category: "SSH", Title: "SSH TCP forwarding",
+			Status: "warn", Severity: "low", Detail: "AllowTcpForwarding is enabled (consider disabling if not needed)"})
+	} else {
+		r = append(r, AuditResult{ID: "ssh.tcp_forwarding", Category: "SSH", Title: "SSH TCP forwarding",
+			Status: "pass", Severity: "low", Detail: "AllowTcpForwarding is disabled"})
+	}
+
+	return r
+}
+
+func findWeakItems(commaSep string, weakSet map[string]bool) []string {
+	var found []string
+	for _, item := range strings.Split(commaSep, ",") {
+		item = strings.TrimSpace(item)
+		if weakSet[item] {
+			found = append(found, item)
+		}
+	}
+	return found
+}
+
+// ---------------------------------------------------------------------------
+// Service hardening audit (Redis, DB, NFS, legacy protocols)
+// ---------------------------------------------------------------------------
+
+func auditServices() []AuditResult {
+	var r []AuditResult
+
+	listeners := collectListeningPorts()
+	portSet := make(map[uint32]PortInfo)
+	for _, p := range listeners {
+		portSet[p.Port] = p
+	}
+
+	// Legacy protocols
+	legacyPorts := []struct {
+		port uint32
+		name string
+	}{
+		{23, "Telnet"},
+		{21, "FTP"},
+		{111, "rpcbind/portmapper"},
+	}
+	for _, lp := range legacyPorts {
+		if _, found := portSet[lp.port]; found {
+			r = append(r, AuditResult{
+				ID: fmt.Sprintf("svc.legacy_%d", lp.port), Category: "Services",
+				Title:    fmt.Sprintf("Legacy protocol: %s (port %d)", lp.name, lp.port),
+				Status:   "fail", Severity: "critical",
+				Detail:   fmt.Sprintf("%s is running on port %d. Replace with secure alternative.", lp.name, lp.port),
+			})
+		}
+	}
+
+	// Redis
+	if _, found := portSet[6379]; found {
+		r = append(r, auditRedis()...)
+	}
+
+	// MySQL/MariaDB
+	if _, found := portSet[3306]; found {
+		r = append(r, auditMySQLBind()...)
+	}
+
+	// PostgreSQL
+	if _, found := portSet[5432]; found {
+		r = append(r, auditPostgresTrust()...)
+	}
+
+	// NFS
+	r = append(r, auditNFSExports()...)
+
+	// SNMP
+	if _, found := portSet[161]; found {
+		r = append(r, auditSNMP()...)
+	}
+
+	return r
+}
+
+func auditRedis() []AuditResult {
+	var r []AuditResult
+
+	out, err := exec.Command("redis-cli", "CONFIG", "GET", "requirepass").Output()
+	if err == nil {
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+		passVal := ""
+		if len(lines) >= 2 {
+			passVal = strings.TrimSpace(lines[1])
+		}
+		if passVal == "" || passVal == "(empty array)" || passVal == "(empty list or set)" {
+			r = append(r, AuditResult{ID: "svc.redis_auth", Category: "Services", Title: "Redis authentication",
+				Status: "fail", Severity: "critical", Detail: "Redis has no requirepass set. Anyone who can reach port 6379 has full access."})
+		} else {
+			r = append(r, AuditResult{ID: "svc.redis_auth", Category: "Services", Title: "Redis authentication",
+				Status: "pass", Severity: "critical", Detail: "Redis requirepass is set"})
+		}
+	}
+
+	out, err = exec.Command("redis-cli", "CONFIG", "GET", "bind").Output()
+	if err == nil {
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+		bindVal := ""
+		if len(lines) >= 2 {
+			bindVal = strings.TrimSpace(lines[1])
+		}
+		if bindVal == "" || bindVal == "0.0.0.0" {
+			r = append(r, AuditResult{ID: "svc.redis_bind", Category: "Services", Title: "Redis bind address",
+				Status: "fail", Severity: "high", Detail: fmt.Sprintf("Redis bind: %q (should be 127.0.0.1)", bindVal)})
+		} else {
+			r = append(r, AuditResult{ID: "svc.redis_bind", Category: "Services", Title: "Redis bind address",
+				Status: "pass", Severity: "high", Detail: fmt.Sprintf("Redis bind: %s", bindVal)})
+		}
+	}
+
+	return r
+}
+
+func auditMySQLBind() []AuditResult {
+	var r []AuditResult
+	for _, path := range []string{"/etc/mysql/mysql.conf.d/mysqld.cnf", "/etc/mysql/my.cnf", "/etc/my.cnf"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "bind-address") || strings.HasPrefix(line, "bind_address") {
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) == 2 {
+					addr := strings.TrimSpace(parts[1])
+					if addr == "0.0.0.0" || addr == "*" || addr == "::" {
+						r = append(r, AuditResult{ID: "svc.mysql_bind", Category: "Services", Title: "MySQL bind address",
+							Status: "fail", Severity: "high", Detail: fmt.Sprintf("MySQL bind-address=%s (should be 127.0.0.1)", addr)})
+					} else {
+						r = append(r, AuditResult{ID: "svc.mysql_bind", Category: "Services", Title: "MySQL bind address",
+							Status: "pass", Severity: "high", Detail: fmt.Sprintf("MySQL bind-address=%s", addr)})
+					}
+					return r
+				}
+			}
+		}
+	}
+	return r
+}
+
+func auditPostgresTrust() []AuditResult {
+	var r []AuditResult
+	matches, _ := filepath.Glob("/etc/postgresql/*/main/pg_hba.conf")
+	for _, path := range matches {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var trustLines []string
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "#") || line == "" {
+				continue
+			}
+			fields := strings.Fields(line)
+			if len(fields) >= 4 {
+				authMethod := fields[len(fields)-1]
+				connType := fields[0]
+				if authMethod == "trust" && connType != "local" {
+					trustLines = append(trustLines, line)
+				}
+			}
+		}
+		if len(trustLines) > 0 {
+			r = append(r, AuditResult{ID: "svc.pg_trust", Category: "Services", Title: "PostgreSQL trust authentication",
+				Status: "fail", Severity: "critical", Detail: fmt.Sprintf("pg_hba.conf has trust auth for network: %s", strings.Join(trustLines, "; "))})
+		} else {
+			r = append(r, AuditResult{ID: "svc.pg_trust", Category: "Services", Title: "PostgreSQL authentication",
+				Status: "pass", Severity: "critical", Detail: "No trust auth for network connections"})
+		}
+		return r
+	}
+	return r
+}
+
+func auditNFSExports() []AuditResult {
+	var r []AuditResult
+	data, err := os.ReadFile("/etc/exports")
+	if err != nil {
+		return r
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.Contains(line, "no_root_squash") {
+			r = append(r, AuditResult{ID: "svc.nfs_root_squash", Category: "Services", Title: "NFS no_root_squash",
+				Status: "fail", Severity: "critical", Detail: fmt.Sprintf("NFS export with no_root_squash: %s", line)})
+			return r
+		}
+	}
+	r = append(r, AuditResult{ID: "svc.nfs_root_squash", Category: "Services", Title: "NFS root_squash",
+		Status: "pass", Severity: "critical", Detail: "No NFS exports with no_root_squash"})
+	return r
+}
+
+func auditSNMP() []AuditResult {
+	var r []AuditResult
+	data, err := os.ReadFile("/etc/snmp/snmpd.conf")
+	if err != nil {
+		return r
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+		lower := strings.ToLower(line)
+		if (strings.Contains(lower, "community") || strings.Contains(lower, "rocommunity") || strings.Contains(lower, "rwcommunity")) &&
+			(strings.Contains(lower, "public") || strings.Contains(lower, "private")) {
+			r = append(r, AuditResult{ID: "svc.snmp_community", Category: "Services", Title: "SNMP default community string",
+				Status: "fail", Severity: "critical", Detail: fmt.Sprintf("Default SNMP community string: %s", line)})
+			return r
+		}
+	}
+	r = append(r, AuditResult{ID: "svc.snmp_community", Category: "Services", Title: "SNMP community strings",
+		Status: "pass", Severity: "critical", Detail: "No default community strings (public/private)"})
 	return r
 }

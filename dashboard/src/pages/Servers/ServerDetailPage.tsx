@@ -55,7 +55,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { useServer, useServerMetrics, useSecurityPosture, useServerVulnerabilities, useDeleteServer, useUpdateServer, useProjects } from '../../api/hooks';
+import { useServer, useServerMetrics, useSecurityPosture, useServerVulnerabilities, useDeleteServer, useUpdateServer, useProjects, useAgentLatestVersion } from '../../api/hooks';
 import type { CveFinding } from '../../api/hooks';
 import type { SecurityPosture, ServerMetric } from '../../api/hooks';
 import { ScoreBadge, computeScore } from '../../components/ScoreBadge';
@@ -292,6 +292,7 @@ export function ServerDetailPage() {
   const { data: posture } = useSecurityPosture(id ?? '');
   const { data: vulns } = useServerVulnerabilities(id ?? '');
   const { data: projects } = useProjects();
+  const { data: latestAgent } = useAgentLatestVersion();
   const deleteMutation = useDeleteServer();
   const updateMutation = useUpdateServer();
 
@@ -383,6 +384,14 @@ export function ServerDetailPage() {
           )}
         </Box>
       </Stack>
+
+      {/* Agent update banner */}
+      {server.agentVersion && latestAgent?.version && server.agentVersion !== latestAgent.version && server.agentVersion !== 'dev' && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Agent update available: <strong>v{latestAgent.version}</strong> (current: v{server.agentVersion}).
+          Run on the server: <code style={{ marginLeft: 4, padding: '2px 6px', borderRadius: 4, backgroundColor: 'rgba(0,0,0,0.2)' }}>sudo sc-agent update</code>
+        </Alert>
+      )}
 
       {/* ============================================================= */}
       {/* Time range picker (Grafana-style) */}
