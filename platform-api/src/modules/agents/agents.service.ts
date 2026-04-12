@@ -379,7 +379,7 @@ export async function storeSecurityPosture(input: SecurityPostureInput) {
       shellUsers: JSON.parse(JSON.stringify(input.shellUsers)),
       pendingReboot: input.pendingReboot,
       openFdAlloc: input.openFDs.allocated,
-      openFdMax: input.openFDs.max,
+      openFdMax: Math.min(input.openFDs.max, 2_147_483_647),
       auditResults: input.auditResults ? JSON.parse(JSON.stringify(input.auditResults)) : undefined,
     },
   });

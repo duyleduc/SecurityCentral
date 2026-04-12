@@ -244,11 +244,15 @@ interface OsvVuln {
 }
 
 function extractCveId(vuln: OsvVuln): string | null {
-  // OSV id might be CVE directly, or check aliases.
+  // OSV id might be CVE directly.
   if (vuln.id.startsWith('CVE-')) return vuln.id;
+  // Check aliases for a bare CVE ID.
   for (const alias of vuln.aliases ?? []) {
     if (alias.startsWith('CVE-')) return alias;
   }
+  // Extract CVE from composite IDs like DEBIAN-CVE-2026-26103.
+  const cveMatch = vuln.id.match(/CVE-\d{4}-\d+/);
+  if (cveMatch) return cveMatch[0];
   // Use OSV id as fallback (e.g., DSA-XXXX, GHSA-XXXX).
   return vuln.id;
 }

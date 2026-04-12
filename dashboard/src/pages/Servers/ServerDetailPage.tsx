@@ -18,6 +18,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   ToggleButton,
   ToggleButtonGroup,
   useTheme,
@@ -390,6 +391,17 @@ export function ServerDetailPage() {
         <Alert severity="info" sx={{ mb: 2 }}>
           Agent update available: <strong>v{latestAgent.version}</strong> (current: v{server.agentVersion}).
           Run on the server: <code style={{ marginLeft: 4, padding: '2px 6px', borderRadius: 4, backgroundColor: 'rgba(0,0,0,0.2)' }}>sudo sc-agent update</code>
+        </Alert>
+      )}
+
+      {/* Offline banner */}
+      {(server.status === 'offline' || server.status === 'dead') && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Server is {server.status}
+          {server.lastHeartbeat
+            ? ` — last heartbeat ${new Date(server.lastHeartbeat).toLocaleString()}`
+            : ''}
+          . Showing last available historical data.
         </Alert>
       )}
 
@@ -790,6 +802,8 @@ function severityColor(s: string): 'error' | 'warning' | 'info' | 'default' {
 
 function VulnerabilitiesTab({ serverId, vulns }: { serverId: string; vulns: CveFinding[] }) {
   const [filter, setFilter] = useState('all');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
   const { data: inventory } = usePackageInventory(serverId);
   const scanMutation = useTriggerCveScan();
   const hasInventory = !!inventory;
@@ -798,12 +812,21 @@ function VulnerabilitiesTab({ serverId, vulns }: { serverId: string; vulns: CveF
     ? vulns
     : filter === 'fix'
       ? vulns.filter((v) => v.detail?.fixedVersion)
-      : vulns.filter((v) => v.severity === filter);
+      : filter === 'kev'
+        ? vulns.filter((v) => v.detail?.cisaKev)
+        : vulns.filter((v) => v.severity === filter);
 
   const critCount = vulns.filter((v) => v.severity === 'critical').length;
   const highCount = vulns.filter((v) => v.severity === 'high').length;
+  const medCount = vulns.filter((v) => v.severity === 'medium').length;
+  const lowCount = vulns.filter((v) => v.severity === 'low').length;
   const fixAvail = vulns.filter((v) => v.detail?.fixedVersion).length;
   const kevCount = vulns.filter((v) => v.detail?.cisaKev).length;
+
+  const handleFilterChange = (f: string) => {
+    setFilter(f);
+    setPage(0);
+  };
 
   const scanButton = (
     <Button
@@ -871,22 +894,31 @@ function VulnerabilitiesTab({ serverId, vulns }: { serverId: string; vulns: CveF
       {/* Header: summary chips + scan button */}
       <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-        <Chip label={`${vulns.length} total`} variant="outlined" onClick={() => setFilter('all')}
-          color={filter === 'all' ? 'primary' : 'default'} />
+        <Chip label={`${vulns.length} total`} variant={filter === 'all' ? 'filled' : 'outlined'}
+          color={filter === 'all' ? 'primary' : 'default'} onClick={() => handleFilterChange('all')} />
         {critCount > 0 && (
           <Chip label={`${critCount} critical`} color={filter === 'critical' ? 'error' : 'default'}
-            variant="outlined" onClick={() => setFilter('critical')} />
+            variant={filter === 'critical' ? 'filled' : 'outlined'} onClick={() => handleFilterChange('critical')} />
         )}
         {highCount > 0 && (
           <Chip label={`${highCount} high`} color={filter === 'high' ? 'warning' : 'default'}
-            variant="outlined" onClick={() => setFilter('high')} />
+            variant={filter === 'high' ? 'filled' : 'outlined'} onClick={() => handleFilterChange('high')} />
+        )}
+        {medCount > 0 && (
+          <Chip label={`${medCount} medium`} color={filter === 'medium' ? 'info' : 'default'}
+            variant={filter === 'medium' ? 'filled' : 'outlined'} onClick={() => handleFilterChange('medium')} />
+        )}
+        {lowCount > 0 && (
+          <Chip label={`${lowCount} low`} color={filter === 'low' ? 'success' : 'default'}
+            variant={filter === 'low' ? 'filled' : 'outlined'} onClick={() => handleFilterChange('low')} />
         )}
         {fixAvail > 0 && (
           <Chip label={`${fixAvail} fix available`} color={filter === 'fix' ? 'primary' : 'default'}
-            variant="outlined" onClick={() => setFilter('fix')} />
+            variant={filter === 'fix' ? 'filled' : 'outlined'} onClick={() => handleFilterChange('fix')} />
         )}
         {kevCount > 0 && (
-          <Chip label={`${kevCount} CISA KEV`} color="error" variant="filled" />
+          <Chip label={`${kevCount} CISA KEV`} color="error"
+            variant={filter === 'kev' ? 'filled' : 'outlined'} onClick={() => handleFilterChange('kev')} />
         )}
         </Stack>
         {scanButton}
@@ -919,11 +951,14 @@ function VulnerabilitiesTab({ serverId, vulns }: { serverId: string; vulns: CveF
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filtered.map((v) => (
+                {filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((v) => (
                   <TableRow key={v.id} hover>
                     <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
                       {v.cveId ? (
-                        <a href={`https://nvd.nist.gov/vuln/detail/${v.cveId}`} target="_blank" rel="noopener noreferrer"
+                        <a href={v.cveId.startsWith('CVE-')
+                          ? `https://nvd.nist.gov/vuln/detail/${v.cveId}`
+                          : `https://osv.dev/vulnerability/${v.cveId}`}
+                          target="_blank" rel="noopener noreferrer"
                           style={{ color: '#6366f1', textDecoration: 'none' }}>
                           {v.cveId}
                         </a>
@@ -958,6 +993,17 @@ function VulnerabilitiesTab({ serverId, vulns }: { serverId: string; vulns: CveF
               </TableBody>
             </Table>
           </TableContainer>
+          {filtered.length > 0 && (
+            <TablePagination
+              component="div"
+              count={filtered.length}
+              page={page}
+              onPageChange={(_, p) => setPage(p)}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+              rowsPerPageOptions={[10, 25, 50, 100]}
+            />
+          )}
         </CardContent>
       </Card>
     </Stack>

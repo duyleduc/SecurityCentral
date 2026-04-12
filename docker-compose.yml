@@ -34,6 +34,8 @@ services:
       PORT: "3000"
       NODE_ENV: production
       CORS_ORIGINS: http://localhost,http://localhost:80
+    volumes:
+      - ./sc-agent/bin:/sc-agent/bin:ro
     ports:
       - "3000:3000"
 

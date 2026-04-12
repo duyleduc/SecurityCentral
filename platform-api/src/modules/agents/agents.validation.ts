@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+// Go's json.Marshal serializes nil slices as `null`. Zod's .default() only
+// handles `undefined`, so we need .nullable() before .default() on every
+// array field that could arrive as null from the Go agent.
+function nullableArray<T extends z.ZodTypeAny>(schema: T) {
+  return z.array(schema).nullable().transform((v) => v ?? []);
+}
+
 const TagSchema = z.object({
   key: z.string().min(1).max(50),
   value: z.string().max(255).default(''),
@@ -47,7 +54,7 @@ const MetricsSchema = z.object({
     txBytesPerSec: z.number().default(0),
     errors: z.number().default(0),
     drops: z.number().default(0),
-    interfaces: z.array(z.object({
+    interfaces: nullableArray(z.object({
       name: z.string(),
       rxBytes: z.number(),
       txBytes: z.number(),
@@ -59,7 +66,7 @@ const MetricsSchema = z.object({
     total: z.number().int(),
     zombies: z.number().int(),
     oomKills: z.number().int(),
-    top: z.array(z.object({
+    top: nullableArray(z.object({
       pid: z.number().int(),
       name: z.string(),
       user: z.string(),
@@ -68,12 +75,12 @@ const MetricsSchema = z.object({
     })).default([]),
   }).optional(),
   service: z.object({
-    failedUnits: z.array(z.string()).default([]),
+    failedUnits: nullableArray(z.string()).default([]),
   }).optional(),
   docker: z.object({
     running: z.number().int(),
     stopped: z.number().int(),
-    containers: z.array(z.object({
+    containers: nullableArray(z.object({
       id: z.string(),
       name: z.string(),
       image: z.string(),
@@ -102,7 +109,7 @@ const SystemInfoSchema = z.object({
 export const AgentHeartbeatSchema = z.object({
   agentId: z.string().uuid(),
   urgent: z.boolean().default(false),
-  alerts: z.array(AlertSchema).default([]),
+  alerts: nullableArray(AlertSchema).default([]),
   metrics: MetricsSchema,
   system: SystemInfoSchema.optional(),
 });
@@ -137,7 +144,7 @@ export const UpdateServerSchema = z.object({
 export const SecurityPostureSchema = z.object({
   agentId: z.string().uuid(),
   collectedAt: z.string(),
-  listeningPorts: z.array(z.object({
+  listeningPorts: nullableArray(z.object({
     port: z.number().int(),
     proto: z.string(),
     process: z.string(),
@@ -153,19 +160,19 @@ export const SecurityPostureSchema = z.object({
     active: z.boolean(),
     type: z.string(),
   }),
-  loggedInUsers: z.array(z.object({
+  loggedInUsers: nullableArray(z.object({
     user: z.string(),
     from: z.string(),
     since: z.string(),
   })).default([]),
   sshFailures: z.number().int().default(0),
-  shellUsers: z.array(z.string()).default([]),
+  shellUsers: nullableArray(z.string()).default([]),
   pendingReboot: z.boolean().default(false),
   openFDs: z.object({
     allocated: z.number().int(),
-    max: z.number().int(),
+    max: z.number(),
   }),
-  auditResults: z.array(z.object({
+  auditResults: nullableArray(z.object({
     id: z.string(),
     category: z.string(),
     title: z.string(),
@@ -179,17 +186,17 @@ export const PackageInventorySchema = z.object({
   agentId: z.string().uuid(),
   collectedAt: z.string(),
   osFamily: z.string().max(50),
-  packages: z.array(z.object({
+  packages: nullableArray(z.object({
     name: z.string(),
     version: z.string(),
     arch: z.string().optional(),
   })).default([]),
-  binaryVersions: z.array(z.object({
+  binaryVersions: nullableArray(z.object({
     name: z.string(),
     version: z.string(),
   })).default([]),
   pendingSecurityUpdates: z.number().int().default(0),
-  heldPackages: z.array(z.string()).default([]),
+  heldPackages: nullableArray(z.string()).default([]),
   kernelRunning: z.string().optional(),
   kernelInstalled: z.string().optional(),
   unattendedUpgrades: z.boolean().default(false),

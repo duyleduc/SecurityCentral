@@ -54,13 +54,34 @@ export async function getMetrics(orgId: string, serverId: string, hours: number)
 
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
-  const rows = await prisma.serverMetricSnapshot.findMany({
+  let rows = await prisma.serverMetricSnapshot.findMany({
     where: {
       serverId,
       createdAt: { gte: since },
     },
     orderBy: { createdAt: 'asc' },
   });
+
+  // If no metrics in the requested window and the server is offline/dead,
+  // fall back to the most recent available data window so charts still
+  // display historical data instead of "Waiting for data...".
+  if (rows.length === 0 && ['offline', 'dead'].includes(server.status)) {
+    const lastMetric = await prisma.serverMetricSnapshot.findFirst({
+      where: { serverId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (lastMetric) {
+      const fallbackSince = new Date(lastMetric.createdAt.getTime() - hours * 60 * 60 * 1000);
+      rows = await prisma.serverMetricSnapshot.findMany({
+        where: {
+          serverId,
+          createdAt: { gte: fallbackSince, lte: lastMetric.createdAt },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+  }
 
   return rows.map((m) => serializeMetric(m as unknown as Record<string, unknown>));
 }

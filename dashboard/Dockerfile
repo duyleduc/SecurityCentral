@@ -20,6 +20,9 @@ RUN echo 'server { \
   index index.html; \
   location / { try_files $uri $uri/ /index.html; } \
   location /api/ { proxy_pass http://platform-api:3000; } \
+  location /auth/ { proxy_pass http://platform-api:3000; } \
+  location /v1/ { proxy_pass http://platform-api:3000; } \
+  location /health { proxy_pass http://platform-api:3000; } \
   location /ws { proxy_pass http://platform-api:3000; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; } \
 }' > /etc/nginx/conf.d/default.conf
 
