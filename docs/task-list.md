@@ -256,3 +256,137 @@ Repositories, domains, and servers show scores with "why" breakdown. Dashboard s
 ### Done when
 
 Dashboard updates in real-time. `docker compose up` boots entire stack.
+
+---
+
+## Phase 2A: Agent Core Metrics Extension
+
+**Goal:** Extend sc-agent from 3 metrics (CPU/RAM/Disk%) to competitive parity with essential monitoring data. No architectural change — add fields to existing structs.
+
+**Ref:** [sc-agent-architecture.md](./sc-agent-architecture.md) §15, [spec-analysis-report.md](./spec-analysis-report.md)
+
+### Go Agent (sc-agent)
+
+- [ ] Add load average (1/5/15) to `sysinfo.CollectMetrics()` via `gopsutil load.Avg()`
+- [ ] Add CPU iowait % to `sysinfo.Metrics` via `gopsutil cpu.Times()` delta calculation
+- [ ] Add swap used % to `sysinfo.Metrics` via `gopsutil mem.SwapMemory()`
+- [ ] Add disk I/O (read/write bytes/s, utilization %) via `gopsutil disk.IOCounters()` with delta between samples
+- [ ] Add network RX/TX bytes and errors per interface via `gopsutil net.IOCounters()` with delta between samples
+- [ ] Extend `sysinfo.Metrics` struct with all new fields
+- [ ] Extend `platform.MetricsData` to `MetricsDataV2` with `Load`, `Disk.IO`, `Network`, `Memory.SwapUsedPct`
+- [ ] Update `RingBuffer.Aggregate()` to include iowait avg/max
+- [ ] Add iowait threshold to `ThresholdConfig` (default 20%) and `config.Config`
+- [ ] Add spike detection to `CheckThresholds()` — alert if CPU or RAM jumps >40% between samples
+- [ ] Store previous disk I/O and network counters for delta calculation (init on first sample)
+
+### Backend (platform-api)
+
+- [ ] Update `POST /v1/agents/heartbeat` handler to accept `MetricsDataV2` payload (backward-compatible with v1)
+- [ ] Extend `ServerMetricSnapshot` Prisma model with new fields (loadAvg1, loadAvg5, loadAvg15, cpuIoWait, swapUsedPct, diskReadBps, diskWriteBps, diskIoUtil, netRxBytes, netTxBytes, netErrors)
+- [ ] Update server metrics query `GET /api/v1/servers/:id/metrics` to return new fields
+
+### Frontend (dashboard)
+
+- [ ] Add load average display to server detail page
+- [ ] Add disk I/O chart (read/write bytes/s) to server detail page
+- [ ] Add network throughput chart (RX/TX) to server detail page
+- [ ] Add swap usage indicator to server detail page
+
+### Done when
+
+Agent sends load avg, iowait, swap, disk I/O, and network metrics. Server detail page shows all new charts.
+
+---
+
+## Phase 2B: Agent Collector Architecture
+
+**Goal:** Refactor sc-agent into pluggable collector system with multi-cadence scheduling. Foundation for all future collectors.
+
+**Ref:** [sc-agent-architecture.md](./sc-agent-architecture.md) §3–§6, §11
+
+### Go Agent (sc-agent)
+
+- [ ] Create `Collector` interface in `internal/collector/registry.go` — `Name()`, `Cadence()`, `Enabled()`, `Init()`, `Collect()`
+- [ ] Create `Registry` with `Register()`, `Enabled()`, `ByCadence()` methods
+- [ ] Create `Scheduler` in `internal/agent/scheduler.go` — goroutine per cadence group, results channel
+- [ ] Create `MetricStore` in `internal/agent/store.go` — holds latest snapshots + ring buffers for fast-cadence metrics
+- [ ] Extract CPU collector (`internal/collector/cpu.go`) — CadenceFast, returns CPU%, iowait%, load avg
+- [ ] Extract Memory collector (`internal/collector/memory.go`) — CadenceFast, returns used%, available bytes, swap
+- [ ] Extract Disk collector (`internal/collector/disk.go`) — CadenceStandard, returns per-mount usage + I/O deltas
+- [ ] Extract Network collector (`internal/collector/network.go`) — CadenceStandard, returns per-interface bytes/errors + TCP counts
+- [ ] Split `agent/collector.go` into `agent/ringbuffer.go` and `agent/alertbuffer.go`
+- [ ] Refactor `agent/heartbeat.go` → `agent/agent.go` — use Scheduler + MetricStore + processLoop instead of raw collectLoop
+- [ ] Verify existing heartbeat timing (60s normal, 15s urgent) is preserved after refactor
+- [ ] Run `go test -race ./...` — all tests pass with no race conditions
+
+### Done when
+
+Agent boots with registry of 4 collectors (CPU, Memory, Disk, Network), scheduler ticks at correct cadences, heartbeat payload unchanged.
+
+---
+
+## Phase 3A: Agent Security-Relevant Collectors
+
+**Goal:** Add process, service, and security monitoring to sc-agent. Enables alert rules #8–#11 from product spec.
+
+**Ref:** [sc-agent-architecture.md](./sc-agent-architecture.md) §4.5–§4.8, §8
+
+### Go Agent (sc-agent)
+
+- [ ] Create Process collector (`internal/collector/process.go`) — CadenceStandard: total count, zombie count, top 5 CPU/RAM consumers, OOM kill events
+- [ ] Create Service collector (`internal/collector/service.go`) — CadenceStandard: failed systemd units (exec `systemctl --failed`)
+- [ ] Create Security collector (`internal/collector/security.go`) — CadenceScan: listening ports, SSH config, firewall status, logged-in users, SSH auth failures, shell users, pending reboot, open FDs
+- [ ] Add daily collection to Security collector: installed packages (dpkg/rpm), world-writable files in /etc /usr
+- [ ] Extend `ThresholdChecker` with new port baseline detection — alert on new externally-bound port (#8 New Public Port)
+- [ ] Extend `ThresholdChecker` with suspicious process detection — unknown process >50% CPU for 3 min (#9)
+- [ ] Extend `ThresholdChecker` with service failure detection — any failed systemd unit (#11)
+- [ ] Add `ProcessMetrics` and `ServiceMetrics` to heartbeat `MetricsDataV2`
+- [ ] Register Process, Service, Security collectors in agent startup
+
+### Backend (platform-api)
+
+- [ ] Create `POST /v1/agents/security-posture` endpoint — accept and store security scan results
+- [ ] Create `SecurityPosture` Prisma model (listeningPorts, sshConfig, firewallActive, firewallType, shellUsers, pendingReboot, packages, sshFailures, loggedInUsers)
+- [ ] Update server scoring to incorporate security posture data (SSH config, firewall, open ports, user access, file permissions)
+- [ ] Add new alert types to findings auto-creation: `new_public_port`, `suspicious_process`, `service_down`, `ssh_brute_force`
+- [ ] `GET /api/v1/servers/:id/security-posture` — return latest security posture report
+
+### Frontend (dashboard)
+
+- [ ] Add security posture tab to server detail page (SSH config status, firewall status, open ports list, shell users, pending reboot)
+- [ ] Add process monitor section to server detail page (top consumers table, process count)
+- [ ] Add service health section to server detail page (failed units list)
+- [ ] Update server score badge to reflect security posture findings
+
+### Done when
+
+Agent reports listening ports, SSH config safety, firewall status, and top processes. Server detail page shows security posture tab with scores.
+
+---
+
+## Phase 3B: Agent Docker Collector (Optional)
+
+**Goal:** Monitor Docker containers on servers where Docker is present.
+
+**Ref:** [sc-agent-architecture.md](./sc-agent-architecture.md) §4.7
+
+### Go Agent (sc-agent)
+
+- [ ] Create Docker collector (`internal/collector/docker.go`) — CadenceStandard, conditional on Docker presence
+- [ ] Feature detection: check `docker` binary exists + `systemctl is-active docker`
+- [ ] Collect: daemon status, running/stopped container count, per-container name/image/state/CPU/memory/restarts
+- [ ] Use exec `docker ps -a --format json` + `docker stats --no-stream --format json` (no Docker SDK dependency)
+- [ ] Add `DockerMetrics` (optional/nil) to heartbeat payload
+
+### Backend (platform-api)
+
+- [ ] Store Docker metrics in `ServerMetricSnapshot` (containerCount, containers JSON)
+- [ ] Auto-create finding for crash-looping container (restarts incrementing)
+
+### Frontend (dashboard)
+
+- [ ] Add Docker section to server detail page (container list with status, CPU, memory, restart count)
+
+### Done when
+
+On a Docker host, agent reports container status. Dashboard shows container health.
