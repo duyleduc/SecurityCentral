@@ -350,6 +350,26 @@ export interface CveFinding {
   createdAt: string;
 }
 
+export interface CveScanResult {
+  matched: number;
+  created: number;
+  resolved: number;
+  packages: number;
+  osFamily: string;
+  scannedAt: string;
+}
+
+export function useTriggerCveScan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (serverId: string) =>
+      apiClient<CveScanResult>(`/api/v1/servers/${serverId}/scan-cve`, { method: 'POST' }),
+    onSuccess: (_data, serverId) => {
+      qc.invalidateQueries({ queryKey: ['servers', serverId, 'vulnerabilities'] });
+    },
+  });
+}
+
 export function useServerVulnerabilities(id: string) {
   return useQuery({
     queryKey: ['servers', id, 'vulnerabilities'],

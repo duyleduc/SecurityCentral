@@ -67,6 +67,21 @@ serversRouter.patch(
   },
 );
 
+// POST /api/v1/servers/:id/scan-cve — trigger manual CVE scan
+serversRouter.post(
+  '/:id/scan-cve',
+  requirePermission('manage_projects'),
+  validate({ params: ServerIdParamsSchema }),
+  async (req, res, next) => {
+    try {
+      const result = await serversService.triggerCveScan(req.auth!.orgId, req.params.id);
+      res.json(successEnvelope(result));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // DELETE /api/v1/servers/:id
 serversRouter.delete(
   '/:id',

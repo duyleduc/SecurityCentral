@@ -1,5 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errors.js';
+import { matchServerPackages, applyMatchesToFindings, syncFeeds } from '../vulndb/vulndb.service.js';
+import { logger } from '../../lib/logger.js';
 
 // BigInt fields from Prisma need conversion to Number for JSON serialization.
 function serializeMetric(m: Record<string, unknown>): Record<string, unknown> {
@@ -86,6 +88,47 @@ export async function updateServer(
       _count: { select: { metrics: true, findings: true } },
     },
   });
+}
+
+export async function triggerCveScan(orgId: string, serverId: string) {
+  const server = await prisma.server.findFirst({ where: { id: serverId, orgId } });
+  if (!server) {
+    throw new AppError('RESOURCE_NOT_FOUND', 'Server not found');
+  }
+
+  // Get the latest package inventory for this server.
+  const inventory = await prisma.packageInventory.findFirst({
+    where: { serverId },
+    orderBy: { collectedAt: 'desc' },
+  });
+
+  if (!inventory) {
+    throw new AppError('VALIDATION_ERROR', 'No package inventory available. Wait for the agent to send its first daily scan.');
+  }
+
+  // Refresh vuln feeds before matching.
+  await syncFeeds();
+
+  const packages = inventory.packages as Array<{ name: string; version: string }>;
+  const matches = await matchServerPackages(serverId, inventory.osFamily, packages);
+  const result = await applyMatchesToFindings(orgId, serverId, server.hostname, matches);
+
+  logger.info('Manual CVE scan completed', {
+    serverId,
+    hostname: server.hostname,
+    matched: matches.length,
+    created: result.created,
+    resolved: result.resolved,
+  });
+
+  return {
+    matched: matches.length,
+    created: result.created,
+    resolved: result.resolved,
+    packages: packages.length,
+    osFamily: inventory.osFamily,
+    scannedAt: new Date().toISOString(),
+  };
 }
 
 export async function deleteServer(orgId: string, serverId: string) {

@@ -1,8 +1,8 @@
 /**
  * Vulnerability Database Service
  *
- * Downloads CVE feeds (Debian Security Tracker, CISA KEV) and matches
- * server package lists against them to create findings.
+ * Uses the OSV.dev API for real-time CVE matching (no giant feed download)
+ * and CISA KEV for actively-exploited flagging.
  *
  * Scope: OS packages + system binaries only.
  * Language ecosystem CVEs (npm, pip, maven) are handled by sc-scan.
@@ -11,37 +11,15 @@
 import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 
-const DEBIAN_SECURITY_URL = 'https://security-tracker.debian.org/tracker/data/json';
 const CISA_KEV_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
+const OSV_BATCH_URL = 'https://api.osv.dev/v1/querybatch';
 
 // ---------------------------------------------------------------------------
-// Feed sync
+// Feed sync (only CISA KEV — small, ~1MB)
 // ---------------------------------------------------------------------------
 
 export async function syncFeeds(): Promise<void> {
-  await syncDebianFeed();
   await syncCisaKev();
-}
-
-async function syncDebianFeed(): Promise<void> {
-  try {
-    const resp = await fetch(DEBIAN_SECURITY_URL, { signal: AbortSignal.timeout(30_000) });
-    if (!resp.ok) {
-      logger.warn('Debian security feed fetch failed', { status: resp.status });
-      return;
-    }
-    const data = await resp.json();
-
-    await prisma.vulnerabilityFeed.upsert({
-      where: { source: 'debian' },
-      create: { source: 'debian', lastSyncAt: new Date(), data: data as object },
-      update: { lastSyncAt: new Date(), data: data as object },
-    });
-
-    logger.info('Debian security feed synced', { packages: Object.keys(data as Record<string, unknown>).length });
-  } catch (err) {
-    logger.error('Debian feed sync error', { error: (err as Error).message });
-  }
 }
 
 async function syncCisaKev(): Promise<void> {
@@ -67,7 +45,7 @@ async function syncCisaKev(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// CVE matching
+// CVE matching via OSV.dev API
 // ---------------------------------------------------------------------------
 
 interface PackageInput {
@@ -86,32 +64,34 @@ interface CveMatch {
 }
 
 /**
- * Match a server's package list against the Debian security tracker feed.
- * Returns a list of CVE matches.
+ * Map OS family to OSV ecosystem name.
+ */
+function osvEcosystem(osFamily: string): string | null {
+  switch (osFamily) {
+    case 'debian': return 'Debian';
+    case 'ubuntu': return 'Ubuntu';
+    case 'alpine': return 'Alpine';
+    default: return null;
+  }
+}
+
+/**
+ * Match packages against OSV.dev in batches.
+ * OSV querybatch allows up to 1000 queries per request.
  */
 export async function matchServerPackages(
   serverId: string,
   osFamily: string,
   packages: readonly PackageInput[],
 ): Promise<CveMatch[]> {
-  // Load feeds from DB.
-  const [debianFeed, kevFeed] = await Promise.all([
-    prisma.vulnerabilityFeed.findUnique({ where: { source: 'debian' } }),
-    prisma.vulnerabilityFeed.findUnique({ where: { source: 'cisa_kev' } }),
-  ]);
-
-  if (!debianFeed) {
-    logger.warn('No Debian security feed available — skipping CVE matching');
-    return [];
-  }
-
-  // Only match Debian/Ubuntu for now.
-  if (osFamily !== 'debian' && osFamily !== 'ubuntu') {
+  const ecosystem = osvEcosystem(osFamily);
+  if (!ecosystem) {
     logger.info('CVE matching not yet supported for OS family', { osFamily });
     return [];
   }
 
-  // Build CISA KEV lookup set.
+  // Load CISA KEV for cross-reference.
+  const kevFeed = await prisma.vulnerabilityFeed.findUnique({ where: { source: 'cisa_kev' } });
   const kevSet = new Set<string>();
   if (kevFeed) {
     const kevData = kevFeed.data as { vulnerabilities?: Array<{ cveID?: string }> };
@@ -120,67 +100,62 @@ export async function matchServerPackages(
     }
   }
 
-  // Debian security tracker format: { "package_name": { "CVE-XXXX": { "releases": { "bookworm": { "status": "resolved", "fixed_version": "1.2.3" } } } } }
-  const debianData = debianFeed.data as Record<string, Record<string, {
-    description?: string;
-    releases?: Record<string, { status?: string; fixed_version?: string; urgency?: string }>;
-  }>>;
-
-  const pkgIndex = new Map<string, string>();
-  for (const pkg of packages) {
-    pkgIndex.set(pkg.name, pkg.version);
-  }
-
+  // Query OSV in batches of 1000.
   const matches: CveMatch[] = [];
+  const batchSize = 1000;
 
-  for (const [pkgName, cves] of Object.entries(debianData)) {
-    const installedVersion = pkgIndex.get(pkgName);
-    if (!installedVersion) continue;
+  for (let i = 0; i < packages.length; i += batchSize) {
+    const batch = packages.slice(i, i + batchSize);
+    const queries = batch.map((pkg) => ({
+      package: { name: pkg.name, ecosystem },
+      version: pkg.version,
+    }));
 
-    for (const [cveId, cveInfo] of Object.entries(cves)) {
-      if (!cveId.startsWith('CVE-')) continue;
+    try {
+      const resp = await fetch(OSV_BATCH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ queries }),
+        signal: AbortSignal.timeout(30_000),
+      });
 
-      // Check across release codenames.
-      const releases = cveInfo.releases ?? {};
-      for (const releaseInfo of Object.values(releases)) {
-        if (releaseInfo.status === 'resolved' && releaseInfo.fixed_version) {
-          // If the installed version is older than the fixed version, it's vulnerable.
-          // Simple string comparison works for most Debian version schemes.
-          if (compareDebianVersions(installedVersion, releaseInfo.fixed_version) < 0) {
-            const isCisaKev = kevSet.has(cveId);
-            const severity = isCisaKev ? 'critical' : urgencyToSeverity(releaseInfo.urgency);
+      if (!resp.ok) {
+        logger.warn('OSV batch query failed', { status: resp.status, batch: i });
+        continue;
+      }
 
-            matches.push({
-              cveId,
-              packageName: pkgName,
-              installedVersion,
-              fixedVersion: releaseInfo.fixed_version,
-              severity,
-              description: cveInfo.description ?? '',
-              cisaKev: isCisaKev,
-            });
-            break; // One match per CVE per package is enough.
-          }
-        }
+      const data = await resp.json() as { results: Array<{ vulns?: Array<OsvVuln> }> };
 
-        // If status is "open" (unfixed), still report but with no fixed version.
-        if (releaseInfo.status === 'open') {
+      for (let j = 0; j < data.results.length; j++) {
+        const vulns = data.results[j].vulns;
+        if (!vulns || vulns.length === 0) continue;
+
+        const pkg = batch[j];
+        for (const vuln of vulns) {
+          const cveId = extractCveId(vuln);
+          if (!cveId) continue;
+
+          const fixedVersion = extractFixedVersion(vuln, pkg.name, ecosystem);
           const isCisaKev = kevSet.has(cveId);
+          const severity = isCisaKev ? 'critical' : osvSeverity(vuln);
+
           matches.push({
             cveId,
-            packageName: pkgName,
-            installedVersion,
-            fixedVersion: null,
-            severity: isCisaKev ? 'critical' : urgencyToSeverity(releaseInfo.urgency),
-            description: cveInfo.description ?? '',
+            packageName: pkg.name,
+            installedVersion: pkg.version,
+            fixedVersion,
+            severity,
+            description: vuln.summary ?? vuln.details?.slice(0, 200) ?? '',
             cisaKev: isCisaKev,
           });
-          break;
         }
       }
+    } catch (err) {
+      logger.error('OSV batch query error', { error: (err as Error).message, batch: i });
     }
   }
 
+  logger.info('OSV matching completed', { serverId, queried: packages.length, matched: matches.length });
   return matches;
 }
 
@@ -197,7 +172,6 @@ export async function applyMatchesToFindings(
   let created = 0;
   let resolved = 0;
 
-  // Create new findings for matches.
   for (const m of matches) {
     const title = `${m.cveId}: ${m.packageName} on ${hostname}`;
     const existing = await prisma.finding.findFirst({
@@ -226,7 +200,7 @@ export async function applyMatchesToFindings(
     created++;
   }
 
-  // Auto-resolve findings for CVEs no longer in the match set (package was updated).
+  // Auto-resolve findings for CVEs no longer matched (package was updated).
   const staleFindings = await prisma.finding.findMany({
     where: {
       orgId,
@@ -251,54 +225,59 @@ export async function applyMatchesToFindings(
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// OSV response types and helpers
 // ---------------------------------------------------------------------------
 
-function urgencyToSeverity(urgency?: string): string {
-  switch (urgency) {
-    case 'high': return 'critical';
-    case 'medium': return 'high';
-    case 'low': return 'medium';
-    case 'unimportant': return 'low';
-    default: return 'medium';
-  }
+interface OsvVuln {
+  id: string;
+  aliases?: string[];
+  summary?: string;
+  details?: string;
+  severity?: Array<{ type: string; score: string }>;
+  affected?: Array<{
+    package?: { name: string; ecosystem: string };
+    ranges?: Array<{
+      type: string;
+      events: Array<{ introduced?: string; fixed?: string }>;
+    }>;
+  }>;
 }
 
-/**
- * Compare Debian package versions. This is a simplified comparison —
- * a full implementation would use dpkg --compare-versions.
- * For MVP, string comparison catches most cases (epoch:upstream-revision).
- */
-function compareDebianVersions(a: string, b: string): number {
-  // Extract epoch if present.
-  const parseEpoch = (v: string) => {
-    const idx = v.indexOf(':');
-    if (idx < 0) return { epoch: 0, rest: v };
-    return { epoch: parseInt(v.slice(0, idx), 10) || 0, rest: v.slice(idx + 1) };
-  };
+function extractCveId(vuln: OsvVuln): string | null {
+  // OSV id might be CVE directly, or check aliases.
+  if (vuln.id.startsWith('CVE-')) return vuln.id;
+  for (const alias of vuln.aliases ?? []) {
+    if (alias.startsWith('CVE-')) return alias;
+  }
+  // Use OSV id as fallback (e.g., DSA-XXXX, GHSA-XXXX).
+  return vuln.id;
+}
 
-  const pa = parseEpoch(a);
-  const pb = parseEpoch(b);
-  if (pa.epoch !== pb.epoch) return pa.epoch - pb.epoch;
-
-  // Compare upstream version parts numerically where possible.
-  const partsA = pa.rest.split(/[.\-+~]/);
-  const partsB = pb.rest.split(/[.\-+~]/);
-  const len = Math.max(partsA.length, partsB.length);
-
-  for (let i = 0; i < len; i++) {
-    const sa = partsA[i] ?? '';
-    const sb = partsB[i] ?? '';
-    const na = parseInt(sa, 10);
-    const nb = parseInt(sb, 10);
-
-    if (!isNaN(na) && !isNaN(nb)) {
-      if (na !== nb) return na - nb;
-    } else {
-      if (sa < sb) return -1;
-      if (sa > sb) return 1;
+function extractFixedVersion(vuln: OsvVuln, pkgName: string, ecosystem: string): string | null {
+  for (const aff of vuln.affected ?? []) {
+    if (aff.package?.name !== pkgName || aff.package?.ecosystem !== ecosystem) continue;
+    for (const range of aff.ranges ?? []) {
+      for (const event of range.events) {
+        if (event.fixed) return event.fixed;
+      }
     }
   }
+  return null;
+}
 
-  return 0;
+function osvSeverity(vuln: OsvVuln): string {
+  // Check for CVSS v3 score.
+  for (const s of vuln.severity ?? []) {
+    if (s.type === 'CVSS_V3') {
+      // Parse base score from CVSS vector or score string.
+      const score = parseFloat(s.score);
+      if (!isNaN(score)) {
+        if (score >= 9.0) return 'critical';
+        if (score >= 7.0) return 'high';
+        if (score >= 4.0) return 'medium';
+        return 'low';
+      }
+    }
+  }
+  return 'medium'; // Default if no severity info.
 }

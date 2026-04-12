@@ -55,7 +55,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { useServer, useServerMetrics, useSecurityPosture, useServerVulnerabilities, useDeleteServer, useUpdateServer, useProjects, useAgentLatestVersion } from '../../api/hooks';
+import { useServer, useServerMetrics, useSecurityPosture, useServerVulnerabilities, usePackageInventory, useTriggerCveScan, useDeleteServer, useUpdateServer, useProjects, useAgentLatestVersion } from '../../api/hooks';
 import type { CveFinding } from '../../api/hooks';
 import type { SecurityPosture, ServerMetric } from '../../api/hooks';
 import { ScoreBadge, computeScore } from '../../components/ScoreBadge';
@@ -583,7 +583,7 @@ export function ServerDetailPage() {
 
       {tab === 1 && <SecurityPostureTab posture={posture ?? null} />}
 
-      {tab === 2 && <VulnerabilitiesTab vulns={vulns ?? []} />}
+      {tab === 2 && <VulnerabilitiesTab serverId={server.id} vulns={vulns ?? []} />}
 
       {tab === 3 && <DockerTab latest={latest ?? null} />}
 
@@ -788,8 +788,11 @@ function severityColor(s: string): 'error' | 'warning' | 'info' | 'default' {
   }
 }
 
-function VulnerabilitiesTab({ vulns }: { vulns: CveFinding[] }) {
+function VulnerabilitiesTab({ serverId, vulns }: { serverId: string; vulns: CveFinding[] }) {
   const [filter, setFilter] = useState('all');
+  const { data: inventory } = usePackageInventory(serverId);
+  const scanMutation = useTriggerCveScan();
+  const hasInventory = !!inventory;
 
   const filtered = filter === 'all'
     ? vulns
@@ -802,22 +805,72 @@ function VulnerabilitiesTab({ vulns }: { vulns: CveFinding[] }) {
   const fixAvail = vulns.filter((v) => v.detail?.fixedVersion).length;
   const kevCount = vulns.filter((v) => v.detail?.cisaKev).length;
 
-  if (vulns.length === 0) {
+  const scanButton = (
+    <Button
+      size="small"
+      variant="outlined"
+      disabled={scanMutation.isPending || !hasInventory}
+      onClick={() => scanMutation.mutate(serverId)}
+      title={hasInventory ? 'Run CVE scan against latest vulnerability feeds' : 'Waiting for agent to send package inventory'}
+    >
+      {scanMutation.isPending ? 'Scanning...' : 'Run CVE Scan'}
+    </Button>
+  );
+
+  if (!hasInventory) {
     return (
       <Card>
         <CardContent>
-          <Typography variant="body2" color="text.secondary">
-            No vulnerabilities found. The agent performs a daily package scan and the platform matches against CVE databases.
-          </Typography>
+          <Stack spacing={1.5}>
+            <Typography variant="body1">No package inventory yet</Typography>
+            <Typography variant="body2" color="text.secondary">
+              The agent collects the server's installed packages once per day and sends them to the platform for CVE matching.
+              This server hasn't sent its first package inventory yet.
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Make sure the agent is running version <strong>1.0.0+</strong> and has been online for at least 24 hours.
+              You can also rebuild and restart the agent to trigger an immediate collection.
+            </Typography>
+          </Stack>
         </CardContent>
       </Card>
     );
   }
 
+  if (vulns.length === 0) {
+    return (
+      <Stack spacing={2}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Typography variant="body2" color="text.secondary">
+            Last package scan: {new Date(inventory.collectedAt).toLocaleString()} ({inventory.packages.length} packages)
+          </Typography>
+          {scanButton}
+        </Stack>
+        {scanMutation.isSuccess && (
+          <Alert severity="success">
+            Scan complete: {scanMutation.data.matched} CVEs matched across {scanMutation.data.packages} packages.
+            {scanMutation.data.created > 0 ? ` ${scanMutation.data.created} new findings created.` : ' No new findings.'}
+          </Alert>
+        )}
+        {scanMutation.isError && (
+          <Alert severity="error">{(scanMutation.error as Error).message}</Alert>
+        )}
+        <Card>
+          <CardContent>
+            <Typography variant="body2" color="text.secondary">
+              No vulnerabilities found. Click "Run CVE Scan" to re-check against the latest vulnerability feeds.
+            </Typography>
+          </CardContent>
+        </Card>
+      </Stack>
+    );
+  }
+
   return (
     <Stack spacing={2}>
-      {/* Summary chips */}
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+      {/* Header: summary chips + scan button */}
+      <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" useFlexGap>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
         <Chip label={`${vulns.length} total`} variant="outlined" onClick={() => setFilter('all')}
           color={filter === 'all' ? 'primary' : 'default'} />
         {critCount > 0 && (
@@ -835,7 +888,20 @@ function VulnerabilitiesTab({ vulns }: { vulns: CveFinding[] }) {
         {kevCount > 0 && (
           <Chip label={`${kevCount} CISA KEV`} color="error" variant="filled" />
         )}
+        </Stack>
+        {scanButton}
       </Stack>
+
+      {scanMutation.isSuccess && (
+        <Alert severity="success">
+          Scan complete: {scanMutation.data.matched} CVEs matched across {scanMutation.data.packages} packages.
+          {scanMutation.data.created > 0 ? ` ${scanMutation.data.created} new findings.` : ''}
+          {scanMutation.data.resolved > 0 ? ` ${scanMutation.data.resolved} resolved.` : ''}
+        </Alert>
+      )}
+      {scanMutation.isError && (
+        <Alert severity="error">{(scanMutation.error as Error).message}</Alert>
+      )}
 
       {/* CVE table */}
       <Card>
