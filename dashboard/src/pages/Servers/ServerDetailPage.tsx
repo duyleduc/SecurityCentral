@@ -369,8 +369,13 @@ export function ServerDetailPage() {
           {server.tags.length > 0 && (
             <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
               {server.tags.map((t) => (
-                <Chip key={t.key} label={t.value ? `${t.key}:${t.value}` : t.key} size="small"
-                  sx={{ fontSize: '0.65rem', bgcolor: 'action.selected' }} />
+                <Chip
+                  key={t.key}
+                  label={t.value ? `${t.key}: ${t.value}` : t.key}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontFamily: 'monospace', fontSize: '0.7rem', borderColor: 'primary.dark' }}
+                />
               ))}
             </Stack>
           )}
@@ -609,19 +614,21 @@ export function ServerDetailPage() {
 
 interface EditServerDialogProps {
   open: boolean;
-  server: { projectId: string | null; tags: Array<{ key: string; value: string }> };
+  server: { hostname: string; projectId: string | null; tags: Array<{ key: string; value: string }> };
   projects: Array<{ id: string; name: string }>;
   loading: boolean;
   onClose: () => void;
-  onSave: (data: { projectId?: string | null; tags?: Array<{ key: string; value: string }> }) => void;
+  onSave: (data: { hostname?: string; projectId?: string | null; tags?: Array<{ key: string; value: string }> }) => void;
 }
 
 function EditServerDialog({ open, server, projects, loading, onClose, onSave }: EditServerDialogProps) {
+  const [hostname, setHostname] = useState(server.hostname);
   const [projectId, setProjectId] = useState(server.projectId ?? '');
   const [tags, setTags] = useState<Tag[]>(server.tags);
 
   // Sync when dialog opens with fresh server data.
   const handleEnter = () => {
+    setHostname(server.hostname);
     setProjectId(server.projectId ?? '');
     setTags(server.tags);
   };
@@ -631,6 +638,12 @@ function EditServerDialog({ open, server, projects, loading, onClose, onSave }: 
       <DialogTitle>Edit Server</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          <TextField
+            fullWidth size="small"
+            label="Hostname"
+            value={hostname}
+            onChange={(e) => setHostname(e.target.value)}
+          />
           <TextField
             fullWidth size="small" select
             label="Project"
@@ -650,8 +663,9 @@ function EditServerDialog({ open, server, projects, loading, onClose, onSave }: 
         <Button onClick={onClose} disabled={loading}>Cancel</Button>
         <Button
           variant="contained"
-          disabled={loading}
+          disabled={loading || !hostname.trim()}
           onClick={() => onSave({
+            hostname: hostname.trim(),
             projectId: projectId || null,
             tags,
           })}

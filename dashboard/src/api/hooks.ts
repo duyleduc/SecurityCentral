@@ -333,7 +333,7 @@ export function useSecurityPosture(id: string) {
 export function useUpdateServer() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; projectId?: string | null; tags?: Array<{ key: string; value: string }> }) =>
+    mutationFn: ({ id, ...data }: { id: string; hostname?: string; projectId?: string | null; tags?: Array<{ key: string; value: string }> }) =>
       apiClient<Server>(`/api/v1/servers/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),

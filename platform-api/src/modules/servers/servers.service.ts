@@ -66,7 +66,7 @@ export async function getMetrics(orgId: string, serverId: string, hours: number)
 export async function updateServer(
   orgId: string,
   serverId: string,
-  data: { projectId?: string | null; tags?: Array<{ key: string; value: string }> },
+  data: { hostname?: string; projectId?: string | null; tags?: Array<{ key: string; value: string }> },
 ) {
   const server = await prisma.server.findFirst({ where: { id: serverId, orgId } });
   if (!server) {
@@ -74,6 +74,7 @@ export async function updateServer(
   }
 
   const update: Record<string, unknown> = {};
+  if (data.hostname !== undefined) update.hostname = data.hostname;
   if (data.projectId !== undefined) update.projectId = data.projectId;
   if (data.tags !== undefined) update.tags = JSON.parse(JSON.stringify(data.tags));
 
