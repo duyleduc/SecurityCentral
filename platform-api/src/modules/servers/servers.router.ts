@@ -51,3 +51,18 @@ serversRouter.get(
     }
   },
 );
+
+// GET /api/v1/servers/:id/security-posture
+serversRouter.get(
+  '/:id/security-posture',
+  requirePermission('view_dashboard'),
+  validate({ params: ServerIdParamsSchema }),
+  async (req, res, next) => {
+    try {
+      const posture = await serversService.getSecurityPosture(req.auth!.orgId, req.params.id);
+      res.json(successEnvelope(posture));
+    } catch (err) {
+      next(err);
+    }
+  },
+);

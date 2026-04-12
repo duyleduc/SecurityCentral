@@ -36,6 +36,9 @@ func New(cfg *config.Config, log *logging.Logger) *Agent {
 	reg.Register(collector.NewMemory())
 	reg.Register(collector.NewDisk())
 	reg.Register(collector.NewNetwork())
+	reg.Register(collector.NewProcess())
+	reg.Register(collector.NewService())
+	reg.Register(collector.NewSecurity())
 
 	return &Agent{
 		cfg:       cfg,
@@ -82,8 +85,63 @@ func (a *Agent) processLoop(ctx context.Context, results <-chan collector.Snapsh
 					"count":     len(alerts),
 				})
 			}
+
+			// Security posture goes to a separate endpoint (too large for heartbeat).
+			if snap.Key == "security" {
+				go a.sendSecurityPosture()
+			}
 		}
 	}
+}
+
+func (a *Agent) sendSecurityPosture() {
+	sec, ok := a.store.LatestSecurity()
+	if !ok {
+		return
+	}
+
+	req := platform.SecurityPostureRequest{
+		AgentID:       a.cfg.AgentID,
+		CollectedAt:   time.Now().UTC().Format(time.RFC3339),
+		PendingReboot: sec.PendingReboot,
+		SSHFailures:   sec.SSHFailures,
+		ShellUsers:    sec.ShellUsers,
+		SSHConfig: platform.SSHConfig{
+			RootLogin:      sec.SSHConfig.RootLogin,
+			PasswordAuth:   sec.SSHConfig.PasswordAuth,
+			Port:           sec.SSHConfig.Port,
+			PermitEmptyPwd: sec.SSHConfig.PermitEmptyPwd,
+		},
+		Firewall: platform.FWInfo{
+			Active: sec.Firewall.Active,
+			Type:   sec.Firewall.Type,
+		},
+		OpenFDs: platform.FDEntry{
+			Allocated: sec.OpenFDs.Allocated,
+			Max:       sec.OpenFDs.Max,
+		},
+	}
+
+	for _, p := range sec.ListeningPorts {
+		req.ListeningPorts = append(req.ListeningPorts, platform.PortEntry{
+			Port: p.Port, Proto: p.Proto, Process: p.Process, Bind: p.Bind,
+		})
+	}
+	for _, s := range sec.LoggedInUsers {
+		req.LoggedInUsers = append(req.LoggedInUsers, platform.SessionInfo{
+			User: s.User, From: s.From, Since: s.Since,
+		})
+	}
+
+	if err := a.client.SendSecurityPosture(req); err != nil {
+		a.log.Error("security posture send failed", map[string]interface{}{"error": err.Error()})
+		return
+	}
+	a.log.Info("security posture sent", map[string]interface{}{
+		"ports":      len(req.ListeningPorts),
+		"sshFails":   req.SSHFailures,
+		"shellUsers": len(req.ShellUsers),
+	})
 }
 
 // sendLoop sends heartbeats: urgent after 15s debounce, normal every 60s.

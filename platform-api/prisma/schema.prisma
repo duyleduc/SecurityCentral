@@ -148,9 +148,10 @@ model Server {
   createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
 
-  project  Project?              @relation(fields: [projectId], references: [id])
-  metrics  ServerMetricSnapshot[]
-  findings Finding[]
+  project         Project?              @relation(fields: [projectId], references: [id])
+  metrics         ServerMetricSnapshot[]
+  findings        Finding[]
+  securityPosture SecurityPosture[]
 
   @@index([orgId])
   @@index([projectId])
@@ -220,6 +221,32 @@ model ServerMetricSnapshot {
 
   @@index([serverId, createdAt])
   @@map("server_metric_snapshots")
+}
+
+// ---------------------------------------------------------------------------
+// SecurityPosture (hourly agent security scan)
+// ---------------------------------------------------------------------------
+
+model SecurityPosture {
+  id             String   @id @default(uuid()) @db.VarChar(36)
+  serverId       String   @map("server_id") @db.VarChar(36)
+  collectedAt    DateTime @map("collected_at") @db.DateTime(3)
+  listeningPorts Json     @map("listening_ports") @db.Json     // [{port,proto,process,bind}]
+  sshConfig      Json     @map("ssh_config") @db.Json          // {rootLogin,passwordAuth,port,permitEmptyPwd}
+  firewallActive Boolean  @map("firewall_active")
+  firewallType   String   @map("firewall_type") @db.VarChar(20)
+  loggedInUsers  Json     @map("logged_in_users") @db.Json     // [{user,from,since}]
+  sshFailures    Int      @map("ssh_failures") @default(0)
+  shellUsers     Json     @map("shell_users") @db.Json         // ["root","ubuntu"]
+  pendingReboot  Boolean  @map("pending_reboot") @default(false)
+  openFdAlloc    Int?     @map("open_fd_alloc")
+  openFdMax      Int?     @map("open_fd_max")
+  createdAt      DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  server Server @relation(fields: [serverId], references: [id])
+
+  @@index([serverId, createdAt])
+  @@map("security_postures")
 }
 
 // ---------------------------------------------------------------------------

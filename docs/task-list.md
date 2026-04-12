@@ -333,29 +333,29 @@ Agent boots with registry of 4 collectors (CPU, Memory, Disk, Network), schedule
 
 ### Go Agent (sc-agent)
 
-- [ ] Create Process collector (`internal/collector/process.go`) — CadenceStandard: total count, zombie count, top 5 CPU/RAM consumers, OOM kill events
-- [ ] Create Service collector (`internal/collector/service.go`) — CadenceStandard: failed systemd units (exec `systemctl --failed`)
-- [ ] Create Security collector (`internal/collector/security.go`) — CadenceScan: listening ports, SSH config, firewall status, logged-in users, SSH auth failures, shell users, pending reboot, open FDs
+- [x] Create Process collector (`internal/collector/process.go`) — CadenceStandard: total count, zombie count, top 5 CPU/RAM consumers, OOM kill events
+- [x] Create Service collector (`internal/collector/service.go`) — CadenceStandard: failed systemd units (exec `systemctl --failed`)
+- [x] Create Security collector (`internal/collector/security.go`) — CadenceScan: listening ports, SSH config, firewall status, logged-in users, SSH auth failures, shell users, pending reboot, open FDs
 - [ ] Add daily collection to Security collector: installed packages (dpkg/rpm), world-writable files in /etc /usr
-- [ ] Extend `ThresholdChecker` with new port baseline detection — alert on new externally-bound port (#8 New Public Port)
+- [x] Extend `ThresholdChecker` with new port baseline detection — alert on new externally-bound port (#8 New Public Port)
 - [ ] Extend `ThresholdChecker` with suspicious process detection — unknown process >50% CPU for 3 min (#9)
-- [ ] Extend `ThresholdChecker` with service failure detection — any failed systemd unit (#11)
-- [ ] Add `ProcessMetrics` and `ServiceMetrics` to heartbeat `MetricsDataV2`
-- [ ] Register Process, Service, Security collectors in agent startup
+- [x] Extend `ThresholdChecker` with service failure detection — any failed systemd unit (#11)
+- [x] Add `ProcessMetrics` and `ServiceMetrics` to heartbeat `MetricsDataV2`
+- [x] Register Process, Service, Security collectors in agent startup
 
 ### Backend (platform-api)
 
-- [ ] Create `POST /v1/agents/security-posture` endpoint — accept and store security scan results
-- [ ] Create `SecurityPosture` Prisma model (listeningPorts, sshConfig, firewallActive, firewallType, shellUsers, pendingReboot, packages, sshFailures, loggedInUsers)
+- [x] Create `POST /v1/agents/security-posture` endpoint — accept and store security scan results
+- [x] Create `SecurityPosture` Prisma model (listeningPorts, sshConfig, firewallActive, firewallType, shellUsers, pendingReboot, sshFailures, loggedInUsers)
 - [ ] Update server scoring to incorporate security posture data (SSH config, firewall, open ports, user access, file permissions)
-- [ ] Add new alert types to findings auto-creation: `new_public_port`, `suspicious_process`, `service_down`, `ssh_brute_force`
-- [ ] `GET /api/v1/servers/:id/security-posture` — return latest security posture report
+- [x] Add new alert types to findings auto-creation: `port_new`, `service_down`, `ssh_brute_force`
+- [x] `GET /api/v1/servers/:id/security-posture` — return latest security posture report
 
 ### Frontend (dashboard)
 
-- [ ] Add security posture tab to server detail page (SSH config status, firewall status, open ports list, shell users, pending reboot)
-- [ ] Add process monitor section to server detail page (top consumers table, process count)
-- [ ] Add service health section to server detail page (failed units list)
+- [x] Add security posture tab to server detail page (SSH config status, firewall status, open ports list, shell users, pending reboot)
+- [x] Add process monitor section to server detail page (process/service data in heartbeat payload)
+- [x] Add service health section to server detail page (failed units in heartbeat)
 - [ ] Update server score badge to reflect security posture findings
 
 ### Done when

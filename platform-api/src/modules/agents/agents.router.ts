@@ -12,6 +12,7 @@ import {
   AgentRegisterSchema,
   AgentHeartbeatSchema,
   AgentFindingsSchema,
+  SecurityPostureSchema,
 } from './agents.validation.js';
 import * as agentsService from './agents.service.js';
 
@@ -126,6 +127,16 @@ agentRouter.post('/heartbeat', validate({ body: AgentHeartbeatSchema }), async (
 agentRouter.post('/findings', validate({ body: AgentFindingsSchema }), async (req, res, next) => {
   try {
     const result = await agentsService.ingestFindings(req.body);
+    res.json(successEnvelope(result));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /v1/agents/security-posture
+agentRouter.post('/security-posture', validate({ body: SecurityPostureSchema }), async (req, res, next) => {
+  try {
+    const result = await agentsService.storeSecurityPosture(req.body);
     res.json(successEnvelope(result));
   } catch (err) {
     next(err);

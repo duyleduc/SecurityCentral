@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -11,11 +12,23 @@ import {
   CircularProgress,
   Divider,
   Paper,
+  Tabs,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import StorageIcon from '@mui/icons-material/Storage';
 import MemoryIcon from '@mui/icons-material/Memory';
 import DnsIcon from '@mui/icons-material/Dns';
+import SecurityIcon from '@mui/icons-material/Security';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+import WarningIcon from '@mui/icons-material/Warning';
 import {
   LineChart,
   Line,
@@ -28,7 +41,8 @@ import {
   AreaChart,
   Area,
 } from 'recharts';
-import { useServer, useServerMetrics } from '../../api/hooks';
+import { useServer, useServerMetrics, useSecurityPosture } from '../../api/hooks';
+import type { SecurityPosture } from '../../api/hooks';
 import { ScoreBadge, computeScore } from '../../components/ScoreBadge';
 
 function formatTime(ts: string) {
@@ -44,8 +58,10 @@ function formatBytes(bytes: number): string {
 export function ServerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [tab, setTab] = useState(0);
   const { data: server, isLoading } = useServer(id ?? '');
   const { data: metrics } = useServerMetrics(id ?? '', 24);
+  const { data: posture } = useSecurityPosture(id ?? '');
 
   if (isLoading) return <CircularProgress />;
   if (!server) return <Typography>Server not found</Typography>;
@@ -319,37 +335,189 @@ export function ServerDetailPage() {
         </Grid>
       </Grid>
 
-      {/* System Information */}
+      {/* Tabs: System Info | Security Posture */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+        <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+          <Tab label="System Information" />
+          <Tab icon={<SecurityIcon fontSize="small" />} iconPosition="start" label="Security Posture" />
+        </Tabs>
+      </Box>
+
+      {tab === 0 && (
+        <Card>
+          <CardContent>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <InfoRow icon={<StorageIcon fontSize="small" />} label="Hostname" value={server.hostname} />
+                <InfoRow label="OS" value={`${server.osFamily ?? 'Unknown'} ${server.osVersion ?? ''}`} />
+                <InfoRow label="Kernel" value={server.kernel ?? '-'} />
+                <InfoRow label="Architecture" value={(server as any).arch ?? '-'} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <InfoRow icon={<MemoryIcon fontSize="small" />} label="CPU" value={server.cpuModel ?? '-'} />
+                <InfoRow label="CPU Cores" value={server.cpuCores != null ? String(server.cpuCores) : '-'} />
+                <InfoRow label="Total RAM" value={server.totalRamMb != null ? (server.totalRamMb >= 1024 ? `${(server.totalRamMb / 1024).toFixed(1)} GB` : `${server.totalRamMb} MB`) : '-'} />
+                <InfoRow label="Total Disk" value={server.totalDiskGb != null ? `${server.totalDiskGb} GB` : '-'} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <InfoRow icon={<DnsIcon fontSize="small" />} label="IP Addresses" value={server.ipAddresses?.join(', ') ?? '-'} />
+                <InfoRow label="Agent ID" value={server.agentId ?? '-'} mono />
+                <InfoRow label="Agent Version" value={server.agentVersion ?? '-'} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <InfoRow label="Last Heartbeat" value={server.lastHeartbeat ? new Date(server.lastHeartbeat).toLocaleString() : 'Never'} />
+                <InfoRow label="Registered" value={new Date(server.createdAt).toLocaleString()} />
+                <InfoRow label="Status" value={server.status} />
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 1 && <SecurityPostureTab posture={posture ?? null} />}
+    </Box>
+  );
+}
+
+function StatusIcon({ ok }: { ok: boolean }) {
+  return ok
+    ? <CheckCircleIcon fontSize="small" color="success" />
+    : <CancelIcon fontSize="small" color="error" />;
+}
+
+function SecurityPostureTab({ posture }: { posture: SecurityPosture | null }) {
+  if (!posture) {
+    return (
       <Card>
         <CardContent>
-          <Typography variant="h6" mb={2}>System Information</Typography>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <InfoRow icon={<StorageIcon fontSize="small" />} label="Hostname" value={server.hostname} />
-              <InfoRow label="OS" value={`${server.osFamily ?? 'Unknown'} ${server.osVersion ?? ''}`} />
-              <InfoRow label="Kernel" value={server.kernel ?? '-'} />
-              <InfoRow label="Architecture" value={(server as any).arch ?? '-'} />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <InfoRow icon={<MemoryIcon fontSize="small" />} label="CPU" value={server.cpuModel ?? '-'} />
-              <InfoRow label="CPU Cores" value={server.cpuCores != null ? String(server.cpuCores) : '-'} />
-              <InfoRow label="Total RAM" value={server.totalRamMb != null ? (server.totalRamMb >= 1024 ? `${(server.totalRamMb / 1024).toFixed(1)} GB` : `${server.totalRamMb} MB`) : '-'} />
-              <InfoRow label="Total Disk" value={server.totalDiskGb != null ? `${server.totalDiskGb} GB` : '-'} />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <InfoRow icon={<DnsIcon fontSize="small" />} label="IP Addresses" value={server.ipAddresses?.join(', ') ?? '-'} />
-              <InfoRow label="Agent ID" value={server.agentId ?? '-'} mono />
-              <InfoRow label="Agent Version" value={server.agentVersion ?? '-'} />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <InfoRow label="Last Heartbeat" value={server.lastHeartbeat ? new Date(server.lastHeartbeat).toLocaleString() : 'Never'} />
-              <InfoRow label="Registered" value={new Date(server.createdAt).toLocaleString()} />
-              <InfoRow label="Status" value={server.status} />
-            </Grid>
-          </Grid>
+          <Typography variant="body2" color="text.secondary">
+            No security posture data yet. The agent performs a security scan every hour.
+          </Typography>
         </CardContent>
       </Card>
-    </Box>
+    );
+  }
+
+  const sshOk = posture.sshConfig.rootLogin !== 'yes' && posture.sshConfig.passwordAuth !== 'yes';
+  const fwOk = posture.firewallActive;
+
+  return (
+    <Stack spacing={2}>
+      {/* Summary chips */}
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+        <Chip icon={fwOk ? <CheckCircleIcon /> : <WarningIcon />} label={`Firewall: ${posture.firewallType}${fwOk ? ' active' : ' inactive'}`}
+          color={fwOk ? 'success' : 'warning'} variant="outlined" />
+        <Chip icon={sshOk ? <CheckCircleIcon /> : <WarningIcon />} label={sshOk ? 'SSH hardened' : 'SSH needs hardening'}
+          color={sshOk ? 'success' : 'warning'} variant="outlined" />
+        {posture.pendingReboot && <Chip icon={<WarningIcon />} label="Reboot pending" color="warning" variant="outlined" />}
+        {posture.sshFailures > 0 && <Chip icon={<WarningIcon />} label={`${posture.sshFailures} SSH failures`}
+          color={posture.sshFailures > 10 ? 'error' : 'warning'} variant="outlined" />}
+        <Chip label={`${posture.listeningPorts.length} listening ports`} variant="outlined" />
+        <Chip label={`${posture.shellUsers.length} shell users`} variant="outlined" />
+        {posture.openFdAlloc != null && posture.openFdMax != null && (
+          <Chip label={`FDs: ${posture.openFdAlloc.toLocaleString()} / ${posture.openFdMax.toLocaleString()}`} variant="outlined" />
+        )}
+      </Stack>
+
+      {/* SSH Config + Firewall */}
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" mb={1}>SSH Configuration</Typography>
+              <Stack spacing={1}>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <StatusIcon ok={posture.sshConfig.rootLogin !== 'yes'} />
+                  <Typography variant="body2">Root Login: <strong>{posture.sshConfig.rootLogin}</strong></Typography>
+                </Stack>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <StatusIcon ok={posture.sshConfig.passwordAuth !== 'yes'} />
+                  <Typography variant="body2">Password Auth: <strong>{posture.sshConfig.passwordAuth}</strong></Typography>
+                </Stack>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <StatusIcon ok={posture.sshConfig.permitEmptyPwd !== 'yes'} />
+                  <Typography variant="body2">Empty Passwords: <strong>{posture.sshConfig.permitEmptyPwd}</strong></Typography>
+                </Stack>
+                <Typography variant="body2" color="text.secondary">Port: {posture.sshConfig.port}</Typography>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" mb={1}>Active Sessions</Typography>
+              {posture.loggedInUsers.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">No active sessions</Typography>
+              ) : (
+                <Stack spacing={0.5}>
+                  {posture.loggedInUsers.map((u, i) => (
+                    <Typography key={i} variant="body2">
+                      <strong>{u.user}</strong> from {u.from} since {u.since}
+                    </Typography>
+                  ))}
+                </Stack>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Listening Ports */}
+      <Card>
+        <CardContent>
+          <Typography variant="h6" mb={1}>Listening Ports</Typography>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Port</TableCell>
+                  <TableCell>Proto</TableCell>
+                  <TableCell>Process</TableCell>
+                  <TableCell>Bind</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {posture.listeningPorts.map((p, i) => (
+                  <TableRow key={i}>
+                    <TableCell sx={{ fontFamily: 'monospace' }}>{p.port}</TableCell>
+                    <TableCell>{p.proto}</TableCell>
+                    <TableCell>{p.process || '-'}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={p.bind || '0.0.0.0'}
+                        size="small"
+                        color={p.bind === '0.0.0.0' || p.bind === '::' || p.bind === '' ? 'warning' : 'default'}
+                        variant="outlined"
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+
+      {/* Shell Users */}
+      <Card>
+        <CardContent>
+          <Typography variant="h6" mb={1}>Shell Users</Typography>
+          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+            {posture.shellUsers.map((u) => (
+              <Chip key={u} label={u} size="small" variant="outlined"
+                color={u === 'root' ? 'warning' : 'default'}
+                sx={{ fontFamily: 'monospace' }} />
+            ))}
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Typography variant="caption" color="text.secondary">
+        Last scan: {new Date(posture.collectedAt).toLocaleString()}
+      </Typography>
+    </Stack>
   );
 }
 

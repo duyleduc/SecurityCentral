@@ -281,6 +281,50 @@ export async function ingestFindings(input: AgentFindingsInput) {
 // Auto-create findings from heartbeat alerts
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Security Posture
+// ---------------------------------------------------------------------------
+
+interface SecurityPostureInput {
+  readonly agentId: string;
+  readonly collectedAt: string;
+  readonly listeningPorts: ReadonlyArray<{ port: number; proto: string; process: string; bind: string }>;
+  readonly sshConfig: { rootLogin: string; passwordAuth: string; port: number; permitEmptyPwd: string };
+  readonly firewall: { active: boolean; type: string };
+  readonly loggedInUsers: ReadonlyArray<{ user: string; from: string; since: string }>;
+  readonly sshFailures: number;
+  readonly shellUsers: readonly string[];
+  readonly pendingReboot: boolean;
+  readonly openFDs: { allocated: number; max: number };
+}
+
+export async function storeSecurityPosture(input: SecurityPostureInput) {
+  const server = await prisma.server.findUnique({ where: { agentId: input.agentId } });
+  if (!server) {
+    throw new AppError('RESOURCE_NOT_FOUND', 'Agent not registered');
+  }
+
+  await prisma.securityPosture.create({
+    data: {
+      serverId: server.id,
+      collectedAt: new Date(input.collectedAt),
+      listeningPorts: JSON.parse(JSON.stringify(input.listeningPorts)),
+      sshConfig: JSON.parse(JSON.stringify(input.sshConfig)),
+      firewallActive: input.firewall.active,
+      firewallType: input.firewall.type,
+      loggedInUsers: JSON.parse(JSON.stringify(input.loggedInUsers)),
+      sshFailures: input.sshFailures,
+      shellUsers: JSON.parse(JSON.stringify(input.shellUsers)),
+      pendingReboot: input.pendingReboot,
+      openFdAlloc: input.openFDs.allocated,
+      openFdMax: input.openFDs.max,
+    },
+  });
+
+  logger.debug('Security posture stored', { agentId: input.agentId, ports: input.listeningPorts.length });
+  return { stored: true };
+}
+
 const ALERT_SEVERITY: Record<string, string> = {
   cpu_high: 'high',
   ram_high: 'high',
@@ -292,6 +336,7 @@ const ALERT_SEVERITY: Record<string, string> = {
   iowait_high: 'high',
   cpu_spike: 'medium',
   ram_spike: 'medium',
+  ssh_brute_force: 'high',
 };
 
 async function createAgentFindings(

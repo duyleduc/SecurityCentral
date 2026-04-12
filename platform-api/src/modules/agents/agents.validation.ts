@@ -55,6 +55,21 @@ const MetricsSchema = z.object({
       drops: z.number(),
     })).default([]),
   }).default({ rxBytesPerSec: 0, txBytesPerSec: 0, errors: 0, drops: 0, interfaces: [] }),
+  process: z.object({
+    total: z.number().int(),
+    zombies: z.number().int(),
+    oomKills: z.number().int(),
+    top: z.array(z.object({
+      pid: z.number().int(),
+      name: z.string(),
+      user: z.string(),
+      cpu: z.number(),
+      ram: z.number(),
+    })).default([]),
+  }).optional(),
+  service: z.object({
+    failedUnits: z.array(z.string()).default([]),
+  }).optional(),
 });
 
 const SystemInfoSchema = z.object({
@@ -98,4 +113,37 @@ export const ServerIdParamsSchema = z.object({
 
 export const ServerMetricsQuerySchema = z.object({
   hours: z.coerce.number().int().min(1).max(168).default(24),
+});
+
+export const SecurityPostureSchema = z.object({
+  agentId: z.string().uuid(),
+  collectedAt: z.string(),
+  listeningPorts: z.array(z.object({
+    port: z.number().int(),
+    proto: z.string(),
+    process: z.string(),
+    bind: z.string(),
+  })).default([]),
+  sshConfig: z.object({
+    rootLogin: z.string(),
+    passwordAuth: z.string(),
+    port: z.number().int(),
+    permitEmptyPwd: z.string(),
+  }),
+  firewall: z.object({
+    active: z.boolean(),
+    type: z.string(),
+  }),
+  loggedInUsers: z.array(z.object({
+    user: z.string(),
+    from: z.string(),
+    since: z.string(),
+  })).default([]),
+  sshFailures: z.number().int().default(0),
+  shellUsers: z.array(z.string()).default([]),
+  pendingReboot: z.boolean().default(false),
+  openFDs: z.object({
+    allocated: z.number().int(),
+    max: z.number().int(),
+  }),
 });

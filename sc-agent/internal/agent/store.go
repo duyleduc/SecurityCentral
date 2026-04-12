@@ -178,7 +178,43 @@ func (ms *MetricStore) AggregateMetrics() platform.MetricsData {
 		}
 	}
 
+	// --- Process: latest snapshot ---
+	if snap, ok := ms.latest["process"]; ok {
+		if d, ok := snap.Data.(collector.ProcessData); ok {
+			pm := &platform.ProcessMetrics{
+				Total:    d.Total,
+				Zombies:  d.Zombies,
+				OOMKills: d.OOMKills,
+			}
+			for _, p := range d.Top {
+				pm.Top = append(pm.Top, platform.ProcessInfo{
+					PID: p.PID, Name: p.Name, User: p.User, CPU: p.CPU, RAM: p.RAM,
+				})
+			}
+			md.Process = pm
+		}
+	}
+
+	// --- Service: latest snapshot ---
+	if snap, ok := ms.latest["service"]; ok {
+		if d, ok := snap.Data.(collector.ServiceData); ok {
+			md.Service = &platform.ServiceMetrics{FailedUnits: d.FailedUnits}
+		}
+	}
+
 	return md
+}
+
+// LatestSecurity returns the latest security posture data.
+func (ms *MetricStore) LatestSecurity() (collector.SecurityData, bool) {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	if snap, ok := ms.latest["security"]; ok {
+		if d, ok := snap.Data.(collector.SecurityData); ok {
+			return d, true
+		}
+	}
+	return collector.SecurityData{}, false
 }
 
 // LatestCPU returns the latest CPU data for threshold checking.

@@ -60,3 +60,16 @@ export async function getMetrics(orgId: string, serverId: string, hours: number)
 
   return rows.map((m) => serializeMetric(m as unknown as Record<string, unknown>));
 }
+
+export async function getSecurityPosture(orgId: string, serverId: string) {
+  const server = await prisma.server.findFirst({ where: { id: serverId, orgId } });
+  if (!server) {
+    throw new AppError('RESOURCE_NOT_FOUND', 'Server not found');
+  }
+
+  // Return the latest posture report.
+  return prisma.securityPosture.findFirst({
+    where: { serverId },
+    orderBy: { createdAt: 'desc' },
+  });
+}

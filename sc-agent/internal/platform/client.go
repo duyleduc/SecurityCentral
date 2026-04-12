@@ -56,11 +56,76 @@ type Alert struct {
 }
 
 type MetricsData struct {
-	CPU     CPUMetrics     `json:"cpu"`
-	RAM     RAMMetrics     `json:"ram"`
-	Disk    DiskMetrics    `json:"disk"`
-	Load    LoadMetrics    `json:"load"`
-	Network NetworkMetrics `json:"network"`
+	CPU     CPUMetrics      `json:"cpu"`
+	RAM     RAMMetrics      `json:"ram"`
+	Disk    DiskMetrics     `json:"disk"`
+	Load    LoadMetrics     `json:"load"`
+	Network NetworkMetrics  `json:"network"`
+	Process *ProcessMetrics `json:"process,omitempty"`
+	Service *ServiceMetrics `json:"service,omitempty"`
+}
+
+type ProcessMetrics struct {
+	Total    int           `json:"total"`
+	Zombies  int           `json:"zombies"`
+	OOMKills int           `json:"oomKills"`
+	Top      []ProcessInfo `json:"top"`
+}
+
+type ProcessInfo struct {
+	PID  int32   `json:"pid"`
+	Name string  `json:"name"`
+	User string  `json:"user"`
+	CPU  float64 `json:"cpu"`
+	RAM  float64 `json:"ram"`
+}
+
+type ServiceMetrics struct {
+	FailedUnits []string `json:"failedUnits"`
+}
+
+// SecurityPostureRequest is sent to POST /v1/agents/security-posture.
+type SecurityPostureRequest struct {
+	AgentID        string        `json:"agentId"`
+	CollectedAt    string        `json:"collectedAt"`
+	ListeningPorts []PortEntry   `json:"listeningPorts"`
+	SSHConfig      SSHConfig     `json:"sshConfig"`
+	Firewall       FWInfo        `json:"firewall"`
+	LoggedInUsers  []SessionInfo `json:"loggedInUsers"`
+	SSHFailures    int           `json:"sshFailures"`
+	ShellUsers     []string      `json:"shellUsers"`
+	PendingReboot  bool          `json:"pendingReboot"`
+	OpenFDs        FDEntry       `json:"openFDs"`
+}
+
+type PortEntry struct {
+	Port    uint32 `json:"port"`
+	Proto   string `json:"proto"`
+	Process string `json:"process"`
+	Bind    string `json:"bind"`
+}
+
+type SSHConfig struct {
+	RootLogin      string `json:"rootLogin"`
+	PasswordAuth   string `json:"passwordAuth"`
+	Port           int    `json:"port"`
+	PermitEmptyPwd string `json:"permitEmptyPwd"`
+}
+
+type FWInfo struct {
+	Active bool   `json:"active"`
+	Type   string `json:"type"`
+}
+
+type SessionInfo struct {
+	User  string `json:"user"`
+	From  string `json:"from"`
+	Since string `json:"since"`
+}
+
+type FDEntry struct {
+	Allocated int `json:"allocated"`
+	Max       int `json:"max"`
 }
 
 type CPUMetrics struct {
@@ -146,6 +211,10 @@ func (c *Client) SendHeartbeat(req HeartbeatRequest) (*HeartbeatResponse, error)
 		return nil, err
 	}
 	return &resp, nil
+}
+
+func (c *Client) SendSecurityPosture(req SecurityPostureRequest) error {
+	return c.post("/v1/agents/security-posture", req, nil)
 }
 
 func (c *Client) post(path string, body interface{}, result interface{}) error {

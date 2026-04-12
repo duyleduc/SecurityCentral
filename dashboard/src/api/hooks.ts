@@ -255,6 +255,23 @@ export interface ServerMetric {
   createdAt: string;
 }
 
+export interface SecurityPosture {
+  id: string;
+  serverId: string;
+  collectedAt: string;
+  listeningPorts: Array<{ port: number; proto: string; process: string; bind: string }>;
+  sshConfig: { rootLogin: string; passwordAuth: string; port: number; permitEmptyPwd: string };
+  firewallActive: boolean;
+  firewallType: string;
+  loggedInUsers: Array<{ user: string; from: string; since: string }>;
+  sshFailures: number;
+  shellUsers: string[];
+  pendingReboot: boolean;
+  openFdAlloc: number | null;
+  openFdMax: number | null;
+  createdAt: string;
+}
+
 export interface InstallToken {
   id: string;
   rawToken?: string;
@@ -286,6 +303,15 @@ export function useServerMetrics(id: string, hours = 24) {
     queryFn: () => apiClient<ServerMetric[]>(`/api/v1/servers/${id}/metrics?hours=${hours}`),
     enabled: !!id,
     refetchInterval: 15_000,
+  });
+}
+
+export function useSecurityPosture(id: string) {
+  return useQuery({
+    queryKey: ['servers', id, 'security-posture'],
+    queryFn: () => apiClient<SecurityPosture | null>(`/api/v1/servers/${id}/security-posture`),
+    enabled: !!id,
+    refetchInterval: 60_000,
   });
 }
 
