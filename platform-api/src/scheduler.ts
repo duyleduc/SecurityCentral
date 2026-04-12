@@ -7,8 +7,9 @@ let sslTimer: ReturnType<typeof setInterval> | null = null;
 let offlineTimer: ReturnType<typeof setInterval> | null = null;
 
 const SSL_POLL_INTERVAL = 60_000; // poll every 60s for endpoints due for SSL/DNS check
-const OFFLINE_POLL_INTERVAL = 5 * 60_000; // check for offline agents every 5 min
+const OFFLINE_POLL_INTERVAL = 2 * 60_000; // check every 2 min
 const OFFLINE_THRESHOLD_MS = 5 * 60_000; // 5 minutes without heartbeat = offline
+const DEAD_THRESHOLD_MS = 30 * 60_000; // 30 minutes without heartbeat = dead
 
 // ---------------------------------------------------------------------------
 // SSL/DNS checks — full security scan (daily)
@@ -48,26 +49,74 @@ async function runDueSslChecks(): Promise<void> {
 
 async function detectOfflineAgents(): Promise<void> {
   try {
-    const threshold = new Date(Date.now() - OFFLINE_THRESHOLD_MS);
+    const now = Date.now();
+    const offlineThreshold = new Date(now - OFFLINE_THRESHOLD_MS);
+    const deadThreshold = new Date(now - DEAD_THRESHOLD_MS);
+
+    // Find all servers with agents that have stale heartbeats
+    // (includes already-offline servers that may need escalation to dead)
     const staleServers = await prisma.server.findMany({
       where: {
-        status: { notIn: ['offline'] },
-        lastHeartbeat: { lt: threshold },
+        status: { notIn: ['dead', 'pending_delete'] },
+        lastHeartbeat: { lt: offlineThreshold },
         agentId: { not: null },
       },
     });
 
     for (const server of staleServers) {
+      const hb = server.lastHeartbeat ? server.lastHeartbeat.getTime() : 0;
+      const isDead = hb < deadThreshold.getTime();
+      const newStatus = isDead ? 'dead' : 'offline';
+
+      // Only update if status actually changes
+      if (server.status === newStatus) continue;
+
       await prisma.server.update({
         where: { id: server.id },
-        data: { status: 'offline' },
+        data: { status: newStatus },
       });
-      emitAgentDisconnected(server.orgId, { id: server.id, hostname: server.hostname });
-      logger.warn('agent marked offline', { serverId: server.id, hostname: server.hostname, lastHeartbeat: server.lastHeartbeat });
-    }
 
-    if (staleServers.length > 0) {
-      logger.info(`offline detection: ${staleServers.length} agent(s) marked offline`);
+      emitAgentDisconnected(server.orgId, { id: server.id, hostname: server.hostname });
+
+      // Auto-create a finding for offline/dead server (dedup by title)
+      const title = isDead
+        ? `server ${server.hostname} is unreachable (dead)`
+        : `server ${server.hostname} is offline`;
+      const severity = isDead ? 'critical' : 'high';
+
+      const existing = await prisma.finding.findFirst({
+        where: {
+          orgId: server.orgId,
+          serverId: server.id,
+          source: 'infra_agent',
+          title: { startsWith: `server ${server.hostname} is` },
+          status: { in: ['open', 'in_progress'] },
+        },
+      });
+
+      if (existing) {
+        // Escalate existing offline finding to dead
+        if (isDead && existing.severity !== 'critical') {
+          await prisma.finding.update({
+            where: { id: existing.id },
+            data: { severity: 'critical', title, description: `No heartbeat since ${server.lastHeartbeat?.toISOString()}. Server may be down.` },
+          });
+        }
+      } else {
+        await prisma.finding.create({
+          data: {
+            orgId: server.orgId,
+            serverId: server.id,
+            source: 'infra_agent',
+            severity,
+            status: 'open',
+            title,
+            description: `No heartbeat since ${server.lastHeartbeat?.toISOString()}.${isDead ? ' Server may be down or the agent was removed.' : ' Agent may have lost connectivity.'}`,
+          },
+        });
+      }
+
+      logger.warn(`agent marked ${newStatus}`, { serverId: server.id, hostname: server.hostname, lastHeartbeat: server.lastHeartbeat });
     }
   } catch (err) {
     logger.error('scheduler: detectOfflineAgents error', { error: (err as Error).message });

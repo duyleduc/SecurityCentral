@@ -358,7 +358,7 @@ export function ServerDetailPage() {
             <Typography variant="h4">{server.hostname}</Typography>
             <Chip
               label={server.status}
-              color={server.status === 'online' ? 'success' : server.status === 'critical' ? 'error' : server.status === 'warning' ? 'warning' : 'default'}
+              color={server.status === 'online' ? 'success' : server.status === 'warning' ? 'warning' : 'error'}
             />
             {server.project && (
               <Chip icon={<FolderIcon sx={{ fontSize: 14 }} />} label={server.project.name} size="small" variant="outlined"

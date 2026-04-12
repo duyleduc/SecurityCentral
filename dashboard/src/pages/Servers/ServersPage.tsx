@@ -32,7 +32,9 @@ function StatusColor(status: string): 'success' | 'warning' | 'error' | 'default
   switch (status) {
     case 'online': return 'success';
     case 'warning': return 'warning';
-    case 'critical': return 'error';
+    case 'critical':
+    case 'offline':
+    case 'dead': return 'error';
     default: return 'default';
   }
 }
@@ -112,7 +114,7 @@ export function ServersPage() {
   const online = servers?.filter((s) => s.status === 'online').length ?? 0;
   const warning = servers?.filter((s) => s.status === 'warning').length ?? 0;
   const critical = servers?.filter((s) => s.status === 'critical').length ?? 0;
-  const offline = servers?.filter((s) => s.status === 'offline').length ?? 0;
+  const offline = servers?.filter((s) => s.status === 'offline' || s.status === 'dead').length ?? 0;
 
   return (
     <Box>
@@ -129,7 +131,7 @@ export function ServersPage() {
           { label: 'Online', value: online, color: 'success.main' },
           { label: 'Warning', value: warning, color: 'warning.main' },
           { label: 'Critical', value: critical, color: 'error.main' },
-          { label: 'Offline', value: offline, color: 'text.secondary' },
+          { label: 'Offline', value: offline, color: 'error.main' },
         ].map((s) => (
           <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
             <Card>

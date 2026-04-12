@@ -166,6 +166,20 @@ export async function processHeartbeat(input: HeartbeatInput) {
     return { commands: [{ type: 'shutdown' }], config: {} };
   }
 
+  // Auto-resolve offline/dead findings when agent comes back
+  if (server.status === 'offline' || server.status === 'dead') {
+    await prisma.finding.updateMany({
+      where: {
+        orgId: server.orgId,
+        serverId: server.id,
+        source: 'infra_agent',
+        title: { startsWith: `server ${server.hostname} is` },
+        status: { in: ['open', 'in_progress'] },
+      },
+      data: { status: 'resolved', resolvedAt: new Date() },
+    });
+  }
+
   // Determine status from alerts
   let status = 'online';
   if (input.alerts.length > 0) {
