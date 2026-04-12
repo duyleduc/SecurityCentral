@@ -306,18 +306,18 @@ Agent sends load avg, iowait, swap, disk I/O, and network metrics. Server detail
 
 ### Go Agent (sc-agent)
 
-- [ ] Create `Collector` interface in `internal/collector/registry.go` — `Name()`, `Cadence()`, `Enabled()`, `Init()`, `Collect()`
-- [ ] Create `Registry` with `Register()`, `Enabled()`, `ByCadence()` methods
-- [ ] Create `Scheduler` in `internal/agent/scheduler.go` — goroutine per cadence group, results channel
-- [ ] Create `MetricStore` in `internal/agent/store.go` — holds latest snapshots + ring buffers for fast-cadence metrics
-- [ ] Extract CPU collector (`internal/collector/cpu.go`) — CadenceFast, returns CPU%, iowait%, load avg
-- [ ] Extract Memory collector (`internal/collector/memory.go`) — CadenceFast, returns used%, available bytes, swap
-- [ ] Extract Disk collector (`internal/collector/disk.go`) — CadenceStandard, returns per-mount usage + I/O deltas
-- [ ] Extract Network collector (`internal/collector/network.go`) — CadenceStandard, returns per-interface bytes/errors + TCP counts
-- [ ] Split `agent/collector.go` into `agent/ringbuffer.go` and `agent/alertbuffer.go`
-- [ ] Refactor `agent/heartbeat.go` → `agent/agent.go` — use Scheduler + MetricStore + processLoop instead of raw collectLoop
-- [ ] Verify existing heartbeat timing (60s normal, 15s urgent) is preserved after refactor
-- [ ] Run `go test -race ./...` — all tests pass with no race conditions
+- [x] Create `Collector` interface in `internal/collector/collector.go` — `Name()`, `Cadence()`, `Enabled()`, `Init()`, `Collect()`
+- [x] Create `Registry` with `Register()`, `Enabled()`, `ByCadence()` methods
+- [x] Create `Scheduler` in `internal/agent/scheduler.go` — goroutine per cadence group, results channel
+- [x] Create `MetricStore` in `internal/agent/store.go` — holds latest snapshots + ring buffers for fast-cadence metrics
+- [x] Extract CPU collector (`internal/collector/cpu.go`) — CadenceFast, returns CPU%, iowait%, load avg
+- [x] Extract Memory collector (`internal/collector/memory.go`) — CadenceFast, returns used%, swap
+- [x] Extract Disk collector (`internal/collector/disk.go`) — CadenceStandard, returns usage + I/O deltas
+- [x] Extract Network collector (`internal/collector/network.go`) — CadenceStandard, returns per-interface bytes/errors + TCP count
+- [x] Split `agent/collector.go` into `agent/alertbuffer.go` + `agent/store.go` (ring buffer moved into store)
+- [x] Refactor `agent/heartbeat.go` — use Scheduler + MetricStore + processLoop instead of raw collectLoop
+- [x] Verify existing heartbeat timing (60s normal, 15s urgent) is preserved after refactor
+- [x] Run `go test -race ./...` — 12 tests pass with no race conditions
 
 ### Done when
 

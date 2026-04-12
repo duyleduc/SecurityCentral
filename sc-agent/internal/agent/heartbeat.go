@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/securitycentral/sc-agent/internal/collector"
 	"github.com/securitycentral/sc-agent/internal/config"
 	"github.com/securitycentral/sc-agent/internal/logging"
 	"github.com/securitycentral/sc-agent/internal/platform"
@@ -11,68 +12,75 @@ import (
 )
 
 const (
-	collectInterval = 1 * time.Second
-	normalInterval  = 60 * time.Second
-	urgentDebounce  = 15 * time.Second
+	normalInterval = 60 * time.Second
+	urgentDebounce = 15 * time.Second
 )
 
 type Agent struct {
 	cfg        *config.Config
 	client     *platform.Client
 	log        *logging.Logger
-	ring       *RingBuffer
+	scheduler  *Scheduler
+	store      *MetricStore
 	alertBuf   *AlertBuffer
-	thresholds ThresholdConfig
+	thresholds *ThresholdChecker
 	spike      *SpikeDetector
 }
 
 func New(cfg *config.Config, log *logging.Logger) *Agent {
 	client := platform.NewClient(cfg.APIBaseURL, cfg.APIKey)
+
+	// Build collector registry — register all metric domains.
+	reg := collector.NewRegistry()
+	reg.Register(collector.NewCPU())
+	reg.Register(collector.NewMemory())
+	reg.Register(collector.NewDisk())
+	reg.Register(collector.NewNetwork())
+
 	return &Agent{
-		cfg:    cfg,
-		client: client,
-		log:    log,
-		ring:   NewRingBuffer(),
-		alertBuf: NewAlertBuffer(),
-		thresholds: ThresholdConfig{
+		cfg:       cfg,
+		client:    client,
+		log:       log,
+		scheduler: NewScheduler(reg, log),
+		store:     NewMetricStore(),
+		alertBuf:  NewAlertBuffer(),
+		thresholds: NewThresholdChecker(ThresholdConfig{
 			CPUPercent:    cfg.CPUThresh,
 			RAMPercent:    cfg.RAMThresh,
 			DiskPercent:   cfg.DiskThresh,
 			IOWaitPercent: cfg.IOWaitThresh,
 			SpikePercent:  cfg.SpikeThresh,
-		},
+		}),
 		spike: &SpikeDetector{},
 	}
 }
 
-// Run starts the collect loop and send loop, blocking until ctx is cancelled.
+// Run starts the scheduler, processLoop, and sendLoop. Blocks until ctx is cancelled.
 func (a *Agent) Run(ctx context.Context) {
-	go a.collectLoop(ctx)
+	results := a.scheduler.Run(ctx)
+	go a.processLoop(ctx, results)
 	a.sendLoop(ctx)
 }
 
-// collectLoop samples metrics every 1s and checks thresholds.
-func (a *Agent) collectLoop(ctx context.Context) {
-	ticker := time.NewTicker(collectInterval)
-	defer ticker.Stop()
-
+// processLoop consumes snapshots from the scheduler, stores them, and checks thresholds.
+func (a *Agent) processLoop(ctx context.Context, results <-chan collector.Snapshot) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			m, err := sysinfo.CollectMetrics()
-			if err != nil {
-				a.log.Error("collect metrics failed", map[string]interface{}{"error": err.Error()})
-				continue
+		case snap, ok := <-results:
+			if !ok {
+				return
 			}
+			a.store.Update(snap)
 
-			a.ring.Push(m)
-
-			alerts := CheckThresholds(m, a.thresholds)
+			alerts := a.thresholds.CheckSnapshot(snap)
 			if len(alerts) > 0 {
 				a.alertBuf.Push(alerts)
-				a.log.Warn("threshold alerts detected", map[string]interface{}{"count": len(alerts)})
+				a.log.Warn("threshold alerts detected", map[string]interface{}{
+					"collector": snap.Key,
+					"count":     len(alerts),
+				})
 			}
 		}
 	}
@@ -92,7 +100,7 @@ func (a *Agent) sendLoop(ctx context.Context) {
 		OSVersion:    sysInfo.Version,
 		Kernel:       sysInfo.Kernel,
 		Arch:         sysInfo.Arch,
-		AgentVersion: "0.1.0",
+		AgentVersion: "0.2.0",
 		CPUCores:     sysInfo.CPUCores,
 		CPUModel:     sysInfo.CPUModel,
 		TotalRAMMB:   sysInfo.TotalRAMMB,
@@ -103,7 +111,7 @@ func (a *Agent) sendLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			// Send final heartbeat before exit
+			// Send final heartbeat before exit.
 			a.sendHeartbeat(false, nil, sys)
 			return
 
@@ -126,11 +134,11 @@ func (a *Agent) sendHeartbeat(urgent bool, alerts []platform.Alert, sys *platfor
 		alerts = []platform.Alert{}
 	}
 
-	metrics := a.ring.Aggregate()
+	metrics := a.store.AggregateMetrics()
 
-	// Check for spikes between 60s windows
+	// Check for spikes between 60s windows.
 	spikeAlerts := a.spike.UpdateAndCheck(
-		metrics.CPU.Avg, metrics.RAM.Avg, a.thresholds.SpikePercent,
+		metrics.CPU.Avg, metrics.RAM.Avg, a.cfg.SpikeThresh,
 	)
 	if len(spikeAlerts) > 0 {
 		alerts = append(alerts, spikeAlerts...)
