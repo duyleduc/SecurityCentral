@@ -337,6 +337,15 @@ export async function ingestFindings(input: AgentFindingsInput) {
 // Security Posture
 // ---------------------------------------------------------------------------
 
+interface AuditResultItem {
+  readonly id: string;
+  readonly category: string;
+  readonly title: string;
+  readonly status: 'pass' | 'fail' | 'warn';
+  readonly severity: 'critical' | 'high' | 'medium' | 'low';
+  readonly detail: string;
+}
+
 interface SecurityPostureInput {
   readonly agentId: string;
   readonly collectedAt: string;
@@ -348,6 +357,7 @@ interface SecurityPostureInput {
   readonly shellUsers: readonly string[];
   readonly pendingReboot: boolean;
   readonly openFDs: { allocated: number; max: number };
+  readonly auditResults?: readonly AuditResultItem[];
 }
 
 export async function storeSecurityPosture(input: SecurityPostureInput) {
@@ -370,10 +380,55 @@ export async function storeSecurityPosture(input: SecurityPostureInput) {
       pendingReboot: input.pendingReboot,
       openFdAlloc: input.openFDs.allocated,
       openFdMax: input.openFDs.max,
+      auditResults: input.auditResults ? JSON.parse(JSON.stringify(input.auditResults)) : undefined,
     },
   });
 
-  logger.debug('Security posture stored', { agentId: input.agentId, ports: input.listeningPorts.length });
+  // Auto-create findings from failed audit checks.
+  if (input.auditResults) {
+    for (const check of input.auditResults) {
+      if (check.status !== 'fail') continue;
+
+      const title = `${check.title} on ${server.hostname}`;
+      const existing = await prisma.finding.findFirst({
+        where: { orgId: server.orgId, serverId: server.id, source: 'security_audit', title, status: { in: ['open', 'in_progress'] } },
+      });
+      if (existing) continue;
+
+      await prisma.finding.create({
+        data: {
+          orgId: server.orgId,
+          serverId: server.id,
+          source: 'security_audit',
+          severity: check.severity,
+          status: 'open',
+          title,
+          description: check.detail,
+          detail: JSON.parse(JSON.stringify({ checkId: check.id, category: check.category })),
+        },
+      });
+    }
+
+    // Auto-resolve findings for checks that now pass.
+    const passingIds = input.auditResults.filter((c) => c.status === 'pass').map((c) => c.title);
+    if (passingIds.length > 0) {
+      const openAuditFindings = await prisma.finding.findMany({
+        where: { orgId: server.orgId, serverId: server.id, source: 'security_audit', status: { in: ['open', 'in_progress'] } },
+      });
+      for (const f of openAuditFindings) {
+        const checkTitle = f.title.replace(` on ${server.hostname}`, '');
+        if (passingIds.includes(checkTitle)) {
+          await prisma.finding.update({ where: { id: f.id }, data: { status: 'resolved', resolvedAt: new Date() } });
+        }
+      }
+    }
+  }
+
+  logger.debug('Security posture stored', {
+    agentId: input.agentId,
+    ports: input.listeningPorts.length,
+    audits: input.auditResults?.length ?? 0,
+  });
   return { stored: true };
 }
 

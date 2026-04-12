@@ -41,6 +41,7 @@ func New(cfg *config.Config, log *logging.Logger) *Agent {
 	reg.Register(collector.NewSecurity())
 	reg.Register(collector.NewDocker())
 	reg.Register(collector.NewPackageInventory())
+	reg.Register(collector.NewAudit())
 
 	return &Agent{
 		cfg:       cfg,
@@ -139,6 +140,18 @@ func (a *Agent) sendSecurityPosture() {
 		})
 	}
 
+	// Include audit results if available.
+	if auditSnap, ok := a.store.Latest("audit"); ok {
+		if ad, ok := auditSnap.Data.(collector.AuditData); ok {
+			for _, r := range ad.Results {
+				req.AuditResults = append(req.AuditResults, platform.AuditResultEntry{
+					ID: r.ID, Category: r.Category, Title: r.Title,
+					Status: r.Status, Severity: r.Severity, Detail: r.Detail,
+				})
+			}
+		}
+	}
+
 	if err := a.client.SendSecurityPosture(req); err != nil {
 		a.log.Error("security posture send failed", map[string]interface{}{"error": err.Error()})
 		return
@@ -147,6 +160,7 @@ func (a *Agent) sendSecurityPosture() {
 		"ports":      len(req.ListeningPorts),
 		"sshFails":   req.SSHFailures,
 		"shellUsers": len(req.ShellUsers),
+		"audits":     len(req.AuditResults),
 	})
 }
 

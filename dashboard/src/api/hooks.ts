@@ -284,6 +284,14 @@ export interface SecurityPosture {
   pendingReboot: boolean;
   openFdAlloc: number | null;
   openFdMax: number | null;
+  auditResults: Array<{
+    id: string;
+    category: string;
+    title: string;
+    status: 'pass' | 'fail' | 'warn';
+    severity: 'critical' | 'high' | 'medium' | 'low';
+    detail: string;
+  }> | null;
   createdAt: string;
 }
 

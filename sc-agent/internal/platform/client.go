@@ -103,16 +103,26 @@ type ServiceMetrics struct {
 
 // SecurityPostureRequest is sent to POST /v1/agents/security-posture.
 type SecurityPostureRequest struct {
-	AgentID        string        `json:"agentId"`
-	CollectedAt    string        `json:"collectedAt"`
-	ListeningPorts []PortEntry   `json:"listeningPorts"`
-	SSHConfig      SSHConfig     `json:"sshConfig"`
-	Firewall       FWInfo        `json:"firewall"`
-	LoggedInUsers  []SessionInfo `json:"loggedInUsers"`
-	SSHFailures    int           `json:"sshFailures"`
-	ShellUsers     []string      `json:"shellUsers"`
-	PendingReboot  bool          `json:"pendingReboot"`
-	OpenFDs        FDEntry       `json:"openFDs"`
+	AgentID        string            `json:"agentId"`
+	CollectedAt    string            `json:"collectedAt"`
+	ListeningPorts []PortEntry       `json:"listeningPorts"`
+	SSHConfig      SSHConfig         `json:"sshConfig"`
+	Firewall       FWInfo            `json:"firewall"`
+	LoggedInUsers  []SessionInfo     `json:"loggedInUsers"`
+	SSHFailures    int               `json:"sshFailures"`
+	ShellUsers     []string          `json:"shellUsers"`
+	PendingReboot  bool              `json:"pendingReboot"`
+	OpenFDs        FDEntry           `json:"openFDs"`
+	AuditResults   []AuditResultEntry `json:"auditResults,omitempty"`
+}
+
+type AuditResultEntry struct {
+	ID       string `json:"id"`
+	Category string `json:"category"`
+	Title    string `json:"title"`
+	Status   string `json:"status"`   // pass, fail, warn
+	Severity string `json:"severity"` // critical, high, medium, low
+	Detail   string `json:"detail"`
 }
 
 type PortEntry struct {

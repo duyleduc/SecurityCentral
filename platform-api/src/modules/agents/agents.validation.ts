@@ -165,6 +165,14 @@ export const SecurityPostureSchema = z.object({
     allocated: z.number().int(),
     max: z.number().int(),
   }),
+  auditResults: z.array(z.object({
+    id: z.string(),
+    category: z.string(),
+    title: z.string(),
+    status: z.enum(['pass', 'fail', 'warn']),
+    severity: z.enum(['critical', 'high', 'medium', 'low']),
+    detail: z.string(),
+  })).default([]),
 });
 
 export const PackageInventorySchema = z.object({

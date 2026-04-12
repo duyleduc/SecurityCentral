@@ -467,30 +467,32 @@ Agent sends daily package list → platform matches against Debian/Ubuntu securi
 
 **Ref:** [server-cve-scanning-analysis.md](./server-cve-scanning-analysis.md) — Tier 1 built-in checks #16–35
 
-### Go Agent (sc-agent) — Extend Security Collector
+### Go Agent (sc-agent)
 
-- [ ] User audit: UID 0 accounts (non-root), users with empty password, password hash algorithm (MD5=critical), NOPASSWD sudoers rules, home directory permissions >750, unexpected authorized_keys, .rhosts/.hosts.equiv detection
-- [ ] Kernel hardening: ASLR (`randomize_va_space`=2), kptr_restrict (>=1), dmesg_restrict (=1), core dump restriction (`suid_dumpable`=0), ptrace_scope (>=1), CPU vulnerability mitigations from `/sys/devices/system/cpu/vulnerabilities/*`
-- [ ] Filesystem audit: unexpected SUID binaries in /usr /bin /sbin, world-writable files in /etc, executables in /tmp and /var/tmp, /etc/passwd and /etc/shadow permission check
-- [ ] Container runtime: Docker socket writable by non-root, privileged containers running, containers mounting docker.sock or /etc or /root
-- [ ] Add all checks to `SecurityPostureRequest` as `auditResults []AuditResult` — each with `checkId`, `status` (pass/fail/warn), `detail`
-- [ ] Each failed audit check → agent sends as alert with type `audit_<checkId>` for finding creation
+- [x] Create `AuditCollector` (`internal/collector/audit.go`) — CadenceDaily, runs 25 hardening checks
+- [x] User audit: UID 0 accounts (non-root), users with empty password, password hash algorithm (MD5=critical), NOPASSWD sudoers rules, home directory permissions >750
+- [x] Kernel hardening: ASLR, kptr_restrict, dmesg_restrict, core dump restriction, ptrace_scope, CPU vulnerability mitigations from `/sys/devices/system/cpu/vulnerabilities/*`
+- [x] Filesystem audit: SUID binaries count, world-writable files in /etc, executables in /tmp and /var/tmp, /etc/passwd and /etc/shadow permissions + ownership
+- [x] Container runtime: Docker socket permissions, privileged containers, containers mounting docker.sock
+- [x] Add `auditResults []AuditResultEntry` to `SecurityPostureRequest` — each with id, category, title, status (pass/fail/warn), severity, detail
+- [x] Audit results sent alongside security posture (included in the hourly posture POST)
 
 ### Backend (platform-api)
 
-- [ ] Create `AuditResult` Zod schema and add to SecurityPosture validation
-- [ ] Store audit results in SecurityPosture model (add `auditResults Json?` column)
-- [ ] Auto-create findings from failed audit checks with `source: 'security_audit'`, descriptive titles (e.g., "ASLR disabled on debian", "UID 0 account found: backdoor")
-- [ ] `GET /api/v1/servers/:id/security-posture` already returns the posture — include audit results
+- [x] Create `AuditResult` Zod schema and add to SecurityPosture validation
+- [x] Store audit results in SecurityPosture model (added `auditResults Json?` column)
+- [x] Auto-create findings from failed audit checks with `source: 'security_audit'`, dedup by title
+- [x] Auto-resolve audit findings when checks start passing
+- [x] `GET /api/v1/servers/:id/security-posture` returns audit results in response
 - [ ] Update scoring: each failed critical audit check = -15, high = -8, medium = -3
 
 ### Frontend (dashboard)
 
-- [ ] Extend Security Posture tab with "Hardening Audit" section
-- [ ] Audit results table: check name, status (pass/fail/warn with icon), detail, severity
-- [ ] Group by category: Users & Access, Kernel, Filesystem, Container Runtime
-- [ ] Summary: "18/25 checks passed" progress bar with color coding
-- [ ] Failed checks highlighted with recommended remediation text
+- [x] Extend Security Posture tab with "Hardening Audit" card
+- [x] Audit results grouped by category (Kernel, Users, Filesystem, Container) with colored left border
+- [x] Each check shows pass/fail/warn icon, title, severity chip (on fail), and detail text
+- [x] Summary: "N/M passed" chip with progress bar (green if all pass, warning/red otherwise)
+- [x] Failed checks show severity badge and remediation detail
 
 ### Done when
 

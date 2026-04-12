@@ -976,6 +976,72 @@ function StatusIcon({ ok }: { ok: boolean }) {
     : <CancelIcon fontSize="small" color="error" />;
 }
 
+// ---------------------------------------------------------------------------
+// Hardening Audit Results
+// ---------------------------------------------------------------------------
+
+interface AuditItem {
+  id: string;
+  category: string;
+  title: string;
+  status: 'pass' | 'fail' | 'warn';
+  severity: string;
+  detail: string;
+}
+
+function AuditResultsSection({ results }: { results: AuditItem[] }) {
+  const categories = [...new Set(results.map((r) => r.category))];
+  const passCount = results.filter((r) => r.status === 'pass').length;
+  const failCount = results.filter((r) => r.status === 'fail').length;
+  const total = results.length;
+  const passPercent = total > 0 ? Math.round((passCount / total) * 100) : 0;
+
+  return (
+    <Card>
+      <CardContent>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+          <Typography variant="h6">Hardening Audit</Typography>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Chip label={`${passCount}/${total} passed`}
+              color={failCount === 0 ? 'success' : failCount <= 3 ? 'warning' : 'error'}
+              size="small" />
+            <Box sx={{ width: 120, height: 6, bgcolor: 'action.hover', borderRadius: 3, overflow: 'hidden' }}>
+              <Box sx={{ width: `${passPercent}%`, height: '100%', bgcolor: failCount === 0 ? 'success.main' : 'warning.main', borderRadius: 3 }} />
+            </Box>
+          </Stack>
+        </Stack>
+
+        {categories.map((cat) => {
+          const items = results.filter((r) => r.category === cat);
+          return (
+            <Box key={cat} sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>{cat}</Typography>
+              {items.map((item) => (
+                <Stack key={item.id} direction="row" spacing={1} alignItems="flex-start" sx={{ py: 0.5, pl: 1, borderLeft: '2px solid', borderColor: item.status === 'pass' ? 'success.main' : item.status === 'fail' ? 'error.main' : 'warning.main', mb: 0.5 }}>
+                  {item.status === 'pass' ? <CheckCircleIcon fontSize="small" color="success" sx={{ mt: 0.2 }} /> :
+                   item.status === 'fail' ? <CancelIcon fontSize="small" color="error" sx={{ mt: 0.2 }} /> :
+                   <WarningIcon fontSize="small" color="warning" sx={{ mt: 0.2 }} />}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{item.title}</Typography>
+                      {item.status === 'fail' && (
+                        <Chip label={item.severity} size="small" color={item.severity === 'critical' ? 'error' : item.severity === 'high' ? 'warning' : 'default'} variant="outlined" sx={{ fontSize: '0.6rem', height: 18 }} />
+                      )}
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', wordBreak: 'break-word' }}>
+                      {item.detail}
+                    </Typography>
+                  </Box>
+                </Stack>
+              ))}
+            </Box>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
 function SecurityPostureTab({ posture }: { posture: SecurityPosture | null }) {
   if (!posture) {
     return (
@@ -1097,6 +1163,11 @@ function SecurityPostureTab({ posture }: { posture: SecurityPosture | null }) {
           </Stack>
         </CardContent>
       </Card>
+
+      {/* Hardening Audit Results */}
+      {posture.auditResults && posture.auditResults.length > 0 && (
+        <AuditResultsSection results={posture.auditResults} />
+      )}
 
       <Typography variant="caption" color="text.secondary">
         Last scan: {new Date(posture.collectedAt).toLocaleString()}
