@@ -77,9 +77,17 @@ type DiskMetrics struct {
 }
 
 type SystemData struct {
-	Hostname     string `json:"hostname,omitempty"`
-	OS           string `json:"os,omitempty"`
-	AgentVersion string `json:"agentVersion,omitempty"`
+	Hostname     string   `json:"hostname,omitempty"`
+	OS           string   `json:"os,omitempty"`
+	OSVersion    string   `json:"osVersion,omitempty"`
+	Kernel       string   `json:"kernel,omitempty"`
+	Arch         string   `json:"arch,omitempty"`
+	AgentVersion string   `json:"agentVersion,omitempty"`
+	CPUCores     int      `json:"cpuCores,omitempty"`
+	CPUModel     string   `json:"cpuModel,omitempty"`
+	TotalRAMMB   int64    `json:"totalRamMb,omitempty"`
+	TotalDiskGB  int64    `json:"totalDiskGb,omitempty"`
+	IPAddresses  []string `json:"ipAddresses,omitempty"`
 }
 
 type HeartbeatResponse struct {

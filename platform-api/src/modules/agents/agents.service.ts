@@ -133,7 +133,19 @@ interface HeartbeatInput {
     readonly ram: { avg: number; max: number };
     readonly disk: { usage: number; ioErrors: number };
   };
-  readonly system?: { hostname?: string; os?: string; agentVersion?: string };
+  readonly system?: {
+    hostname?: string;
+    os?: string;
+    osVersion?: string;
+    kernel?: string;
+    arch?: string;
+    agentVersion?: string;
+    cpuCores?: number;
+    cpuModel?: string;
+    totalRamMb?: number;
+    totalDiskGb?: number;
+    ipAddresses?: string[];
+  };
 }
 
 export async function processHeartbeat(input: HeartbeatInput) {
@@ -170,7 +182,14 @@ export async function processHeartbeat(input: HeartbeatInput) {
         lastHeartbeat: new Date(),
         ...(input.system?.agentVersion ? { agentVersion: input.system.agentVersion } : {}),
         ...(input.system?.os ? { osFamily: input.system.os } : {}),
+        ...(input.system?.osVersion ? { osVersion: input.system.osVersion } : {}),
         ...(input.system?.hostname ? { hostname: input.system.hostname } : {}),
+        ...(input.system?.kernel ? { kernel: input.system.kernel } : {}),
+        ...(input.system?.cpuCores ? { cpuCores: input.system.cpuCores } : {}),
+        ...(input.system?.cpuModel ? { cpuModel: input.system.cpuModel } : {}),
+        ...(input.system?.totalRamMb ? { totalRamMb: input.system.totalRamMb } : {}),
+        ...(input.system?.totalDiskGb ? { totalDiskGb: input.system.totalDiskGb } : {}),
+        ...(input.system?.ipAddresses ? { ipAddresses: JSON.parse(JSON.stringify(input.system.ipAddresses)) } : {}),
       },
     }),
   ]);

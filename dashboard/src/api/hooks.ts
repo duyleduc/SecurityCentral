@@ -220,6 +220,13 @@ export interface Server {
   agentVersion: string | null;
   osFamily: string | null;
   osVersion: string | null;
+  kernel: string | null;
+  cpuCores: number | null;
+  cpuModel: string | null;
+  totalRamMb: number | null;
+  totalDiskGb: number | null;
+  ipAddresses: string[] | null;
+  tags: Array<{ key: string; value: string }>;
   status: string;
   lastHeartbeat: string | null;
   createdAt: string;

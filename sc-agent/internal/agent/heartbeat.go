@@ -84,8 +84,16 @@ func (a *Agent) sendLoop(ctx context.Context) {
 	sysInfo := sysinfo.GetSystemInfo()
 	sys := &platform.SystemData{
 		Hostname:     sysInfo.Hostname,
-		OS:           sysInfo.OS,
+		OS:           sysInfo.Platform,
+		OSVersion:    sysInfo.Version,
+		Kernel:       sysInfo.Kernel,
+		Arch:         sysInfo.Arch,
 		AgentVersion: "0.1.0",
+		CPUCores:     sysInfo.CPUCores,
+		CPUModel:     sysInfo.CPUModel,
+		TotalRAMMB:   sysInfo.TotalRAMMB,
+		TotalDiskGB:  sysInfo.TotalDiskGB,
+		IPAddresses:  sysInfo.IPAddresses,
 	}
 
 	for {

@@ -135,6 +135,12 @@ model Server {
   agentVersion  String?   @map("agent_version") @db.VarChar(20)
   osFamily      String?   @map("os_family") @db.VarChar(50)
   osVersion     String?   @map("os_version") @db.VarChar(50)
+  kernel        String?   @db.VarChar(100)
+  cpuCores      Int?      @map("cpu_cores")
+  cpuModel      String?   @map("cpu_model") @db.VarChar(200)
+  totalRamMb    Int?      @map("total_ram_mb")
+  totalDiskGb   Int?      @map("total_disk_gb")
+  ipAddresses   Json?     @map("ip_addresses") @db.Json  // ["192.168.1.10", ...]
   status        String    @default("offline") @db.VarChar(20) // online | offline | warning | critical
   tags          Json      @default("[]") @db.Json
   lastHeartbeat DateTime? @map("last_heartbeat") @db.DateTime(3)

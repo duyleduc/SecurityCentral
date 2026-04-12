@@ -36,7 +36,15 @@ const MetricsSchema = z.object({
 const SystemInfoSchema = z.object({
   hostname: z.string().optional(),
   os: z.string().optional(),
+  osVersion: z.string().optional(),
+  kernel: z.string().optional(),
+  arch: z.string().optional(),
   agentVersion: z.string().optional(),
+  cpuCores: z.number().int().optional(),
+  cpuModel: z.string().optional(),
+  totalRamMb: z.number().int().optional(),
+  totalDiskGb: z.number().int().optional(),
+  ipAddresses: z.array(z.string()).optional(),
 });
 
 export const AgentHeartbeatSchema = z.object({
