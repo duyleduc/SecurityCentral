@@ -391,3 +391,141 @@ Agent reports listening ports, SSH config safety, firewall status, and top proce
 ### Done when
 
 On a Docker host, agent reports container status. Dashboard shows container health.
+
+---
+
+## Phase 5A: Package Inventory + Server-Side CVE Matching
+
+**Goal:** Collect OS package list from agents, match against NVD/distro CVE databases server-side, create findings for vulnerable packages. This is the #1 gap in the product spec (4.2.1: "OS version & patch status").
+
+**Ref:** [server-cve-scanning-analysis.md](./server-cve-scanning-analysis.md)
+
+**Scope boundary:** OS packages + system binaries only. Language ecosystem CVEs (npm, pip, maven, go) are handled by sc-scan (repo scanning).
+
+### Go Agent (sc-agent)
+
+- [ ] Add `CveCollector` (`internal/collector/cve.go`) — CadenceDaily: collects OS package list, system binary versions, pending security updates
+- [ ] Collect full package list via `dpkg-query -W -f '${Package}\t${Version}\t${Architecture}\n'` (Debian/Ubuntu) or `rpm -qa --queryformat '%{NAME}\t%{VERSION}-%{RELEASE}\t%{ARCH}\n'` (RHEL/CentOS)
+- [ ] Detect package manager type from `/etc/os-release` (apt vs yum/dnf)
+- [ ] Collect pending security updates count (`apt list --upgradable` filtered for security)
+- [ ] Collect held/pinned packages (`apt-mark showhold`)
+- [ ] Collect running kernel vs latest installed kernel (`uname -r` vs `dpkg -l linux-image-*`)
+- [ ] Collect unattended-upgrades status (`systemctl is-active unattended-upgrades`)
+- [ ] Collect system binary versions (auto-detect from running processes): OpenSSL, OpenSSH, glibc, curl, nginx, Docker, containerd, runc
+- [ ] Hash package list — only re-send if changed from previous scan (avoid redundant 2000-line payloads)
+- [ ] Add to platform client: `POST /v1/agents/package-inventory` with `PackageInventoryRequest` struct
+- [ ] Register CveCollector in agent startup
+
+### Backend (platform-api) — Vulnerability Database Module
+
+- [ ] Create `modules/vulndb/` module with vulndb service, router
+- [ ] Implement Debian Security Tracker JSON feed downloader (`https://security-tracker.debian.org/tracker/data/json`) — daily cron via scheduler
+- [ ] Implement Ubuntu CVE Tracker feed downloader (`https://ubuntu.com/security/cves.json`)
+- [ ] Implement CISA KEV JSON feed downloader (`https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json`) — daily
+- [ ] Create `VulnerabilityFeed` Prisma model (source, lastSyncAt, data JSON) for caching feeds
+- [ ] Implement `matchServerPackages(serverId, packages[])` — for each package+version, check against distro security tracker for known CVEs
+- [ ] Cross-reference all matched CVEs against CISA KEV — flag as `severity: critical` if actively exploited
+- [ ] Create `Finding` records with `source: 'cve_scan'`, `cveId`, `cvssScore`, `detail: {package, installedVersion, fixedVersion, fixAvailable}`
+- [ ] Auto-resolve stale CVE findings when a package is updated (new inventory shows patched version)
+- [ ] Add feed sync to `scheduler.ts` — daily vuln DB refresh
+- [ ] `POST /v1/agents/package-inventory` endpoint — accept package list from agent, trigger CVE matching
+- [ ] `GET /api/v1/servers/:id/vulnerabilities` endpoint — return CVE findings for a server (filterable by severity, fix available)
+- [ ] `GET /api/v1/servers/:id/packages` endpoint — return raw package inventory
+
+### Backend — Validation & Types
+
+- [ ] Create `PackageInventorySchema` (Zod) — `agentId`, `osFamily`, `packages[{name, version, arch}]`, `binaryVersions[{name, version}]`, `pendingSecurityUpdates`, `heldPackages[]`, `kernelRunning`, `kernelInstalled`, `unattendedUpgrades`
+- [ ] Create `ServerVulnerabilitiesQuerySchema` — `severity?`, `fixAvailable?`, `cisaKev?`
+
+### Backend — Scoring Integration
+
+- [ ] Update scoring engine to incorporate CVE findings: Critical CVE = -20, High = -10, Medium = -5, Low = -2 (capped at -60 from CVEs)
+- [ ] CISA KEV CVE = always -20 deduction regardless of CVSS
+- [ ] Fix available but not applied = extra -5 deduction
+
+### Frontend (dashboard)
+
+- [ ] Add "Vulnerabilities" tab to server detail page (4th tab after System Info, Security Posture, Docker)
+- [ ] CVE findings table: CVE ID (clickable link to NVD), package name, installed version, fixed version, CVSS score, severity chip, CISA KEV badge
+- [ ] Filter bar: severity dropdown, "fix available" toggle, "CISA KEV only" toggle
+- [ ] Summary header chips: total CVEs, critical count (red), high count (orange), fix-available count
+- [ ] Empty state: "No vulnerabilities found" or "Waiting for first package scan (daily)"
+- [ ] Add `useServerVulnerabilities(id)` hook — `GET /api/v1/servers/:id/vulnerabilities`, refetch 60s
+- [ ] Add `useServerPackages(id)` hook — `GET /api/v1/servers/:id/packages`
+- [ ] Package inventory view: collapsible section showing full package list with version, searchable
+- [ ] Add CVE count badge to server list cards (e.g., "3 critical CVEs" chip in red)
+- [ ] Add CVE summary to dashboard top-risks widget (across all servers)
+
+### Done when
+
+Agent sends daily package list → platform matches against Debian/Ubuntu security tracker + CISA KEV → CVE findings appear on server detail "Vulnerabilities" tab → user can filter by severity and see fix-available packages.
+
+---
+
+## Phase 5B: Extended Security Audit
+
+**Goal:** Add remaining server hardening checks from the CVE scanning spec — user audit, filesystem audit, kernel hardening, container runtime security. These produce config-level findings (not CVE findings).
+
+**Ref:** [server-cve-scanning-analysis.md](./server-cve-scanning-analysis.md) — Tier 1 built-in checks #16–35
+
+### Go Agent (sc-agent) — Extend Security Collector
+
+- [ ] User audit: UID 0 accounts (non-root), users with empty password, password hash algorithm (MD5=critical), NOPASSWD sudoers rules, home directory permissions >750, unexpected authorized_keys, .rhosts/.hosts.equiv detection
+- [ ] Kernel hardening: ASLR (`randomize_va_space`=2), kptr_restrict (>=1), dmesg_restrict (=1), core dump restriction (`suid_dumpable`=0), ptrace_scope (>=1), CPU vulnerability mitigations from `/sys/devices/system/cpu/vulnerabilities/*`
+- [ ] Filesystem audit: unexpected SUID binaries in /usr /bin /sbin, world-writable files in /etc, executables in /tmp and /var/tmp, /etc/passwd and /etc/shadow permission check
+- [ ] Container runtime: Docker socket writable by non-root, privileged containers running, containers mounting docker.sock or /etc or /root
+- [ ] Add all checks to `SecurityPostureRequest` as `auditResults []AuditResult` — each with `checkId`, `status` (pass/fail/warn), `detail`
+- [ ] Each failed audit check → agent sends as alert with type `audit_<checkId>` for finding creation
+
+### Backend (platform-api)
+
+- [ ] Create `AuditResult` Zod schema and add to SecurityPosture validation
+- [ ] Store audit results in SecurityPosture model (add `auditResults Json?` column)
+- [ ] Auto-create findings from failed audit checks with `source: 'security_audit'`, descriptive titles (e.g., "ASLR disabled on debian", "UID 0 account found: backdoor")
+- [ ] `GET /api/v1/servers/:id/security-posture` already returns the posture — include audit results
+- [ ] Update scoring: each failed critical audit check = -15, high = -8, medium = -3
+
+### Frontend (dashboard)
+
+- [ ] Extend Security Posture tab with "Hardening Audit" section
+- [ ] Audit results table: check name, status (pass/fail/warn with icon), detail, severity
+- [ ] Group by category: Users & Access, Kernel, Filesystem, Container Runtime
+- [ ] Summary: "18/25 checks passed" progress bar with color coding
+- [ ] Failed checks highlighted with recommended remediation text
+
+### Done when
+
+Security posture tab shows hardening audit results grouped by category. Failed checks auto-create findings. Server score reflects audit failures.
+
+---
+
+## Phase 5C: SSH Deep Config + Service Hardening
+
+**Goal:** Deep SSH configuration audit (ciphers, MACs, KEX, host key algorithms) and infrastructure service hardening checks (Redis auth, DB bind address, NFS exports, legacy protocols).
+
+**Ref:** [server-cve-scanning.md](./server-cve-scanning.md) — Sections 5 (SSH) and 10 (Services)
+
+### Go Agent (sc-agent)
+
+- [ ] SSH deep config via `sshd -T`: ciphers (no arcfour, 3des-cbc), MACs (no hmac-md5, hmac-sha1), KEX algorithms (no diffie-hellman-group1-sha1), host key algorithms (no ssh-dss), MaxAuthTries <=4, X11Forwarding, AllowTcpForwarding, ClientAliveInterval
+- [ ] Redis hardening (if running): `requirepass` set, bind to 127.0.0.1 only
+- [ ] MySQL/MariaDB bind address (if running): check for 127.0.0.1
+- [ ] PostgreSQL pg_hba.conf (if running): no `trust` auth for network clients
+- [ ] NFS exports: check for `no_root_squash`
+- [ ] Legacy protocol detection: Telnet (:23), FTP (:21), rpcbind (:111) running
+- [ ] SNMP default community strings (`public`/`private`)
+
+### Backend (platform-api)
+
+- [ ] Extend audit result types for SSH deep config and service checks
+- [ ] Auto-create findings: "SSH allows weak cipher 3des-cbc", "Redis has no authentication", "Telnet service running on port 23"
+
+### Frontend (dashboard)
+
+- [ ] Extend Security Posture SSH section with full config details (ciphers, MACs, KEX — green/red per item)
+- [ ] Add "Service Hardening" section: per-service checks with pass/fail status
+- [ ] Legacy protocol warnings prominently displayed
+
+### Done when
+
+SSH section shows full cipher/MAC/KEX audit with pass/fail per algorithm. Service hardening section shows Redis/DB/NFS/legacy protocol checks.
