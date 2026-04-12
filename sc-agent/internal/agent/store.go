@@ -222,6 +222,16 @@ func (ms *MetricStore) AggregateMetrics() platform.MetricsData {
 	return md
 }
 
+// Latest returns the latest snapshot for any collector key.
+func (ms *MetricStore) Latest(key string) (collector.Snapshot, bool) {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	if snap, ok := ms.latest[key]; ok {
+		return *snap, true
+	}
+	return collector.Snapshot{}, false
+}
+
 // LatestSecurity returns the latest security posture data.
 func (ms *MetricStore) LatestSecurity() (collector.SecurityData, bool) {
 	ms.mu.RLock()

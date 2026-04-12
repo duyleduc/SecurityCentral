@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errors.js';
 import { logger } from '../../lib/logger.js';
 import { emitAgentConnected, emitServerMetrics } from '../../ws/hooks.js';
+import { matchServerPackages, applyMatchesToFindings } from '../vulndb/vulndb.service.js';
 
 // ---------------------------------------------------------------------------
 // Install Tokens
@@ -374,6 +375,81 @@ export async function storeSecurityPosture(input: SecurityPostureInput) {
 
   logger.debug('Security posture stored', { agentId: input.agentId, ports: input.listeningPorts.length });
   return { stored: true };
+}
+
+// ---------------------------------------------------------------------------
+// Package Inventory + CVE Matching
+// ---------------------------------------------------------------------------
+
+interface PackageInventoryInput {
+  readonly agentId: string;
+  readonly collectedAt: string;
+  readonly osFamily: string;
+  readonly packages: ReadonlyArray<{ name: string; version: string; arch?: string }>;
+  readonly binaryVersions: ReadonlyArray<{ name: string; version: string }>;
+  readonly pendingSecurityUpdates: number;
+  readonly heldPackages: readonly string[];
+  readonly kernelRunning?: string;
+  readonly kernelInstalled?: string;
+  readonly unattendedUpgrades: boolean;
+  readonly packageHash: string;
+}
+
+export async function storePackageInventory(input: PackageInventoryInput) {
+  const server = await prisma.server.findUnique({ where: { agentId: input.agentId } });
+  if (!server) {
+    throw new AppError('RESOURCE_NOT_FOUND', 'Agent not registered');
+  }
+
+  // Check if package list changed — skip CVE re-matching if identical.
+  const latest = await prisma.packageInventory.findFirst({
+    where: { serverId: server.id },
+    orderBy: { collectedAt: 'desc' },
+    select: { packageHash: true },
+  });
+
+  const changed = !latest || latest.packageHash !== input.packageHash;
+
+  // Always store the inventory record.
+  await prisma.packageInventory.create({
+    data: {
+      serverId: server.id,
+      collectedAt: new Date(input.collectedAt),
+      osFamily: input.osFamily,
+      packages: JSON.parse(JSON.stringify(input.packages)),
+      binaryVersions: JSON.parse(JSON.stringify(input.binaryVersions)),
+      pendingSecurityUpdates: input.pendingSecurityUpdates,
+      heldPackages: JSON.parse(JSON.stringify(input.heldPackages)),
+      kernelRunning: input.kernelRunning,
+      kernelInstalled: input.kernelInstalled,
+      unattendedUpgrades: input.unattendedUpgrades,
+      packageHash: input.packageHash,
+    },
+  });
+
+  // Run CVE matching only if packages changed.
+  let cveResult = { created: 0, resolved: 0 };
+  if (changed) {
+    try {
+      const matches = await matchServerPackages(server.id, input.osFamily, input.packages);
+      cveResult = await applyMatchesToFindings(server.orgId, server.id, server.hostname, matches);
+      logger.info('CVE matching completed', {
+        serverId: server.id,
+        matched: matches.length,
+        created: cveResult.created,
+        resolved: cveResult.resolved,
+      });
+    } catch (err) {
+      logger.error('CVE matching failed', { serverId: server.id, error: (err as Error).message });
+    }
+  }
+
+  return {
+    stored: true,
+    packagesChanged: changed,
+    cveMatches: cveResult.created,
+    cveResolved: cveResult.resolved,
+  };
 }
 
 const ALERT_SEVERITY: Record<string, string> = {

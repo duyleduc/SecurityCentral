@@ -166,3 +166,24 @@ export const SecurityPostureSchema = z.object({
     max: z.number().int(),
   }),
 });
+
+export const PackageInventorySchema = z.object({
+  agentId: z.string().uuid(),
+  collectedAt: z.string(),
+  osFamily: z.string().max(50),
+  packages: z.array(z.object({
+    name: z.string(),
+    version: z.string(),
+    arch: z.string().optional(),
+  })).default([]),
+  binaryVersions: z.array(z.object({
+    name: z.string(),
+    version: z.string(),
+  })).default([]),
+  pendingSecurityUpdates: z.number().int().default(0),
+  heldPackages: z.array(z.string()).default([]),
+  kernelRunning: z.string().optional(),
+  kernelInstalled: z.string().optional(),
+  unattendedUpgrades: z.boolean().default(false),
+  packageHash: z.string(),
+});

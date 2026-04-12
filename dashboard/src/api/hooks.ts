@@ -330,6 +330,48 @@ export function useSecurityPosture(id: string) {
   });
 }
 
+export interface CveFinding {
+  id: string;
+  cveId: string | null;
+  severity: string;
+  status: string;
+  title: string;
+  description: string | null;
+  cvssScore: number | null;
+  detail: { packageName?: string; installedVersion?: string; fixedVersion?: string | null; cisaKev?: boolean } | null;
+  createdAt: string;
+}
+
+export function useServerVulnerabilities(id: string) {
+  return useQuery({
+    queryKey: ['servers', id, 'vulnerabilities'],
+    queryFn: () => apiClient<CveFinding[]>(`/api/v1/servers/${id}/vulnerabilities`),
+    enabled: !!id,
+    refetchInterval: 60_000,
+  });
+}
+
+export interface PackageInventory {
+  id: string;
+  serverId: string;
+  collectedAt: string;
+  osFamily: string;
+  packages: Array<{ name: string; version: string; arch?: string }>;
+  pendingSecurityUpdates: number;
+  kernelRunning: string | null;
+  kernelInstalled: string | null;
+  unattendedUpgrades: boolean;
+}
+
+export function usePackageInventory(id: string) {
+  return useQuery({
+    queryKey: ['servers', id, 'packages'],
+    queryFn: () => apiClient<PackageInventory | null>(`/api/v1/servers/${id}/packages`),
+    enabled: !!id,
+    refetchInterval: 60_000,
+  });
+}
+
 export function useUpdateServer() {
   const qc = useQueryClient();
   return useMutation({

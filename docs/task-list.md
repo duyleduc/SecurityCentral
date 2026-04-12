@@ -404,38 +404,37 @@ On a Docker host, agent reports container status. Dashboard shows container heal
 
 ### Go Agent (sc-agent)
 
-- [ ] Add `CveCollector` (`internal/collector/cve.go`) — CadenceDaily: collects OS package list, system binary versions, pending security updates
-- [ ] Collect full package list via `dpkg-query -W -f '${Package}\t${Version}\t${Architecture}\n'` (Debian/Ubuntu) or `rpm -qa --queryformat '%{NAME}\t%{VERSION}-%{RELEASE}\t%{ARCH}\n'` (RHEL/CentOS)
-- [ ] Detect package manager type from `/etc/os-release` (apt vs yum/dnf)
-- [ ] Collect pending security updates count (`apt list --upgradable` filtered for security)
-- [ ] Collect held/pinned packages (`apt-mark showhold`)
-- [ ] Collect running kernel vs latest installed kernel (`uname -r` vs `dpkg -l linux-image-*`)
-- [ ] Collect unattended-upgrades status (`systemctl is-active unattended-upgrades`)
-- [ ] Collect system binary versions (auto-detect from running processes): OpenSSL, OpenSSH, glibc, curl, nginx, Docker, containerd, runc
-- [ ] Hash package list — only re-send if changed from previous scan (avoid redundant 2000-line payloads)
-- [ ] Add to platform client: `POST /v1/agents/package-inventory` with `PackageInventoryRequest` struct
-- [ ] Register CveCollector in agent startup
+- [x] Add `PackageInventory` collector (`internal/collector/packages.go`) — CadenceDaily: collects OS package list, system binary versions, pending security updates
+- [x] Collect full package list via `dpkg-query` (Debian/Ubuntu) or `rpm -qa` (RHEL/CentOS)
+- [x] Detect package manager type from `/etc/os-release` (apt vs yum/dnf)
+- [x] Collect pending security updates count (`apt list --upgradable` filtered for security)
+- [x] Collect held/pinned packages (`apt-mark showhold`)
+- [x] Collect running kernel vs latest installed kernel (`uname -r` vs `dpkg -l linux-image-*`)
+- [x] Collect unattended-upgrades status (`systemctl is-active unattended-upgrades`)
+- [x] Collect system binary versions (auto-detect): OpenSSL, OpenSSH, glibc, curl, nginx, Docker, containerd, runc
+- [x] Hash package list (SHA256) — only triggers CVE re-matching if changed
+- [x] Add to platform client: `POST /v1/agents/package-inventory` with `PackageInventoryRequest` struct
+- [x] Register PackageInventory collector in agent startup
 
 ### Backend (platform-api) — Vulnerability Database Module
 
-- [ ] Create `modules/vulndb/` module with vulndb service, router
-- [ ] Implement Debian Security Tracker JSON feed downloader (`https://security-tracker.debian.org/tracker/data/json`) — daily cron via scheduler
+- [x] Create `modules/vulndb/` module with vulndb.service.ts
+- [x] Implement Debian Security Tracker JSON feed downloader — daily sync via scheduler
 - [ ] Implement Ubuntu CVE Tracker feed downloader (`https://ubuntu.com/security/cves.json`)
-- [ ] Implement CISA KEV JSON feed downloader (`https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json`) — daily
-- [ ] Create `VulnerabilityFeed` Prisma model (source, lastSyncAt, data JSON) for caching feeds
-- [ ] Implement `matchServerPackages(serverId, packages[])` — for each package+version, check against distro security tracker for known CVEs
-- [ ] Cross-reference all matched CVEs against CISA KEV — flag as `severity: critical` if actively exploited
-- [ ] Create `Finding` records with `source: 'cve_scan'`, `cveId`, `cvssScore`, `detail: {package, installedVersion, fixedVersion, fixAvailable}`
-- [ ] Auto-resolve stale CVE findings when a package is updated (new inventory shows patched version)
-- [ ] Add feed sync to `scheduler.ts` — daily vuln DB refresh
-- [ ] `POST /v1/agents/package-inventory` endpoint — accept package list from agent, trigger CVE matching
-- [ ] `GET /api/v1/servers/:id/vulnerabilities` endpoint — return CVE findings for a server (filterable by severity, fix available)
-- [ ] `GET /api/v1/servers/:id/packages` endpoint — return raw package inventory
+- [x] Implement CISA KEV JSON feed downloader — daily sync
+- [x] Create `VulnerabilityFeed` Prisma model (source, lastSyncAt, data JSON) for caching feeds
+- [x] Create `PackageInventory` Prisma model (serverId, packages JSON, binaryVersions, hash, metadata)
+- [x] Implement `matchServerPackages(serverId, osFamily, packages[])` — match against Debian security tracker, cross-reference CISA KEV
+- [x] Create `Finding` records with `source: 'cve_scan'`, `cveId`, `detail: {packageName, installedVersion, fixedVersion, cisaKev}`
+- [x] Auto-resolve stale CVE findings when a package is updated (new inventory shows patched version)
+- [x] Add feed sync to `scheduler.ts` — daily vuln DB refresh + initial sync on startup
+- [x] `POST /v1/agents/package-inventory` endpoint — accept package list from agent, store + trigger CVE matching
+- [x] `GET /api/v1/servers/:id/vulnerabilities` endpoint — return CVE findings for a server
+- [x] `GET /api/v1/servers/:id/packages` endpoint — return latest package inventory
 
 ### Backend — Validation & Types
 
-- [ ] Create `PackageInventorySchema` (Zod) — `agentId`, `osFamily`, `packages[{name, version, arch}]`, `binaryVersions[{name, version}]`, `pendingSecurityUpdates`, `heldPackages[]`, `kernelRunning`, `kernelInstalled`, `unattendedUpgrades`
-- [ ] Create `ServerVulnerabilitiesQuerySchema` — `severity?`, `fixAvailable?`, `cisaKev?`
+- [x] Create `PackageInventorySchema` (Zod) — agentId, osFamily, packages, binaryVersions, pendingSecurityUpdates, heldPackages, kernelRunning, kernelInstalled, unattendedUpgrades, packageHash
 
 ### Backend — Scoring Integration
 
@@ -445,13 +444,13 @@ On a Docker host, agent reports container status. Dashboard shows container heal
 
 ### Frontend (dashboard)
 
-- [ ] Add "Vulnerabilities" tab to server detail page (4th tab after System Info, Security Posture, Docker)
-- [ ] CVE findings table: CVE ID (clickable link to NVD), package name, installed version, fixed version, CVSS score, severity chip, CISA KEV badge
-- [ ] Filter bar: severity dropdown, "fix available" toggle, "CISA KEV only" toggle
-- [ ] Summary header chips: total CVEs, critical count (red), high count (orange), fix-available count
-- [ ] Empty state: "No vulnerabilities found" or "Waiting for first package scan (daily)"
-- [ ] Add `useServerVulnerabilities(id)` hook — `GET /api/v1/servers/:id/vulnerabilities`, refetch 60s
-- [ ] Add `useServerPackages(id)` hook — `GET /api/v1/servers/:id/packages`
+- [x] Add "Vulnerabilities" tab to server detail page (3rd tab, shows count in tab label)
+- [x] CVE findings table: CVE ID (clickable link to NVD), package name, installed version, fixed version, severity chip, CISA KEV badge
+- [x] Filter chips: total, critical, high, fix available, CISA KEV
+- [x] Summary header chips: total CVEs, critical count (red), high count (orange), fix-available count, KEV count
+- [x] Empty state: "No vulnerabilities found" with daily scan explanation
+- [x] Add `useServerVulnerabilities(id)` hook — `GET /api/v1/servers/:id/vulnerabilities`, refetch 60s
+- [x] Add `usePackageInventory(id)` hook — `GET /api/v1/servers/:id/packages`
 - [ ] Package inventory view: collapsible section showing full package list with version, searchable
 - [ ] Add CVE count badge to server list cards (e.g., "3 critical CVEs" chip in red)
 - [ ] Add CVE summary to dashboard top-risks widget (across all servers)

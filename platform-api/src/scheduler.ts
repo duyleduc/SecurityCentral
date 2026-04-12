@@ -2,9 +2,11 @@ import { prisma } from './lib/prisma.js';
 import { logger } from './lib/logger.js';
 import { performSslCheck } from './modules/monitoring/monitoring.service.js';
 import { emitAgentDisconnected } from './ws/hooks.js';
+import { syncFeeds } from './modules/vulndb/vulndb.service.js';
 
 let sslTimer: ReturnType<typeof setInterval> | null = null;
 let offlineTimer: ReturnType<typeof setInterval> | null = null;
+let vulnFeedTimer: ReturnType<typeof setInterval> | null = null;
 
 const SSL_POLL_INTERVAL = 60_000; // poll every 60s for endpoints due for SSL/DNS check
 const OFFLINE_POLL_INTERVAL = 2 * 60_000; // check every 2 min
@@ -127,14 +129,20 @@ async function detectOfflineAgents(): Promise<void> {
 // Lifecycle
 // ---------------------------------------------------------------------------
 
+const VULN_FEED_INTERVAL = 24 * 60 * 60_000; // sync CVE feeds daily
+
 export function startScheduler(): void {
-  logger.info('scheduler started (SSL/DNS checks + offline detection — uptime via sc-monitor)');
+  logger.info('scheduler started (SSL/DNS + offline detection + vuln feed sync)');
   sslTimer = setInterval(runDueSslChecks, SSL_POLL_INTERVAL);
   offlineTimer = setInterval(detectOfflineAgents, OFFLINE_POLL_INTERVAL);
+  vulnFeedTimer = setInterval(() => void syncFeeds(), VULN_FEED_INTERVAL);
+  // Initial feed sync on startup (non-blocking).
+  void syncFeeds();
 }
 
 export function stopScheduler(): void {
   if (sslTimer) { clearInterval(sslTimer); sslTimer = null; }
   if (offlineTimer) { clearInterval(offlineTimer); offlineTimer = null; }
+  if (vulnFeedTimer) { clearInterval(vulnFeedTimer); vulnFeedTimer = null; }
   logger.info('scheduler stopped');
 }

@@ -40,6 +40,7 @@ func New(cfg *config.Config, log *logging.Logger) *Agent {
 	reg.Register(collector.NewService())
 	reg.Register(collector.NewSecurity())
 	reg.Register(collector.NewDocker())
+	reg.Register(collector.NewPackageInventory())
 
 	return &Agent{
 		cfg:       cfg,
@@ -90,6 +91,10 @@ func (a *Agent) processLoop(ctx context.Context, results <-chan collector.Snapsh
 			// Security posture goes to a separate endpoint (too large for heartbeat).
 			if snap.Key == "security" {
 				go a.sendSecurityPosture()
+			}
+			// Package inventory goes to a separate endpoint (daily, large payload).
+			if snap.Key == "packages" {
+				go a.sendPackageInventory()
 			}
 		}
 	}
@@ -142,6 +147,49 @@ func (a *Agent) sendSecurityPosture() {
 		"ports":      len(req.ListeningPorts),
 		"sshFails":   req.SSHFailures,
 		"shellUsers": len(req.ShellUsers),
+	})
+}
+
+func (a *Agent) sendPackageInventory() {
+	snap, ok := a.store.Latest("packages")
+	if !ok {
+		return
+	}
+	pkg, ok := snap.Data.(collector.PackageData)
+	if !ok {
+		return
+	}
+
+	req := platform.PackageInventoryRequest{
+		AgentID:                a.cfg.AgentID,
+		CollectedAt:            time.Now().UTC().Format(time.RFC3339),
+		OSFamily:               pkg.OSFamily,
+		PendingSecurityUpdates: pkg.PendingSecurityUpdates,
+		HeldPackages:           pkg.HeldPackages,
+		KernelRunning:          pkg.KernelRunning,
+		KernelInstalled:        pkg.KernelInstalled,
+		UnattendedUpgrades:     pkg.UnattendedUpgrades,
+		PackageHash:            pkg.PackageHash,
+	}
+	for _, p := range pkg.Packages {
+		req.Packages = append(req.Packages, platform.PkgEntry{
+			Name: p.Name, Version: p.Version, Arch: p.Arch,
+		})
+	}
+	for _, b := range pkg.BinaryVersions {
+		req.BinaryVersions = append(req.BinaryVersions, platform.BinaryVer{
+			Name: b.Name, Version: b.Version,
+		})
+	}
+
+	if err := a.client.SendPackageInventory(req); err != nil {
+		a.log.Error("package inventory send failed", map[string]interface{}{"error": err.Error()})
+		return
+	}
+	a.log.Info("package inventory sent", map[string]interface{}{
+		"packages": len(req.Packages),
+		"binaries": len(req.BinaryVersions),
+		"hash":     req.PackageHash,
 	})
 }
 

@@ -111,6 +111,34 @@ export async function deleteServer(orgId: string, serverId: string) {
   return { deleted: true, hostname: server.hostname, agentId: server.agentId };
 }
 
+export async function getPackageInventory(orgId: string, serverId: string) {
+  const server = await prisma.server.findFirst({ where: { id: serverId, orgId } });
+  if (!server) {
+    throw new AppError('RESOURCE_NOT_FOUND', 'Server not found');
+  }
+
+  return prisma.packageInventory.findFirst({
+    where: { serverId },
+    orderBy: { collectedAt: 'desc' },
+  });
+}
+
+export async function getVulnerabilities(orgId: string, serverId: string) {
+  const server = await prisma.server.findFirst({ where: { id: serverId, orgId } });
+  if (!server) {
+    throw new AppError('RESOURCE_NOT_FOUND', 'Server not found');
+  }
+
+  return prisma.finding.findMany({
+    where: {
+      serverId,
+      source: 'cve_scan',
+      status: { in: ['open', 'in_progress'] },
+    },
+    orderBy: [{ severity: 'asc' }, { createdAt: 'desc' }],
+  });
+}
+
 export async function getSecurityPosture(orgId: string, serverId: string) {
   const server = await prisma.server.findFirst({ where: { id: serverId, orgId } });
   if (!server) {

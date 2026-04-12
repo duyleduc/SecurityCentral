@@ -55,7 +55,8 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { useServer, useServerMetrics, useSecurityPosture, useDeleteServer, useUpdateServer, useProjects } from '../../api/hooks';
+import { useServer, useServerMetrics, useSecurityPosture, useServerVulnerabilities, useDeleteServer, useUpdateServer, useProjects } from '../../api/hooks';
+import type { CveFinding } from '../../api/hooks';
 import type { SecurityPosture, ServerMetric } from '../../api/hooks';
 import { ScoreBadge, computeScore } from '../../components/ScoreBadge';
 import { TagsInput, type Tag } from '../../components/TagsInput';
@@ -289,6 +290,7 @@ export function ServerDetailPage() {
   const { data: server, isLoading } = useServer(id ?? '');
   const { data: metrics } = useServerMetrics(id ?? '', hours);
   const { data: posture } = useSecurityPosture(id ?? '');
+  const { data: vulns } = useServerVulnerabilities(id ?? '');
   const { data: projects } = useProjects();
   const deleteMutation = useDeleteServer();
   const updateMutation = useUpdateServer();
@@ -533,6 +535,8 @@ export function ServerDetailPage() {
         <Tabs value={tab} onChange={(_, v) => setTab(v)}>
           <Tab label="System Information" />
           <Tab icon={<SecurityIcon fontSize="small" />} iconPosition="start" label="Security Posture" />
+          <Tab icon={<SecurityIcon fontSize="small" />} iconPosition="start"
+            label={`Vulnerabilities${vulns?.length ? ` (${vulns.length})` : ''}`} />
           <Tab icon={<ViewInArIcon fontSize="small" />} iconPosition="start" label="Docker" />
         </Tabs>
       </Box>
@@ -570,7 +574,9 @@ export function ServerDetailPage() {
 
       {tab === 1 && <SecurityPostureTab posture={posture ?? null} />}
 
-      {tab === 2 && <DockerTab latest={latest ?? null} />}
+      {tab === 2 && <VulnerabilitiesTab vulns={vulns ?? []} />}
+
+      {tab === 3 && <DockerTab latest={latest ?? null} />}
 
       {/* Delete Confirmation Dialog */}
       <DeleteServerDialog
@@ -753,6 +759,133 @@ function DeleteServerDialog({ open, hostname, loading, copied, onClose, onConfir
         </Button>
       </DialogActions>
     </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Docker Tab
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Vulnerabilities Tab (CVE findings from package inventory matching)
+// ---------------------------------------------------------------------------
+
+function severityColor(s: string): 'error' | 'warning' | 'info' | 'default' {
+  switch (s) {
+    case 'critical': return 'error';
+    case 'high': return 'warning';
+    case 'medium': return 'info';
+    default: return 'default';
+  }
+}
+
+function VulnerabilitiesTab({ vulns }: { vulns: CveFinding[] }) {
+  const [filter, setFilter] = useState('all');
+
+  const filtered = filter === 'all'
+    ? vulns
+    : filter === 'fix'
+      ? vulns.filter((v) => v.detail?.fixedVersion)
+      : vulns.filter((v) => v.severity === filter);
+
+  const critCount = vulns.filter((v) => v.severity === 'critical').length;
+  const highCount = vulns.filter((v) => v.severity === 'high').length;
+  const fixAvail = vulns.filter((v) => v.detail?.fixedVersion).length;
+  const kevCount = vulns.filter((v) => v.detail?.cisaKev).length;
+
+  if (vulns.length === 0) {
+    return (
+      <Card>
+        <CardContent>
+          <Typography variant="body2" color="text.secondary">
+            No vulnerabilities found. The agent performs a daily package scan and the platform matches against CVE databases.
+          </Typography>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Stack spacing={2}>
+      {/* Summary chips */}
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+        <Chip label={`${vulns.length} total`} variant="outlined" onClick={() => setFilter('all')}
+          color={filter === 'all' ? 'primary' : 'default'} />
+        {critCount > 0 && (
+          <Chip label={`${critCount} critical`} color={filter === 'critical' ? 'error' : 'default'}
+            variant="outlined" onClick={() => setFilter('critical')} />
+        )}
+        {highCount > 0 && (
+          <Chip label={`${highCount} high`} color={filter === 'high' ? 'warning' : 'default'}
+            variant="outlined" onClick={() => setFilter('high')} />
+        )}
+        {fixAvail > 0 && (
+          <Chip label={`${fixAvail} fix available`} color={filter === 'fix' ? 'primary' : 'default'}
+            variant="outlined" onClick={() => setFilter('fix')} />
+        )}
+        {kevCount > 0 && (
+          <Chip label={`${kevCount} CISA KEV`} color="error" variant="filled" />
+        )}
+      </Stack>
+
+      {/* CVE table */}
+      <Card>
+        <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>CVE</TableCell>
+                  <TableCell>Package</TableCell>
+                  <TableCell>Installed</TableCell>
+                  <TableCell>Fixed</TableCell>
+                  <TableCell>Severity</TableCell>
+                  <TableCell>KEV</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filtered.map((v) => (
+                  <TableRow key={v.id} hover>
+                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                      {v.cveId ? (
+                        <a href={`https://nvd.nist.gov/vuln/detail/${v.cveId}`} target="_blank" rel="noopener noreferrer"
+                          style={{ color: '#6366f1', textDecoration: 'none' }}>
+                          {v.cveId}
+                        </a>
+                      ) : '-'}
+                    </TableCell>
+                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{v.detail?.packageName ?? '-'}</TableCell>
+                    <TableCell sx={{ fontSize: '0.8rem' }}>{v.detail?.installedVersion ?? '-'}</TableCell>
+                    <TableCell sx={{ fontSize: '0.8rem' }}>
+                      {v.detail?.fixedVersion ? (
+                        <Chip label={v.detail.fixedVersion} size="small" color="success" variant="outlined" sx={{ fontSize: '0.7rem' }} />
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">no fix</Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={v.severity} size="small" color={severityColor(v.severity)} variant="outlined" />
+                    </TableCell>
+                    <TableCell>
+                      {v.detail?.cisaKev && <Chip label="KEV" size="small" color="error" variant="filled" sx={{ fontSize: '0.65rem' }} />}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {filtered.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6}>
+                      <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+                        No vulnerabilities match the selected filter.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+    </Stack>
   );
 }
 

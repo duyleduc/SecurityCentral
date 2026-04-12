@@ -145,6 +145,32 @@ type FDEntry struct {
 	Max       int `json:"max"`
 }
 
+// PackageInventoryRequest is sent to POST /v1/agents/package-inventory.
+type PackageInventoryRequest struct {
+	AgentID                string           `json:"agentId"`
+	CollectedAt            string           `json:"collectedAt"`
+	OSFamily               string           `json:"osFamily"`
+	Packages               []PkgEntry       `json:"packages"`
+	BinaryVersions         []BinaryVer      `json:"binaryVersions"`
+	PendingSecurityUpdates int              `json:"pendingSecurityUpdates"`
+	HeldPackages           []string         `json:"heldPackages"`
+	KernelRunning          string           `json:"kernelRunning"`
+	KernelInstalled        string           `json:"kernelInstalled"`
+	UnattendedUpgrades     bool             `json:"unattendedUpgrades"`
+	PackageHash            string           `json:"packageHash"`
+}
+
+type PkgEntry struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Arch    string `json:"arch,omitempty"`
+}
+
+type BinaryVer struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
 type CPUMetrics struct {
 	Avg    float64 `json:"avg"`
 	Max    float64 `json:"max"`
@@ -232,6 +258,10 @@ func (c *Client) SendHeartbeat(req HeartbeatRequest) (*HeartbeatResponse, error)
 
 func (c *Client) SendSecurityPosture(req SecurityPostureRequest) error {
 	return c.post("/v1/agents/security-posture", req, nil)
+}
+
+func (c *Client) SendPackageInventory(req PackageInventoryRequest) error {
+	return c.post("/v1/agents/package-inventory", req, nil)
 }
 
 func (c *Client) post(path string, body interface{}, result interface{}) error {

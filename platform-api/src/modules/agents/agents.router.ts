@@ -13,6 +13,7 @@ import {
   AgentHeartbeatSchema,
   AgentFindingsSchema,
   SecurityPostureSchema,
+  PackageInventorySchema,
 } from './agents.validation.js';
 import * as agentsService from './agents.service.js';
 
@@ -137,6 +138,16 @@ agentRouter.post('/findings', validate({ body: AgentFindingsSchema }), async (re
 agentRouter.post('/security-posture', validate({ body: SecurityPostureSchema }), async (req, res, next) => {
   try {
     const result = await agentsService.storeSecurityPosture(req.body);
+    res.json(successEnvelope(result));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /v1/agents/package-inventory
+agentRouter.post('/package-inventory', validate({ body: PackageInventorySchema }), async (req, res, next) => {
+  try {
+    const result = await agentsService.storePackageInventory(req.body);
     res.json(successEnvelope(result));
   } catch (err) {
     next(err);

@@ -148,10 +148,11 @@ model Server {
   createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
 
-  project         Project?              @relation(fields: [projectId], references: [id])
-  metrics         ServerMetricSnapshot[]
-  findings        Finding[]
-  securityPosture SecurityPosture[]
+  project            Project?              @relation(fields: [projectId], references: [id])
+  metrics            ServerMetricSnapshot[]
+  findings           Finding[]
+  securityPosture    SecurityPosture[]
+  packageInventories PackageInventory[]
 
   @@index([orgId])
   @@index([projectId])
@@ -248,6 +249,46 @@ model SecurityPosture {
 
   @@index([serverId, createdAt])
   @@map("security_postures")
+}
+
+// ---------------------------------------------------------------------------
+// PackageInventory (daily agent package scan for CVE matching)
+// ---------------------------------------------------------------------------
+
+model PackageInventory {
+  id                     String   @id @default(uuid()) @db.VarChar(36)
+  serverId               String   @map("server_id") @db.VarChar(36)
+  collectedAt            DateTime @map("collected_at") @db.DateTime(3)
+  osFamily               String   @map("os_family") @db.VarChar(50)
+  packages               Json     @db.Json
+  binaryVersions         Json     @map("binary_versions") @db.Json
+  pendingSecurityUpdates Int      @map("pending_security_updates") @default(0)
+  heldPackages           Json     @map("held_packages") @db.Json
+  kernelRunning          String?  @map("kernel_running") @db.VarChar(100)
+  kernelInstalled        String?  @map("kernel_installed") @db.VarChar(100)
+  unattendedUpgrades     Boolean  @map("unattended_upgrades") @default(false)
+  packageHash            String   @map("package_hash") @db.VarChar(32)
+  createdAt              DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  server Server @relation(fields: [serverId], references: [id])
+
+  @@index([serverId, collectedAt])
+  @@map("package_inventories")
+}
+
+// ---------------------------------------------------------------------------
+// VulnerabilityFeed (cached CVE database feeds)
+// ---------------------------------------------------------------------------
+
+model VulnerabilityFeed {
+  id         String   @id @default(uuid()) @db.VarChar(36)
+  source     String   @unique @db.VarChar(50)
+  lastSyncAt DateTime @map("last_sync_at") @db.DateTime(3)
+  data       Json     @db.Json
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  @@map("vulnerability_feeds")
 }
 
 // ---------------------------------------------------------------------------

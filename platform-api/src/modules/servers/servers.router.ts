@@ -96,3 +96,33 @@ serversRouter.get(
     }
   },
 );
+
+// GET /api/v1/servers/:id/vulnerabilities
+serversRouter.get(
+  '/:id/vulnerabilities',
+  requirePermission('view_dashboard'),
+  validate({ params: ServerIdParamsSchema }),
+  async (req, res, next) => {
+    try {
+      const vulns = await serversService.getVulnerabilities(req.auth!.orgId, req.params.id);
+      res.json(successEnvelope(vulns));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// GET /api/v1/servers/:id/packages
+serversRouter.get(
+  '/:id/packages',
+  requirePermission('view_dashboard'),
+  validate({ params: ServerIdParamsSchema }),
+  async (req, res, next) => {
+    try {
+      const inventory = await serversService.getPackageInventory(req.auth!.orgId, req.params.id);
+      res.json(successEnvelope(inventory));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
