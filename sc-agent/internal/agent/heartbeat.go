@@ -23,6 +23,7 @@ type Agent struct {
 	ring       *RingBuffer
 	alertBuf   *AlertBuffer
 	thresholds ThresholdConfig
+	spike      *SpikeDetector
 }
 
 func New(cfg *config.Config, log *logging.Logger) *Agent {
@@ -34,10 +35,13 @@ func New(cfg *config.Config, log *logging.Logger) *Agent {
 		ring:   NewRingBuffer(),
 		alertBuf: NewAlertBuffer(),
 		thresholds: ThresholdConfig{
-			CPUPercent:  cfg.CPUThresh,
-			RAMPercent:  cfg.RAMThresh,
-			DiskPercent: cfg.DiskThresh,
+			CPUPercent:    cfg.CPUThresh,
+			RAMPercent:    cfg.RAMThresh,
+			DiskPercent:   cfg.DiskThresh,
+			IOWaitPercent: cfg.IOWaitThresh,
+			SpikePercent:  cfg.SpikeThresh,
 		},
+		spike: &SpikeDetector{},
 	}
 }
 
@@ -124,6 +128,15 @@ func (a *Agent) sendHeartbeat(urgent bool, alerts []platform.Alert, sys *platfor
 
 	metrics := a.ring.Aggregate()
 
+	// Check for spikes between 60s windows
+	spikeAlerts := a.spike.UpdateAndCheck(
+		metrics.CPU.Avg, metrics.RAM.Avg, a.thresholds.SpikePercent,
+	)
+	if len(spikeAlerts) > 0 {
+		alerts = append(alerts, spikeAlerts...)
+		urgent = true
+	}
+
 	req := platform.HeartbeatRequest{
 		AgentID: a.cfg.AgentID,
 		Urgent:  urgent,
@@ -139,10 +152,16 @@ func (a *Agent) sendHeartbeat(urgent bool, alerts []platform.Alert, sys *platfor
 	}
 
 	a.log.Debug("heartbeat sent", map[string]interface{}{
-		"urgent": urgent,
-		"alerts": len(alerts),
-		"cpu":    metrics.CPU.Avg,
-		"ram":    metrics.RAM.Avg,
-		"disk":   metrics.Disk.Usage,
+		"urgent":  urgent,
+		"alerts":  len(alerts),
+		"cpu":     metrics.CPU.Avg,
+		"ioWait":  metrics.CPU.IOWait,
+		"ram":     metrics.RAM.Avg,
+		"swap":    metrics.RAM.SwapUsedPct,
+		"disk":    metrics.Disk.Usage,
+		"diskIO":  metrics.Disk.IOUtilPct,
+		"load1":   metrics.Load.Load1,
+		"netRxBps": metrics.Network.RxBytesPerSec,
+		"netTxBps": metrics.Network.TxBytesPerSec,
 	})
 }

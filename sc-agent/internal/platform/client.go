@@ -56,24 +56,53 @@ type Alert struct {
 }
 
 type MetricsData struct {
-	CPU  CPUMetrics  `json:"cpu"`
-	RAM  RAMMetrics  `json:"ram"`
-	Disk DiskMetrics `json:"disk"`
+	CPU     CPUMetrics     `json:"cpu"`
+	RAM     RAMMetrics     `json:"ram"`
+	Disk    DiskMetrics    `json:"disk"`
+	Load    LoadMetrics    `json:"load"`
+	Network NetworkMetrics `json:"network"`
 }
 
 type CPUMetrics struct {
-	Avg float64 `json:"avg"`
-	Max float64 `json:"max"`
+	Avg    float64 `json:"avg"`
+	Max    float64 `json:"max"`
+	IOWait float64 `json:"ioWait"`
 }
 
 type RAMMetrics struct {
-	Avg float64 `json:"avg"`
-	Max float64 `json:"max"`
+	Avg         float64 `json:"avg"`
+	Max         float64 `json:"max"`
+	SwapUsedPct float64 `json:"swapUsedPct"`
 }
 
 type DiskMetrics struct {
-	Usage    float64 `json:"usage"`
-	IOErrors int     `json:"ioErrors"`
+	Usage        float64 `json:"usage"`
+	IOErrors     int     `json:"ioErrors"`
+	ReadBps      uint64  `json:"readBps"`
+	WriteBps     uint64  `json:"writeBps"`
+	IOUtilPct    float64 `json:"ioUtilPct"`
+}
+
+type LoadMetrics struct {
+	Load1  float64 `json:"load1"`
+	Load5  float64 `json:"load5"`
+	Load15 float64 `json:"load15"`
+}
+
+type NetworkMetrics struct {
+	RxBytesPerSec uint64         `json:"rxBytesPerSec"`
+	TxBytesPerSec uint64         `json:"txBytesPerSec"`
+	Errors        uint64         `json:"errors"`
+	Drops         uint64         `json:"drops"`
+	Interfaces    []IfaceMetric  `json:"interfaces,omitempty"`
+}
+
+type IfaceMetric struct {
+	Name    string `json:"name"`
+	RxBytes uint64 `json:"rxBytes"`
+	TxBytes uint64 `json:"txBytes"`
+	Errors  uint64 `json:"errors"`
+	Drops   uint64 `json:"drops"`
 }
 
 type SystemData struct {

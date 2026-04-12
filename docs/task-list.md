@@ -267,30 +267,30 @@ Dashboard updates in real-time. `docker compose up` boots entire stack.
 
 ### Go Agent (sc-agent)
 
-- [ ] Add load average (1/5/15) to `sysinfo.CollectMetrics()` via `gopsutil load.Avg()`
-- [ ] Add CPU iowait % to `sysinfo.Metrics` via `gopsutil cpu.Times()` delta calculation
-- [ ] Add swap used % to `sysinfo.Metrics` via `gopsutil mem.SwapMemory()`
-- [ ] Add disk I/O (read/write bytes/s, utilization %) via `gopsutil disk.IOCounters()` with delta between samples
-- [ ] Add network RX/TX bytes and errors per interface via `gopsutil net.IOCounters()` with delta between samples
-- [ ] Extend `sysinfo.Metrics` struct with all new fields
-- [ ] Extend `platform.MetricsData` to `MetricsDataV2` with `Load`, `Disk.IO`, `Network`, `Memory.SwapUsedPct`
-- [ ] Update `RingBuffer.Aggregate()` to include iowait avg/max
-- [ ] Add iowait threshold to `ThresholdConfig` (default 20%) and `config.Config`
-- [ ] Add spike detection to `CheckThresholds()` — alert if CPU or RAM jumps >40% between samples
-- [ ] Store previous disk I/O and network counters for delta calculation (init on first sample)
+- [x] Add load average (1/5/15) to `sysinfo.CollectMetrics()` via `gopsutil load.Avg()`
+- [x] Add CPU iowait % to `sysinfo.Metrics` via `gopsutil cpu.Times()` delta calculation
+- [x] Add swap used % to `sysinfo.Metrics` via `gopsutil mem.SwapMemory()`
+- [x] Add disk I/O (read/write bytes/s, utilization %) via `gopsutil disk.IOCounters()` with delta between samples
+- [x] Add network RX/TX bytes and errors per interface via `gopsutil net.IOCounters()` with delta between samples
+- [x] Extend `sysinfo.Metrics` struct with all new fields
+- [x] Extend `platform.MetricsData` to `MetricsDataV2` with `Load`, `Disk.IO`, `Network`, `Memory.SwapUsedPct`
+- [x] Update `RingBuffer.Aggregate()` to include iowait avg/max
+- [x] Add iowait threshold to `ThresholdConfig` (default 20%) and `config.Config`
+- [x] Add spike detection to `CheckThresholds()` — alert if CPU or RAM jumps >40% between samples
+- [x] Store previous disk I/O and network counters for delta calculation (init on first sample)
 
 ### Backend (platform-api)
 
-- [ ] Update `POST /v1/agents/heartbeat` handler to accept `MetricsDataV2` payload (backward-compatible with v1)
-- [ ] Extend `ServerMetricSnapshot` Prisma model with new fields (loadAvg1, loadAvg5, loadAvg15, cpuIoWait, swapUsedPct, diskReadBps, diskWriteBps, diskIoUtil, netRxBytes, netTxBytes, netErrors)
-- [ ] Update server metrics query `GET /api/v1/servers/:id/metrics` to return new fields
+- [x] Update `POST /v1/agents/heartbeat` handler to accept `MetricsDataV2` payload (backward-compatible with v1)
+- [x] Extend `ServerMetricSnapshot` Prisma model with new fields (loadAvg1, loadAvg5, loadAvg15, cpuIoWait, swapUsedPct, diskReadBps, diskWriteBps, diskIoUtil, netRxBytes, netTxBytes, netErrors)
+- [x] Update server metrics query `GET /api/v1/servers/:id/metrics` to return new fields
 
 ### Frontend (dashboard)
 
-- [ ] Add load average display to server detail page
-- [ ] Add disk I/O chart (read/write bytes/s) to server detail page
-- [ ] Add network throughput chart (RX/TX) to server detail page
-- [ ] Add swap usage indicator to server detail page
+- [x] Add load average display to server detail page
+- [x] Add disk I/O chart (read/write bytes/s) to server detail page
+- [x] Add network throughput chart (RX/TX) to server detail page
+- [x] Add swap usage indicator to server detail page
 
 ### Done when
 

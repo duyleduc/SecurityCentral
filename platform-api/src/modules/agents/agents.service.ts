@@ -129,9 +129,11 @@ interface HeartbeatInput {
   readonly urgent: boolean;
   readonly alerts: ReadonlyArray<{ type: string; value: number; threshold: number; since?: string }>;
   readonly metrics: {
-    readonly cpu: { avg: number; max: number };
-    readonly ram: { avg: number; max: number };
-    readonly disk: { usage: number; ioErrors: number };
+    readonly cpu: { avg: number; max: number; ioWait?: number };
+    readonly ram: { avg: number; max: number; swapUsedPct?: number };
+    readonly disk: { usage: number; ioErrors: number; readBps?: number; writeBps?: number; ioUtilPct?: number };
+    readonly load?: { load1: number; load5: number; load15: number };
+    readonly network?: { rxBytesPerSec: number; txBytesPerSec: number; errors: number; drops: number };
   };
   readonly system?: {
     hostname?: string;
@@ -173,6 +175,17 @@ export async function processHeartbeat(input: HeartbeatInput) {
         disk: input.metrics.disk.usage,
         urgent: input.urgent,
         alerts: JSON.parse(JSON.stringify(input.alerts)),
+        cpuIoWait: input.metrics.cpu.ioWait ?? null,
+        swapUsedPct: input.metrics.ram.swapUsedPct ?? null,
+        loadAvg1: input.metrics.load?.load1 ?? null,
+        loadAvg5: input.metrics.load?.load5 ?? null,
+        loadAvg15: input.metrics.load?.load15 ?? null,
+        diskReadBps: input.metrics.disk.readBps != null ? BigInt(input.metrics.disk.readBps) : null,
+        diskWriteBps: input.metrics.disk.writeBps != null ? BigInt(input.metrics.disk.writeBps) : null,
+        diskIoUtil: input.metrics.disk.ioUtilPct ?? null,
+        netRxBps: input.metrics.network?.rxBytesPerSec != null ? BigInt(input.metrics.network.rxBytesPerSec) : null,
+        netTxBps: input.metrics.network?.txBytesPerSec != null ? BigInt(input.metrics.network.txBytesPerSec) : null,
+        netErrors: input.metrics.network?.errors ?? null,
       },
     }),
     prisma.server.update({
@@ -200,6 +213,14 @@ export async function processHeartbeat(input: HeartbeatInput) {
     memory: input.metrics.ram.avg,
     disk: input.metrics.disk.usage,
     urgent: input.urgent,
+    cpuIoWait: input.metrics.cpu.ioWait ?? 0,
+    swapUsedPct: input.metrics.ram.swapUsedPct ?? 0,
+    loadAvg1: input.metrics.load?.load1 ?? 0,
+    diskReadBps: input.metrics.disk.readBps ?? 0,
+    diskWriteBps: input.metrics.disk.writeBps ?? 0,
+    diskIoUtil: input.metrics.disk.ioUtilPct ?? 0,
+    netRxBps: input.metrics.network?.rxBytesPerSec ?? 0,
+    netTxBps: input.metrics.network?.txBytesPerSec ?? 0,
   });
 
   // Auto-create findings from alerts
@@ -268,6 +289,9 @@ const ALERT_SEVERITY: Record<string, string> = {
   port_new: 'medium',
   service_down: 'critical',
   io_error: 'high',
+  iowait_high: 'high',
+  cpu_spike: 'medium',
+  ram_spike: 'medium',
 };
 
 async function createAgentFindings(

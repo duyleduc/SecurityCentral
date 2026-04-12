@@ -25,12 +25,20 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
+  AreaChart,
+  Area,
 } from 'recharts';
 import { useServer, useServerMetrics } from '../../api/hooks';
 import { ScoreBadge, computeScore } from '../../components/ScoreBadge';
 
 function formatTime(ts: string) {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B/s`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB/s`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB/s`;
 }
 
 export function ServerDetailPage() {
@@ -47,6 +55,19 @@ export function ServerDetailPage() {
     CPU: Math.round(m.cpu * 10) / 10,
     RAM: Math.round(m.memory * 10) / 10,
     Disk: Math.round(m.disk * 10) / 10,
+    IOWait: m.cpuIoWait != null ? Math.round(m.cpuIoWait * 10) / 10 : 0,
+  })) ?? [];
+
+  const diskIOData = metrics?.filter((m) => m.diskReadBps != null).map((m) => ({
+    time: formatTime(m.createdAt),
+    Read: m.diskReadBps ?? 0,
+    Write: m.diskWriteBps ?? 0,
+  })) ?? [];
+
+  const networkData = metrics?.filter((m) => m.netRxBps != null).map((m) => ({
+    time: formatTime(m.createdAt),
+    RX: m.netRxBps ?? 0,
+    TX: m.netTxBps ?? 0,
   })) ?? [];
 
   const latest = metrics?.[metrics.length - 1];
@@ -81,8 +102,8 @@ export function ServerDetailPage() {
         </Box>
       </Stack>
 
-      {/* Live metrics cards */}
-      <Grid container spacing={2} mb={3}>
+      {/* Live metrics cards — row 1 */}
+      <Grid container spacing={2} mb={2}>
         <Grid size={{ xs: 6, sm: 3 }}>
           <Card>
             <CardContent>
@@ -92,8 +113,10 @@ export function ServerDetailPage() {
               }>
                 {latest ? `${Math.round(latest.cpu)}%` : '-'}
               </Typography>
-              {server.cpuModel && (
-                <Typography variant="caption" color="text.secondary" noWrap>{server.cpuModel}</Typography>
+              {latest?.cpuIoWait != null && latest.cpuIoWait > 0 && (
+                <Typography variant="caption" color={latest.cpuIoWait > 20 ? 'error.main' : 'text.secondary'}>
+                  IOWait: {latest.cpuIoWait.toFixed(1)}%
+                </Typography>
               )}
             </CardContent>
           </Card>
@@ -107,11 +130,18 @@ export function ServerDetailPage() {
               }>
                 {latest ? `${Math.round(latest.memory)}%` : '-'}
               </Typography>
-              {server.totalRamMb != null && (
-                <Typography variant="caption" color="text.secondary">
-                  {server.totalRamMb >= 1024 ? `${(server.totalRamMb / 1024).toFixed(1)} GB` : `${server.totalRamMb} MB`} total
-                </Typography>
-              )}
+              <Stack direction="row" spacing={1}>
+                {server.totalRamMb != null && (
+                  <Typography variant="caption" color="text.secondary">
+                    {server.totalRamMb >= 1024 ? `${(server.totalRamMb / 1024).toFixed(1)} GB` : `${server.totalRamMb} MB`}
+                  </Typography>
+                )}
+                {latest?.swapUsedPct != null && latest.swapUsedPct > 0 && (
+                  <Typography variant="caption" color={latest.swapUsedPct > 50 ? 'warning.main' : 'text.secondary'}>
+                    Swap: {Math.round(latest.swapUsedPct)}%
+                  </Typography>
+                )}
+              </Stack>
             </CardContent>
           </Card>
         </Grid>
@@ -124,9 +154,77 @@ export function ServerDetailPage() {
               }>
                 {latest ? `${Math.round(latest.disk)}%` : '-'}
               </Typography>
-              {server.totalDiskGb != null && (
-                <Typography variant="caption" color="text.secondary">{server.totalDiskGb} GB total</Typography>
+              <Stack direction="row" spacing={1}>
+                {server.totalDiskGb != null && (
+                  <Typography variant="caption" color="text.secondary">{server.totalDiskGb} GB</Typography>
+                )}
+                {latest?.diskIoUtil != null && latest.diskIoUtil > 0 && (
+                  <Typography variant="caption" color={latest.diskIoUtil > 80 ? 'error.main' : 'text.secondary'}>
+                    I/O: {latest.diskIoUtil.toFixed(0)}%
+                  </Typography>
+                )}
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="caption" color="text.secondary">Load Average</Typography>
+              <Typography variant="h3" color={
+                (latest?.loadAvg1 ?? 0) > (server.cpuCores ?? 1) ? 'error.main' :
+                (latest?.loadAvg1 ?? 0) > (server.cpuCores ?? 1) * 0.7 ? 'warning.main' : 'success.main'
+              }>
+                {latest?.loadAvg1 != null ? latest.loadAvg1.toFixed(2) : '-'}
+              </Typography>
+              {latest?.loadAvg5 != null && (
+                <Typography variant="caption" color="text.secondary">
+                  {latest.loadAvg5.toFixed(2)} / {(latest.loadAvg15 ?? 0).toFixed(2)}
+                  {server.cpuCores ? ` (${server.cpuCores} cores)` : ''}
+                </Typography>
               )}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Live metrics cards — row 2: Network + OS */}
+      <Grid container spacing={2} mb={3}>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="caption" color="text.secondary">Network RX</Typography>
+              <Typography variant="h5">
+                {latest?.netRxBps != null ? formatBytes(latest.netRxBps) : '-'}
+              </Typography>
+              {latest?.netErrors != null && latest.netErrors > 0 && (
+                <Typography variant="caption" color="error.main">
+                  {latest.netErrors} errors
+                </Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="caption" color="text.secondary">Network TX</Typography>
+              <Typography variant="h5">
+                {latest?.netTxBps != null ? formatBytes(latest.netTxBps) : '-'}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="caption" color="text.secondary">Disk I/O</Typography>
+              <Typography variant="h6">
+                {latest?.diskReadBps != null ? `R: ${formatBytes(latest.diskReadBps)}` : '-'}
+              </Typography>
+              <Typography variant="h6">
+                {latest?.diskWriteBps != null ? `W: ${formatBytes(latest.diskWriteBps)}` : '-'}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -143,21 +241,22 @@ export function ServerDetailPage() {
         </Grid>
       </Grid>
 
-      {/* Metrics chart */}
+      {/* CPU / RAM / Disk chart */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h6" mb={2}>Metrics (last 24h)</Typography>
+          <Typography variant="h6" mb={2}>CPU / RAM / Disk (last 24h)</Typography>
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                 <XAxis dataKey="time" stroke="rgba(255,255,255,0.5)" fontSize={12} />
-                <YAxis domain={[0, 100]} stroke="rgba(255,255,255,0.5)" fontSize={12} />
+                <YAxis domain={[0, 100]} stroke="rgba(255,255,255,0.5)" fontSize={12} unit="%" />
                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.1)' }} />
                 <Legend />
                 <Line type="monotone" dataKey="CPU" stroke="#6366f1" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="RAM" stroke="#22d3ee" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="Disk" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="IOWait" stroke="#ef4444" strokeWidth={1.5} dot={false} strokeDasharray="4 4" />
               </LineChart>
             </ResponsiveContainer>
           ) : (
@@ -167,6 +266,58 @@ export function ServerDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Disk I/O + Network throughput charts side by side */}
+      <Grid container spacing={2} mb={3}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" mb={2}>Disk I/O</Typography>
+              {diskIOData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={diskIOData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis dataKey="time" stroke="rgba(255,255,255,0.5)" fontSize={11} />
+                    <YAxis stroke="rgba(255,255,255,0.5)" fontSize={11}
+                      tickFormatter={(v: number) => v >= 1048576 ? `${(v / 1048576).toFixed(0)}M` : v >= 1024 ? `${(v / 1024).toFixed(0)}K` : `${v}`} />
+                    <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.1)' }}
+                      formatter={(v: number) => formatBytes(v)} />
+                    <Legend />
+                    <Area type="monotone" dataKey="Read" stroke="#22d3ee" fill="#22d3ee" fillOpacity={0.15} strokeWidth={2} dot={false} />
+                    <Area type="monotone" dataKey="Write" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.15} strokeWidth={2} dot={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <Typography variant="body2" color="text.secondary">No disk I/O data yet.</Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" mb={2}>Network Throughput</Typography>
+              {networkData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={networkData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <XAxis dataKey="time" stroke="rgba(255,255,255,0.5)" fontSize={11} />
+                    <YAxis stroke="rgba(255,255,255,0.5)" fontSize={11}
+                      tickFormatter={(v: number) => v >= 1048576 ? `${(v / 1048576).toFixed(0)}M` : v >= 1024 ? `${(v / 1024).toFixed(0)}K` : `${v}`} />
+                    <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.1)' }}
+                      formatter={(v: number) => formatBytes(v)} />
+                    <Legend />
+                    <Area type="monotone" dataKey="RX" stroke="#6366f1" fill="#6366f1" fillOpacity={0.15} strokeWidth={2} dot={false} />
+                    <Area type="monotone" dataKey="TX" stroke="#a855f7" fill="#a855f7" fillOpacity={0.15} strokeWidth={2} dot={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <Typography variant="body2" color="text.secondary">No network data yet.</Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
 
       {/* System Information */}
       <Card>

@@ -45,7 +45,12 @@ export function emitAgentDisconnected(orgId: string, server: { id: string; hostn
   broadcastToOrg(orgId, 'agent:disconnected', server);
 }
 
-export function emitServerMetrics(orgId: string, data: { serverId: string; cpu: number; memory: number; disk: number; urgent: boolean }): void {
+export function emitServerMetrics(orgId: string, data: {
+  serverId: string; cpu: number; memory: number; disk: number; urgent: boolean;
+  cpuIoWait?: number; swapUsedPct?: number; loadAvg1?: number;
+  diskReadBps?: number; diskWriteBps?: number; diskIoUtil?: number;
+  netRxBps?: number; netTxBps?: number;
+}): void {
   broadcastToOrg(orgId, 'server:metrics', data);
 }
 

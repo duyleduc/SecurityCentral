@@ -241,6 +241,17 @@ export interface ServerMetric {
   disk: number;
   urgent: boolean;
   alerts: unknown[];
+  cpuIoWait: number | null;
+  swapUsedPct: number | null;
+  loadAvg1: number | null;
+  loadAvg5: number | null;
+  loadAvg15: number | null;
+  diskReadBps: number | null;
+  diskWriteBps: number | null;
+  diskIoUtil: number | null;
+  netRxBps: number | null;
+  netTxBps: number | null;
+  netErrors: number | null;
   createdAt: string;
 }
 

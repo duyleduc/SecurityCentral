@@ -196,14 +196,25 @@ model Repository {
 // ---------------------------------------------------------------------------
 
 model ServerMetricSnapshot {
-  id        String   @id @default(uuid()) @db.VarChar(36)
-  serverId  String   @map("server_id") @db.VarChar(36)
-  cpu       Float
-  memory    Float
-  disk      Float
-  urgent    Boolean  @default(false)
-  alerts    Json     @default("[]") @db.Json
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  id            String   @id @default(uuid()) @db.VarChar(36)
+  serverId      String   @map("server_id") @db.VarChar(36)
+  cpu           Float
+  memory        Float
+  disk          Float
+  urgent        Boolean  @default(false)
+  alerts        Json     @default("[]") @db.Json
+  cpuIoWait     Float?   @map("cpu_io_wait")
+  swapUsedPct   Float?   @map("swap_used_pct")
+  loadAvg1      Float?   @map("load_avg_1")
+  loadAvg5      Float?   @map("load_avg_5")
+  loadAvg15     Float?   @map("load_avg_15")
+  diskReadBps   BigInt?  @map("disk_read_bps")
+  diskWriteBps  BigInt?  @map("disk_write_bps")
+  diskIoUtil    Float?   @map("disk_io_util")
+  netRxBps      BigInt?  @map("net_rx_bps")
+  netTxBps      BigInt?  @map("net_tx_bps")
+  netErrors     Int?     @map("net_errors")
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(3)
 
   server Server @relation(fields: [serverId], references: [id])
 

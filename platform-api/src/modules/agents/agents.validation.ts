@@ -28,9 +28,33 @@ const AlertSchema = z.object({
 });
 
 const MetricsSchema = z.object({
-  cpu: z.object({ avg: z.number(), max: z.number() }),
-  ram: z.object({ avg: z.number(), max: z.number() }),
-  disk: z.object({ usage: z.number(), ioErrors: z.number().default(0) }),
+  cpu: z.object({ avg: z.number(), max: z.number(), ioWait: z.number().default(0) }),
+  ram: z.object({ avg: z.number(), max: z.number(), swapUsedPct: z.number().default(0) }),
+  disk: z.object({
+    usage: z.number(),
+    ioErrors: z.number().default(0),
+    readBps: z.number().default(0),
+    writeBps: z.number().default(0),
+    ioUtilPct: z.number().default(0),
+  }),
+  load: z.object({
+    load1: z.number(),
+    load5: z.number(),
+    load15: z.number(),
+  }).default({ load1: 0, load5: 0, load15: 0 }),
+  network: z.object({
+    rxBytesPerSec: z.number().default(0),
+    txBytesPerSec: z.number().default(0),
+    errors: z.number().default(0),
+    drops: z.number().default(0),
+    interfaces: z.array(z.object({
+      name: z.string(),
+      rxBytes: z.number(),
+      txBytes: z.number(),
+      errors: z.number(),
+      drops: z.number(),
+    })).default([]),
+  }).default({ rxBytesPerSec: 0, txBytesPerSec: 0, errors: 0, drops: 0, interfaces: [] }),
 });
 
 const SystemInfoSchema = z.object({

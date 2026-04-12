@@ -1,6 +1,15 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errors.js';
 
+// BigInt fields from Prisma need conversion to Number for JSON serialization.
+function serializeMetric(m: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(m)) {
+    out[k] = typeof v === 'bigint' ? Number(v) : v;
+  }
+  return out;
+}
+
 export async function list(orgId: string) {
   return prisma.server.findMany({
     where: { orgId },
@@ -27,7 +36,10 @@ export async function getById(orgId: string, id: string) {
     throw new AppError('RESOURCE_NOT_FOUND', 'Server not found');
   }
 
-  return server;
+  return {
+    ...server,
+    metrics: server.metrics.map((m) => serializeMetric(m as unknown as Record<string, unknown>)),
+  };
 }
 
 export async function getMetrics(orgId: string, serverId: string, hours: number) {
@@ -38,11 +50,13 @@ export async function getMetrics(orgId: string, serverId: string, hours: number)
 
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
-  return prisma.serverMetricSnapshot.findMany({
+  const rows = await prisma.serverMetricSnapshot.findMany({
     where: {
       serverId,
       createdAt: { gte: since },
     },
     orderBy: { createdAt: 'asc' },
   });
+
+  return rows.map((m) => serializeMetric(m as unknown as Record<string, unknown>));
 }

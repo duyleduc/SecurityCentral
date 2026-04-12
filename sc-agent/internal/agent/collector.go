@@ -46,7 +46,14 @@ func (rb *RingBuffer) Aggregate() platform.MetricsData {
 		return platform.MetricsData{}
 	}
 
-	var cpuSum, cpuMax, ramSum, ramMax, diskLast float64
+	var cpuSum, cpuMax, ioWaitSum float64
+	var ramSum, ramMax float64
+	var swapLast float64
+	var diskLast float64
+	var diskReadBps, diskWriteBps uint64
+	var diskIOUtil float64
+	var loadAvg1, loadAvg5, loadAvg15 float64
+	var netRx, netTx, netErrors, netDrops uint64
 
 	for i := 0; i < count; i++ {
 		s := rb.samples[i]
@@ -54,17 +61,70 @@ func (rb *RingBuffer) Aggregate() platform.MetricsData {
 		if s.CPUPercent > cpuMax {
 			cpuMax = s.CPUPercent
 		}
+		ioWaitSum += s.CPUIOWait
 		ramSum += s.RAMPercent
 		if s.RAMPercent > ramMax {
 			ramMax = s.RAMPercent
 		}
-		diskLast = s.DiskPercent
 	}
 
+	// Use latest sample for point-in-time values
+	latest := rb.samples[(rb.pos-1+ringBufferSize)%ringBufferSize]
+	diskLast = latest.DiskPercent
+	swapLast = latest.SwapUsedPct
+	loadAvg1 = latest.LoadAvg1
+	loadAvg5 = latest.LoadAvg5
+	loadAvg15 = latest.LoadAvg15
+	diskReadBps = latest.DiskReadBps
+	diskWriteBps = latest.DiskWriteBps
+	diskIOUtil = latest.DiskIOUtil
+	netRx = latest.NetRxBytes
+	netTx = latest.NetTxBytes
+	netErrors = latest.NetErrors
+	netDrops = latest.NetDrops
+
+	var ifaces []platform.IfaceMetric
+	for _, ifc := range latest.Interfaces {
+		ifaces = append(ifaces, platform.IfaceMetric{
+			Name:    ifc.Name,
+			RxBytes: ifc.RxBytes,
+			TxBytes: ifc.TxBytes,
+			Errors:  ifc.RxErrors + ifc.TxErrors,
+			Drops:   ifc.Drops,
+		})
+	}
+
+	n := float64(count)
 	return platform.MetricsData{
-		CPU:  platform.CPUMetrics{Avg: cpuSum / float64(count), Max: cpuMax},
-		RAM:  platform.RAMMetrics{Avg: ramSum / float64(count), Max: ramMax},
-		Disk: platform.DiskMetrics{Usage: diskLast, IOErrors: 0},
+		CPU: platform.CPUMetrics{
+			Avg:    cpuSum / n,
+			Max:    cpuMax,
+			IOWait: ioWaitSum / n,
+		},
+		RAM: platform.RAMMetrics{
+			Avg:         ramSum / n,
+			Max:         ramMax,
+			SwapUsedPct: swapLast,
+		},
+		Disk: platform.DiskMetrics{
+			Usage:     diskLast,
+			IOErrors:  0,
+			ReadBps:   diskReadBps,
+			WriteBps:  diskWriteBps,
+			IOUtilPct: diskIOUtil,
+		},
+		Load: platform.LoadMetrics{
+			Load1:  loadAvg1,
+			Load5:  loadAvg5,
+			Load15: loadAvg15,
+		},
+		Network: platform.NetworkMetrics{
+			RxBytesPerSec: netRx,
+			TxBytesPerSec: netTx,
+			Errors:        netErrors,
+			Drops:         netDrops,
+			Interfaces:    ifaces,
+		},
 	}
 }
 
