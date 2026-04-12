@@ -216,6 +216,8 @@ export function useHeartbeats(endpointId: string, limit = 20) {
 export interface Server {
   id: string;
   hostname: string;
+  projectId: string | null;
+  project: { id: string; name: string } | null;
   agentId: string | null;
   agentVersion: string | null;
   osFamily: string | null;
@@ -325,6 +327,30 @@ export function useSecurityPosture(id: string) {
     queryFn: () => apiClient<SecurityPosture | null>(`/api/v1/servers/${id}/security-posture`),
     enabled: !!id,
     refetchInterval: 60_000,
+  });
+}
+
+export function useUpdateServer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: string; projectId?: string | null; tags?: Array<{ key: string; value: string }> }) =>
+      apiClient<Server>(`/api/v1/servers/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['servers'] });
+      qc.invalidateQueries({ queryKey: ['servers', vars.id] });
+    },
+  });
+}
+
+export function useDeleteServer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<{ deleted: boolean; hostname: string; agentId: string | null }>(`/api/v1/servers/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['servers'] }),
   });
 }
 

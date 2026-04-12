@@ -19,11 +19,13 @@ import {
   Tab,
   IconButton,
   Stack,
+  MenuItem,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import StorageIcon from '@mui/icons-material/Storage';
+import FolderIcon from '@mui/icons-material/Folder';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import { useServers, useCreateInstallToken, type InstallToken } from '../../api/hooks';
+import { useServers, useProjects, useCreateInstallToken, type InstallToken } from '../../api/hooks';
 import { TagsInput, type Tag } from '../../components/TagsInput';
 
 function StatusColor(status: string): 'success' | 'warning' | 'error' | 'default' {
@@ -37,12 +39,14 @@ function StatusColor(status: string): 'success' | 'warning' | 'error' | 'default
 
 export function ServersPage() {
   const { data: servers, isLoading } = useServers();
+  const { data: projects } = useProjects();
   const createToken = useCreateInstallToken();
   const navigate = useNavigate();
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [label, setLabel] = useState('');
+  const [projectId, setProjectId] = useState('');
   const [tags, setTags] = useState<Tag[]>([]);
   const [arch, setArch] = useState<'amd64' | 'arm64'>('amd64');
   const [token, setToken] = useState<InstallToken | null>(null);
@@ -67,6 +71,7 @@ export function ServersPage() {
   const handleGenerate = async () => {
     const result = await createToken.mutateAsync({
       label: label || 'New server',
+      projectId: projectId || undefined,
       tags: tags.length > 0 ? tags : undefined,
     });
     setToken(result);
@@ -78,6 +83,7 @@ export function ServersPage() {
     setStep(1);
     setToken(null);
     setLabel('');
+    setProjectId('');
     setTags([]);
     setCopied(false);
     setExpiresIn('');
@@ -149,15 +155,22 @@ export function ServersPage() {
                     <StorageIcon color={srv.status === 'online' ? 'success' : srv.status === 'critical' ? 'error' : 'disabled'} />
                     <Typography variant="h6" noWrap>{srv.hostname}</Typography>
                   </Box>
-                  <Box display="flex" gap={1} flexWrap="wrap" mb={1}>
+                  <Box display="flex" gap={0.5} flexWrap="wrap" mb={1}>
                     <Chip label={srv.status} size="small" color={StatusColor(srv.status)} />
+                    {srv.project && (
+                      <Chip icon={<FolderIcon sx={{ fontSize: 14 }} />} label={srv.project.name} size="small" variant="outlined" />
+                    )}
                     {srv.osFamily && <Chip label={srv.osFamily} size="small" variant="outlined" />}
                     {srv.agentVersion && <Chip label={`v${srv.agentVersion}`} size="small" variant="outlined" />}
-                    {((srv as any).tags as Array<{ key: string; value: string }> | undefined)?.map((t) => (
-                      <Chip key={t.key} label={t.value ? `${t.key}:${t.value}` : t.key} size="small"
-                        sx={{ fontSize: '0.65rem', bgcolor: 'action.selected' }} />
-                    ))}
                   </Box>
+                  {srv.tags.length > 0 && (
+                    <Box display="flex" gap={0.5} flexWrap="wrap" mb={1}>
+                      {srv.tags.map((t) => (
+                        <Chip key={t.key} label={t.value ? `${t.key}:${t.value}` : t.key} size="small"
+                          sx={{ fontSize: '0.65rem', bgcolor: 'action.selected' }} />
+                      ))}
+                    </Box>
+                  )}
                   {srv.lastHeartbeat && (
                     <Typography variant="caption" color="text.secondary">
                       Last heartbeat: {new Date(srv.lastHeartbeat).toLocaleString()}
@@ -186,6 +199,17 @@ export function ServersPage() {
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder="e.g., prod-web-1"
               />
+              <TextField
+                fullWidth size="small" select
+                label="Project (optional)"
+                value={projectId}
+                onChange={(e) => setProjectId(e.target.value)}
+              >
+                <MenuItem value="">None</MenuItem>
+                {projects?.map((p) => (
+                  <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                ))}
+              </TextField>
               <TagsInput tags={tags} onChange={setTags} existingKeys={[]} />
 
               {createToken.isError && (

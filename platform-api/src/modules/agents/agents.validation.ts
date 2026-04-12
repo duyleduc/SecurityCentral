@@ -128,6 +128,11 @@ export const ServerMetricsQuerySchema = z.object({
   hours: z.coerce.number().int().min(1).max(168).default(24),
 });
 
+export const UpdateServerSchema = z.object({
+  projectId: z.string().uuid().nullable().optional(),
+  tags: z.array(TagSchema).max(20).optional(),
+});
+
 export const SecurityPostureSchema = z.object({
   agentId: z.string().uuid(),
   collectedAt: z.string(),

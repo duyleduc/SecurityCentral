@@ -161,6 +161,11 @@ export async function processHeartbeat(input: HeartbeatInput) {
     throw new AppError('RESOURCE_NOT_FOUND', 'Agent not registered');
   }
 
+  // If the server was deleted while agent was still running, tell it to shut down.
+  if (server.status === 'pending_delete') {
+    return { commands: [{ type: 'shutdown' }], config: {} };
+  }
+
   // Determine status from alerts
   let status = 'online';
   if (input.alerts.length > 0) {
