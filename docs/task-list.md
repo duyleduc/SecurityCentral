@@ -372,20 +372,21 @@ Agent reports listening ports, SSH config safety, firewall status, and top proce
 
 ### Go Agent (sc-agent)
 
-- [ ] Create Docker collector (`internal/collector/docker.go`) — CadenceStandard, conditional on Docker presence
-- [ ] Feature detection: check `docker` binary exists + `systemctl is-active docker`
-- [ ] Collect: daemon status, running/stopped container count, per-container name/image/state/CPU/memory/restarts
-- [ ] Use exec `docker ps -a --format json` + `docker stats --no-stream --format json` (no Docker SDK dependency)
-- [ ] Add `DockerMetrics` (optional/nil) to heartbeat payload
+- [x] Create Docker collector (`internal/collector/docker.go`) — CadenceStandard, conditional on Docker presence
+- [x] Feature detection: check `docker` binary + `docker info` to verify daemon is running
+- [x] Collect: running/stopped count, per-container ID/name/image/state/CPU/memory/restarts
+- [x] Use exec `docker ps -a --format json` + `docker stats --no-stream --format json` + `docker inspect` (no Docker SDK)
+- [x] Add `DockerMetrics` (optional/nil) to heartbeat payload
 
 ### Backend (platform-api)
 
-- [ ] Store Docker metrics in `ServerMetricSnapshot` (containerCount, containers JSON)
-- [ ] Auto-create finding for crash-looping container (restarts incrementing)
+- [x] Store Docker metrics as JSON column in `ServerMetricSnapshot`
+- [x] Auto-create finding for crash-looping container (restarts > 0, severity high if >= 5)
+- [x] Add Docker data to heartbeat validation schema
 
 ### Frontend (dashboard)
 
-- [ ] Add Docker section to server detail page (container list with status, CPU, memory, restart count)
+- [x] Add Docker tab to server detail page (container table with name, image, state, CPU%, memory%, restarts)
 
 ### Done when
 

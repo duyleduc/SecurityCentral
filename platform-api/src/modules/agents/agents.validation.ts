@@ -70,6 +70,19 @@ const MetricsSchema = z.object({
   service: z.object({
     failedUnits: z.array(z.string()).default([]),
   }).optional(),
+  docker: z.object({
+    running: z.number().int(),
+    stopped: z.number().int(),
+    containers: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      image: z.string(),
+      state: z.string(),
+      cpu: z.number(),
+      memory: z.number(),
+      restarts: z.number().int(),
+    })).default([]),
+  }).optional(),
 });
 
 const SystemInfoSchema = z.object({

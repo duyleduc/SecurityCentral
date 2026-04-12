@@ -39,6 +39,7 @@ func New(cfg *config.Config, log *logging.Logger) *Agent {
 	reg.Register(collector.NewProcess())
 	reg.Register(collector.NewService())
 	reg.Register(collector.NewSecurity())
+	reg.Register(collector.NewDocker())
 
 	return &Agent{
 		cfg:       cfg,

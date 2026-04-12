@@ -26,6 +26,7 @@ import StorageIcon from '@mui/icons-material/Storage';
 import MemoryIcon from '@mui/icons-material/Memory';
 import DnsIcon from '@mui/icons-material/Dns';
 import SecurityIcon from '@mui/icons-material/Security';
+import ViewInArIcon from '@mui/icons-material/ViewInAr';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import WarningIcon from '@mui/icons-material/Warning';
@@ -42,7 +43,7 @@ import {
   Area,
 } from 'recharts';
 import { useServer, useServerMetrics, useSecurityPosture } from '../../api/hooks';
-import type { SecurityPosture } from '../../api/hooks';
+import type { SecurityPosture, ServerMetric } from '../../api/hooks';
 import { ScoreBadge, computeScore } from '../../components/ScoreBadge';
 
 function formatTime(ts: string) {
@@ -335,11 +336,12 @@ export function ServerDetailPage() {
         </Grid>
       </Grid>
 
-      {/* Tabs: System Info | Security Posture */}
+      {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)}>
           <Tab label="System Information" />
           <Tab icon={<SecurityIcon fontSize="small" />} iconPosition="start" label="Security Posture" />
+          <Tab icon={<ViewInArIcon fontSize="small" />} iconPosition="start" label="Docker" />
         </Tabs>
       </Box>
 
@@ -375,7 +377,82 @@ export function ServerDetailPage() {
       )}
 
       {tab === 1 && <SecurityPostureTab posture={posture ?? null} />}
+
+      {tab === 2 && <DockerTab latest={latest ?? null} />}
     </Box>
+  );
+}
+
+function DockerTab({ latest }: { latest: { docker: ServerMetric['docker'] } | null }) {
+  const docker = latest?.docker;
+
+  if (!docker) {
+    return (
+      <Card>
+        <CardContent>
+          <Typography variant="body2" color="text.secondary">
+            No Docker data available. Docker may not be installed on this server, or the agent hasn't sent a heartbeat yet.
+          </Typography>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Stack spacing={2}>
+      <Stack direction="row" spacing={1}>
+        <Chip label={`${docker.running} running`} color="success" variant="outlined" />
+        <Chip label={`${docker.stopped} stopped`} color={docker.stopped > 0 ? 'warning' : 'default'} variant="outlined" />
+        <Chip label={`${docker.containers.length} total`} variant="outlined" />
+      </Stack>
+
+      <Card>
+        <CardContent>
+          <Typography variant="h6" mb={1}>Containers</Typography>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Image</TableCell>
+                  <TableCell>State</TableCell>
+                  <TableCell align="right">CPU %</TableCell>
+                  <TableCell align="right">Mem %</TableCell>
+                  <TableCell align="right">Restarts</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {docker.containers.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{c.name}</TableCell>
+                    <TableCell sx={{ fontSize: '0.8rem' }}>{c.image}</TableCell>
+                    <TableCell>
+                      <Chip label={c.state} size="small"
+                        color={c.state === 'running' ? 'success' : c.state === 'restarting' ? 'warning' : 'default'}
+                        variant="outlined" />
+                    </TableCell>
+                    <TableCell align="right">{c.cpu.toFixed(1)}%</TableCell>
+                    <TableCell align="right">{c.memory.toFixed(1)}%</TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2" color={c.restarts > 0 ? 'warning.main' : 'text.primary'}>
+                        {c.restarts}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {docker.containers.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6}>
+                      <Typography variant="body2" color="text.secondary">No containers found</Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+    </Stack>
   );
 }
 

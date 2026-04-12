@@ -134,6 +134,11 @@ interface HeartbeatInput {
     readonly disk: { usage: number; ioErrors: number; readBps?: number; writeBps?: number; ioUtilPct?: number };
     readonly load?: { load1: number; load5: number; load15: number };
     readonly network?: { rxBytesPerSec: number; txBytesPerSec: number; errors: number; drops: number };
+    readonly docker?: {
+      running: number;
+      stopped: number;
+      containers: ReadonlyArray<{ id: string; name: string; image: string; state: string; cpu: number; memory: number; restarts: number }>;
+    };
   };
   readonly system?: {
     hostname?: string;
@@ -186,6 +191,7 @@ export async function processHeartbeat(input: HeartbeatInput) {
         netRxBps: input.metrics.network?.rxBytesPerSec != null ? BigInt(input.metrics.network.rxBytesPerSec) : null,
         netTxBps: input.metrics.network?.txBytesPerSec != null ? BigInt(input.metrics.network.txBytesPerSec) : null,
         netErrors: input.metrics.network?.errors ?? null,
+        docker: input.metrics.docker ? JSON.parse(JSON.stringify(input.metrics.docker)) : null,
       },
     }),
     prisma.server.update({
@@ -226,6 +232,32 @@ export async function processHeartbeat(input: HeartbeatInput) {
   // Auto-create findings from alerts
   if (input.alerts.length > 0) {
     await createAgentFindings(server.orgId, server.id, server.hostname, input.alerts);
+  }
+
+  // Auto-create findings for crash-looping containers
+  if (input.metrics.docker?.containers) {
+    for (const ctr of input.metrics.docker.containers) {
+      if (ctr.restarts > 0) {
+        const title = `container ${ctr.name} restarting on ${server.hostname} (${ctr.restarts} restarts)`;
+        const existing = await prisma.finding.findFirst({
+          where: { orgId: server.orgId, serverId: server.id, title, status: { in: ['open', 'in_progress'] } },
+        });
+        if (!existing) {
+          await prisma.finding.create({
+            data: {
+              orgId: server.orgId,
+              serverId: server.id,
+              source: 'infra_agent',
+              severity: ctr.restarts >= 5 ? 'high' : 'medium',
+              status: 'open',
+              title,
+              description: `Container ${ctr.name} (${ctr.image}) has restarted ${ctr.restarts} times`,
+              detail: JSON.parse(JSON.stringify(ctr)),
+            },
+          });
+        }
+      }
+    }
   }
 
   logger.debug('Heartbeat processed', {

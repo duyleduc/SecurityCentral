@@ -202,6 +202,23 @@ func (ms *MetricStore) AggregateMetrics() platform.MetricsData {
 		}
 	}
 
+	// --- Docker: latest snapshot ---
+	if snap, ok := ms.latest["docker"]; ok {
+		if d, ok := snap.Data.(collector.DockerData); ok {
+			dm := &platform.DockerMetrics{
+				Running: d.Running,
+				Stopped: d.Stopped,
+			}
+			for _, c := range d.Containers {
+				dm.Containers = append(dm.Containers, platform.ContainerData{
+					ID: c.ID, Name: c.Name, Image: c.Image, State: c.State,
+					CPU: c.CPU, Memory: c.Memory, Restarts: c.Restarts,
+				})
+			}
+			md.Docker = dm
+		}
+	}
+
 	return md
 }
 

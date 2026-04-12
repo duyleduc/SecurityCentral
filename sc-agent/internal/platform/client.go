@@ -63,6 +63,23 @@ type MetricsData struct {
 	Network NetworkMetrics  `json:"network"`
 	Process *ProcessMetrics `json:"process,omitempty"`
 	Service *ServiceMetrics `json:"service,omitempty"`
+	Docker  *DockerMetrics  `json:"docker,omitempty"`
+}
+
+type DockerMetrics struct {
+	Running    int             `json:"running"`
+	Stopped    int             `json:"stopped"`
+	Containers []ContainerData `json:"containers"`
+}
+
+type ContainerData struct {
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	Image    string  `json:"image"`
+	State    string  `json:"state"`
+	CPU      float64 `json:"cpu"`
+	Memory   float64 `json:"memory"`
+	Restarts int     `json:"restarts"`
 }
 
 type ProcessMetrics struct {

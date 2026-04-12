@@ -215,6 +215,7 @@ model ServerMetricSnapshot {
   netRxBps      BigInt?  @map("net_rx_bps")
   netTxBps      BigInt?  @map("net_tx_bps")
   netErrors     Int?     @map("net_errors")
+  docker        Json?    @db.Json
   createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(3)
 
   server Server @relation(fields: [serverId], references: [id])

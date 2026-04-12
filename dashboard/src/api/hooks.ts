@@ -252,6 +252,19 @@ export interface ServerMetric {
   netRxBps: number | null;
   netTxBps: number | null;
   netErrors: number | null;
+  docker: {
+    running: number;
+    stopped: number;
+    containers: Array<{
+      id: string;
+      name: string;
+      image: string;
+      state: string;
+      cpu: number;
+      memory: number;
+      restarts: number;
+    }>;
+  } | null;
   createdAt: string;
 }
 
