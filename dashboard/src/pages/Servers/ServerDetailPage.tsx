@@ -46,6 +46,7 @@ import WarningIcon from '@mui/icons-material/Warning';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 import {
   AreaChart,
   Area,
@@ -440,6 +441,7 @@ export function ServerDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [crosshairTs, setCrosshairTs] = useState<number | null>(null);
+  const theme = useTheme();
   const { data: server, isLoading } = useServer(id ?? '');
   const { data: metrics } = useServerMetrics(id ?? '', hours);
   const { data: posture } = useSecurityPosture(id ?? '');
@@ -476,6 +478,22 @@ export function ServerDetailPage() {
   const ramColor = (latest?.memory ?? 0) > 85 ? 'error.main' : (latest?.memory ?? 0) > 60 ? 'warning.main' : 'success.main';
   const diskColor = (latest?.disk ?? 0) > 90 ? 'error.main' : (latest?.disk ?? 0) > 75 ? 'warning.main' : 'success.main';
 
+  // Compute score from real findings + posture data
+  const serverScore = useMemo(() => {
+    const sevCounts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
+    for (const v of vulns ?? []) {
+      if (sevCounts[v.severity] !== undefined) sevCounts[v.severity]++;
+    }
+    // Audit failures count as findings too
+    const audits = (posture as any)?.auditResults ?? [];
+    for (const a of audits) {
+      if (a.status === 'fail' && sevCounts[a.severity] !== undefined) sevCounts[a.severity]++;
+    }
+    // Posture issues
+    if (posture && !posture.firewallActive) sevCounts.high++;
+    return computeScore(sevCounts);
+  }, [vulns, posture]);
+
   if (isLoading) return <CircularProgress />;
   if (!server) return <Typography>Server not found</Typography>;
 
@@ -486,6 +504,14 @@ export function ServerDetailPage() {
           Back to Servers
         </Button>
         <Stack direction="row" spacing={1}>
+          <Button
+            startIcon={<AssessmentIcon />}
+            variant="contained"
+            size="small"
+            onClick={() => navigate(`/servers/${id}/report`)}
+          >
+            Full Report
+          </Button>
           <Button
             startIcon={<EditIcon />}
             variant="outlined"
@@ -508,7 +534,7 @@ export function ServerDetailPage() {
 
       {/* Header */}
       <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
-        <ScoreBadge score={computeScore({}).score} breakdown={computeScore({}).breakdown} size="medium" />
+        <ScoreBadge score={serverScore.score} breakdown={serverScore.breakdown} size="medium" />
         <Box sx={{ flex: 1 }}>
           <Stack direction="row" spacing={1.5} alignItems="center">
             <Typography variant="h4">{server.hostname}</Typography>
@@ -521,6 +547,18 @@ export function ServerDetailPage() {
                 onClick={() => navigate(`/projects/${server.project!.id}`)} />
             )}
             {server.agentVersion && <Chip label={`Agent v${server.agentVersion}`} variant="outlined" size="small" />}
+          </Stack>
+          {/* Score breakdown: CVE + audit counts */}
+          <Stack direction="row" spacing={0.75} sx={{ mt: 0.75 }} flexWrap="wrap" useFlexGap>
+            {serverScore.breakdown.filter((b) => b.count > 0).map((b) => (
+              <Chip key={b.severity} size="small" variant="outlined"
+                label={`${b.count} ${b.severity} (−${b.deduction})`}
+                color={b.severity === 'critical' ? 'error' : b.severity === 'high' ? 'warning' : b.severity === 'medium' ? 'info' : 'default'}
+                sx={{ fontSize: '0.7rem', height: 22 }} />
+            ))}
+            {serverScore.breakdown.every((b) => b.count === 0) && (
+              <Chip size="small" label="No issues" color="success" variant="outlined" sx={{ fontSize: '0.7rem', height: 22 }} />
+            )}
           </Stack>
           {server.tags.length > 0 && (
             <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
@@ -558,32 +596,52 @@ export function ServerDetailPage() {
       )}
 
       {/* ============================================================= */}
-      {/* Gauge row (Grafana-style) */}
+      {/* Row 1: Server info cards */}
       {/* ============================================================= */}
-      <Grid container spacing={1.5} mb={2}>
-        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
+      <Grid container spacing={1} sx={{ mb: 2 }}>
+        {[
+          { label: 'OS', value: `${server.osFamily ?? '?'} ${server.osVersion ?? ''}`.trim() },
+          { label: 'Kernel', value: server.kernel ?? '-' },
+          { label: 'IP', value: server.ipAddresses?.join(', ') ?? '-' },
+          { label: 'CPU', value: `${server.cpuCores ?? '?'} cores` },
+          { label: 'RAM', value: fmtRam(server.totalRamMb) },
+          { label: 'Disk', value: server.totalDiskGb != null ? `${server.totalDiskGb} GB` : '-' },
+          { label: 'Uptime', value: fmtUptime(server.lastHeartbeat, server.createdAt) },
+          { label: 'Heartbeat', value: server.lastHeartbeat ? new Date(server.lastHeartbeat).toLocaleTimeString() : 'Never' },
+        ].map(({ label, value }) => (
+          <Grid key={label} size={{ xs: 6, sm: 3, md: 1.5 }}>
+            <Card sx={{ bgcolor: 'rgba(15,23,42,0.6)', border: '1px solid', borderColor: 'divider', height: '100%' }}>
+              <CardContent sx={{ py: 1, px: 1.5, '&:last-child': { pb: 1 } }}>
+                <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  {label}
+                </Typography>
+                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 600, mt: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {value}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+
+      {/* ============================================================= */}
+      {/* Row 2: Metric gauges */}
+      {/* ============================================================= */}
+      <Grid container spacing={1.5} mb={2} columns={10}>
+        <Grid size={{ xs: 5, sm: 2 }}>
           <Gauge label="CPU Busy" value={latest?.cpu ?? null} thresholds={[60, 85]} />
         </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
+        <Grid size={{ xs: 5, sm: 2 }}>
           <Gauge label="Sys Load" value={latest?.loadAvg1 ?? null} max={server.cpuCores ?? 4} unit="" thresholds={[(server.cpuCores ?? 4) * 0.7, (server.cpuCores ?? 4) * 0.9]} />
         </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
+        <Grid size={{ xs: 5, sm: 2 }}>
           <Gauge label="RAM Used" value={latest?.memory ?? null} thresholds={[60, 85]} />
         </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
+        <Grid size={{ xs: 5, sm: 2 }}>
           <Gauge label="SWAP Used" value={latest?.swapUsedPct ?? null} thresholds={[30, 60]} />
         </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
+        <Grid size={{ xs: 5, sm: 2 }}>
           <Gauge label="Disk Used" value={latest?.disk ?? null} thresholds={[75, 90]} />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
-          <InfoGauge label="CPU Cores" value={server.cpuCores != null ? String(server.cpuCores) : '-'} />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
-          <InfoGauge label="Uptime" value={fmtUptime(server.lastHeartbeat, server.createdAt)} />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
-          <InfoGauge label="RAM Total" value={fmtRam(server.totalRamMb)} />
         </Grid>
       </Grid>
 
@@ -732,54 +790,21 @@ export function ServerDetailPage() {
       </Grid>
 
       {/* ============================================================= */}
-      {/* Tabs: System Info | Security Posture | Docker */}
+      {/* Tabs: Security | Vulnerabilities | Docker */}
       {/* ============================================================= */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2, mt: 3 }}>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-          <Tab label="System Information" />
-          <Tab icon={<SecurityIcon fontSize="small" />} iconPosition="start" label="Security Posture" />
-          <Tab icon={<SecurityIcon fontSize="small" />} iconPosition="start"
-            label={`Vulnerabilities${vulns?.length ? ` (${vulns.length})` : ''}`} />
+          <Tab icon={<SecurityIcon fontSize="small" />} iconPosition="start" label="Security" />
+          <Tab label={`Vulnerabilities${vulns?.length ? ` (${vulns.length})` : ''}`} />
           <Tab icon={<ViewInArIcon fontSize="small" />} iconPosition="start" label="Docker" />
         </Tabs>
       </Box>
 
-      {tab === 0 && (
-        <Card>
-          <CardContent>
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <InfoRow icon={<StorageIcon fontSize="small" />} label="Hostname" value={server.hostname} />
-                <InfoRow label="OS" value={`${server.osFamily ?? 'Unknown'} ${server.osVersion ?? ''}`} />
-                <InfoRow label="Kernel" value={server.kernel ?? '-'} />
-                <InfoRow label="Architecture" value={(server as any).arch ?? '-'} />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <InfoRow icon={<MemoryIcon fontSize="small" />} label="CPU" value={server.cpuModel ?? '-'} />
-                <InfoRow label="CPU Cores" value={server.cpuCores != null ? String(server.cpuCores) : '-'} />
-                <InfoRow label="Total RAM" value={server.totalRamMb != null ? (server.totalRamMb >= 1024 ? `${(server.totalRamMb / 1024).toFixed(1)} GB` : `${server.totalRamMb} MB`) : '-'} />
-                <InfoRow label="Total Disk" value={server.totalDiskGb != null ? `${server.totalDiskGb} GB` : '-'} />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <InfoRow icon={<DnsIcon fontSize="small" />} label="IP Addresses" value={server.ipAddresses?.join(', ') ?? '-'} />
-                <InfoRow label="Agent ID" value={server.agentId ?? '-'} mono />
-                <InfoRow label="Agent Version" value={server.agentVersion ?? '-'} />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <InfoRow label="Last Heartbeat" value={server.lastHeartbeat ? new Date(server.lastHeartbeat).toLocaleString() : 'Never'} />
-                <InfoRow label="Registered" value={new Date(server.createdAt).toLocaleString()} />
-                <InfoRow label="Status" value={server.status} />
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
-      )}
+      {tab === 0 && <SecurityPostureTab posture={posture ?? null} />}
 
-      {tab === 1 && <SecurityPostureTab posture={posture ?? null} />}
+      {tab === 1 && <VulnerabilitiesTab serverId={server.id} vulns={vulns ?? []} />}
 
-      {tab === 2 && <VulnerabilitiesTab serverId={server.id} vulns={vulns ?? []} />}
-
-      {tab === 3 && <DockerTab latest={latest ?? null} />}
+      {tab === 2 && <DockerTab latest={latest ?? null} />}
 
       {/* Delete Confirmation Dialog */}
       <DeleteServerDialog
@@ -1024,49 +1049,19 @@ function VulnerabilitiesTab({ serverId, vulns }: { serverId: string; vulns: CveF
 
   if (!hasInventory) {
     return (
-      <Card>
-        <CardContent>
-          <Stack spacing={1.5}>
-            <Typography variant="body1">No package inventory yet</Typography>
-            <Typography variant="body2" color="text.secondary">
-              The agent collects the server's installed packages once per day and sends them to the platform for CVE matching.
-              This server hasn't sent its first package inventory yet.
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Make sure the agent is running version <strong>1.0.0+</strong> and has been online for at least 24 hours.
-              You can also rebuild and restart the agent to trigger an immediate collection.
-            </Typography>
-          </Stack>
-        </CardContent>
-      </Card>
+      <Typography variant="body2" color="text.secondary">
+        Waiting for agent to send package inventory (daily scan).
+      </Typography>
     );
   }
 
   if (vulns.length === 0) {
     return (
-      <Stack spacing={2}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Typography variant="body2" color="text.secondary">
-            Last package scan: {new Date(inventory.collectedAt).toLocaleString()} ({inventory.packages.length} packages)
-          </Typography>
-          {scanButton}
-        </Stack>
-        {scanMutation.isSuccess && (
-          <Alert severity="success">
-            Scan complete: {scanMutation.data.matched} CVEs matched across {scanMutation.data.packages} packages.
-            {scanMutation.data.created > 0 ? ` ${scanMutation.data.created} new findings created.` : ' No new findings.'}
-          </Alert>
-        )}
-        {scanMutation.isError && (
-          <Alert severity="error">{(scanMutation.error as Error).message}</Alert>
-        )}
-        <Card>
-          <CardContent>
-            <Typography variant="body2" color="text.secondary">
-              No vulnerabilities found. Click "Run CVE Scan" to re-check against the latest vulnerability feeds.
-            </Typography>
-          </CardContent>
-        </Card>
+      <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Typography variant="body2" color="text.secondary">
+          No vulnerabilities found — {inventory.packages.length} packages scanned {new Date(inventory.collectedAt).toLocaleDateString()}
+        </Typography>
+        {scanButton}
       </Stack>
     );
   }
@@ -1346,133 +1341,118 @@ function AuditResultsSection({ results }: { results: AuditItem[] }) {
 }
 
 function SecurityPostureTab({ posture }: { posture: SecurityPosture | null }) {
+  const [showPorts, setShowPorts] = useState(false);
+
   if (!posture) {
     return (
-      <Card>
-        <CardContent>
-          <Typography variant="body2" color="text.secondary">
-            No security posture data yet. The agent performs a security scan every hour.
-          </Typography>
-        </CardContent>
-      </Card>
+      <Typography variant="body2" color="text.secondary">
+        No security posture data yet. The agent scans every hour.
+      </Typography>
     );
   }
 
   const sshOk = posture.sshConfig.rootLogin !== 'yes' && posture.sshConfig.passwordAuth !== 'yes';
   const fwOk = posture.firewallActive;
+  const auditResults = posture.auditResults ?? [];
+  const auditFail = auditResults.filter((r) => r.status === 'fail');
+  const auditWarn = auditResults.filter((r) => r.status === 'warn');
+  const auditPass = auditResults.filter((r) => r.status === 'pass');
+  const publicPorts = posture.listeningPorts.filter((p) => p.bind === '0.0.0.0' || p.bind === '::' || p.bind === '');
 
   return (
-    <Stack spacing={2}>
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-        <Chip icon={fwOk ? <CheckCircleIcon /> : <WarningIcon />} label={`Firewall: ${posture.firewallType}${fwOk ? ' active' : ' inactive'}`}
-          color={fwOk ? 'success' : 'warning'} variant="outlined" />
-        <Chip icon={sshOk ? <CheckCircleIcon /> : <WarningIcon />} label={sshOk ? 'SSH hardened' : 'SSH needs hardening'}
-          color={sshOk ? 'success' : 'warning'} variant="outlined" />
-        {posture.pendingReboot && <Chip icon={<WarningIcon />} label="Reboot pending" color="warning" variant="outlined" />}
-        {posture.sshFailures > 0 && <Chip icon={<WarningIcon />} label={`${posture.sshFailures} SSH failures`}
+    <Stack spacing={1.5}>
+      {/* Quick status chips */}
+      <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+        <Chip size="small" icon={fwOk ? <CheckCircleIcon /> : <CancelIcon />}
+          label={fwOk ? `Firewall (${posture.firewallType})` : 'No firewall'}
+          color={fwOk ? 'success' : 'error'} variant="outlined" />
+        <Chip size="small" icon={sshOk ? <CheckCircleIcon /> : <CancelIcon />}
+          label={sshOk ? 'SSH hardened' : 'SSH weak'}
+          color={sshOk ? 'success' : 'error'} variant="outlined" />
+        {posture.pendingReboot && <Chip size="small" icon={<WarningIcon />} label="Reboot pending" color="warning" variant="outlined" />}
+        {posture.sshFailures > 0 && <Chip size="small" label={`${posture.sshFailures} SSH fail attempts`}
           color={posture.sshFailures > 10 ? 'error' : 'warning'} variant="outlined" />}
-        <Chip label={`${posture.listeningPorts.length} listening ports`} variant="outlined" />
-        <Chip label={`${posture.shellUsers.length} shell users`} variant="outlined" />
-        {posture.openFdAlloc != null && posture.openFdMax != null && (
-          <Chip label={`FDs: ${posture.openFdAlloc.toLocaleString()} / ${posture.openFdMax.toLocaleString()}`} variant="outlined" />
+        <Chip size="small" label={`${publicPorts.length} public ports`}
+          color={publicPorts.length > 5 ? 'warning' : 'default'} variant="outlined"
+          onClick={() => setShowPorts(!showPorts)} sx={{ cursor: 'pointer' }} />
+        <Chip size="small" label={`${posture.shellUsers.length} shell users (${posture.shellUsers.join(', ')})`} variant="outlined" />
+        {posture.loggedInUsers.length > 0 && (
+          <Chip size="small" label={`${posture.loggedInUsers.length} active session${posture.loggedInUsers.length > 1 ? 's' : ''}`} variant="outlined" />
+        )}
+        {auditResults.length > 0 && (
+          <Chip size="small"
+            label={`Audit: ${auditPass.length} pass / ${auditFail.length} fail`}
+            color={auditFail.length === 0 ? 'success' : auditFail.length <= 3 ? 'warning' : 'error'}
+            variant="outlined" />
         )}
       </Stack>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" mb={1}>SSH Configuration</Typography>
-              <Stack spacing={1}>
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <StatusIcon ok={posture.sshConfig.rootLogin !== 'yes'} />
-                  <Typography variant="body2">Root Login: <strong>{posture.sshConfig.rootLogin}</strong></Typography>
-                </Stack>
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <StatusIcon ok={posture.sshConfig.passwordAuth !== 'yes'} />
-                  <Typography variant="body2">Password Auth: <strong>{posture.sshConfig.passwordAuth}</strong></Typography>
-                </Stack>
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <StatusIcon ok={posture.sshConfig.permitEmptyPwd !== 'yes'} />
-                  <Typography variant="body2">Empty Passwords: <strong>{posture.sshConfig.permitEmptyPwd}</strong></Typography>
-                </Stack>
-                <Typography variant="body2" color="text.secondary">Port: {posture.sshConfig.port}</Typography>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" mb={1}>Active Sessions</Typography>
-              {posture.loggedInUsers.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">No active sessions</Typography>
-              ) : (
-                <Stack spacing={0.5}>
-                  {posture.loggedInUsers.map((u, i) => (
-                    <Typography key={i} variant="body2">
-                      <strong>{u.user}</strong> from {u.from} since {u.since}
-                    </Typography>
-                  ))}
-                </Stack>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      <Card>
-        <CardContent>
-          <Typography variant="h6" mb={1}>Listening Ports</Typography>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Port</TableCell>
-                  <TableCell>Proto</TableCell>
-                  <TableCell>Process</TableCell>
-                  <TableCell>Bind</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {posture.listeningPorts.map((p, i) => (
-                  <TableRow key={i}>
-                    <TableCell sx={{ fontFamily: 'monospace' }}>{p.port}</TableCell>
-                    <TableCell>{p.proto}</TableCell>
-                    <TableCell>{p.process || '-'}</TableCell>
-                    <TableCell>
-                      <Chip label={p.bind || '0.0.0.0'} size="small"
-                        color={p.bind === '0.0.0.0' || p.bind === '::' || p.bind === '' ? 'warning' : 'default'}
-                        variant="outlined" />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent>
-          <Typography variant="h6" mb={1}>Shell Users</Typography>
-          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-            {posture.shellUsers.map((u) => (
-              <Chip key={u} label={u} size="small" variant="outlined"
-                color={u === 'root' ? 'warning' : 'default'}
-                sx={{ fontFamily: 'monospace' }} />
-            ))}
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Hardening Audit Results */}
-      {posture.auditResults && posture.auditResults.length > 0 && (
-        <AuditResultsSection results={posture.auditResults} />
+      {/* Expanded listening ports (toggle) */}
+      {showPorts && (
+        <Card sx={{ bgcolor: 'rgba(15,23,42,0.5)' }}>
+          <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
+            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+              {posture.listeningPorts.map((p, i) => (
+                <Chip key={i} size="small" variant="outlined"
+                  label={`${p.port}/${p.proto} ${p.process || ''}`}
+                  color={p.bind === '0.0.0.0' || p.bind === '::' || p.bind === '' ? 'warning' : 'default'}
+                  sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
+              ))}
+            </Stack>
+          </CardContent>
+        </Card>
       )}
 
-      <Typography variant="caption" color="text.secondary">
+      {/* Issues only — failed and warning audit checks */}
+      {auditFail.length + auditWarn.length > 0 && (
+        <Card>
+          <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'text.secondary' }}>Issues Found</Typography>
+            {[...auditFail, ...auditWarn].map((item) => (
+              <Stack key={item.id} direction="row" spacing={1} alignItems="center"
+                sx={{ py: 0.5, borderLeft: '2px solid', borderColor: item.status === 'fail' ? 'error.main' : 'warning.main', pl: 1, mb: 0.5 }}>
+                {item.status === 'fail'
+                  ? <CancelIcon sx={{ fontSize: 14, color: 'error.main' }} />
+                  : <WarningIcon sx={{ fontSize: 14, color: 'warning.main' }} />}
+                <Typography variant="body2" sx={{ flex: 1, fontSize: '0.8rem' }}>{item.title}</Typography>
+                <Chip label={item.severity} size="small" variant="outlined" sx={{ fontSize: '0.6rem', height: 18 }}
+                  color={item.severity === 'critical' ? 'error' : item.severity === 'high' ? 'warning' : 'default'} />
+              </Stack>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* SSH details — only if there are problems */}
+      {!sshOk && (
+        <Card sx={{ bgcolor: 'rgba(15,23,42,0.5)' }}>
+          <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="subtitle2" sx={{ mb: 0.5, color: 'text.secondary' }}>SSH Configuration</Typography>
+            <Stack spacing={0.5}>
+              {posture.sshConfig.rootLogin === 'yes' && (
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <CancelIcon sx={{ fontSize: 14, color: 'error.main' }} />
+                  <Typography variant="body2" fontSize="0.8rem">Root login enabled</Typography>
+                </Stack>
+              )}
+              {posture.sshConfig.passwordAuth === 'yes' && (
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <CancelIcon sx={{ fontSize: 14, color: 'error.main' }} />
+                  <Typography variant="body2" fontSize="0.8rem">Password auth enabled (use key-based)</Typography>
+                </Stack>
+              )}
+              {posture.sshConfig.permitEmptyPwd === 'yes' && (
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <CancelIcon sx={{ fontSize: 14, color: 'error.main' }} />
+                  <Typography variant="body2" fontSize="0.8rem">Empty passwords permitted</Typography>
+                </Stack>
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+
+      <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem' }}>
         Last scan: {new Date(posture.collectedAt).toLocaleString()}
       </Typography>
     </Stack>
