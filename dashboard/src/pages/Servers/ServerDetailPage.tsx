@@ -97,6 +97,158 @@ function fmtBytesShort(v: number): string {
 }
 
 // ---------------------------------------------------------------------------
+// Gauge widget (Grafana-style semicircle)
+// ---------------------------------------------------------------------------
+
+interface GaugeProps {
+  label: string;
+  value: number | null;
+  max?: number;
+  unit?: string;
+  /** Display text override (e.g. "6.8 hours") instead of value+unit */
+  display?: string;
+  /** Thresholds: [warn, crit]. Colors go green → yellow → red. */
+  thresholds?: [number, number];
+}
+
+function Gauge({ label, value, max = 100, unit = '%', display, thresholds = [60, 85] }: GaugeProps) {
+  const pct = value != null ? Math.min(Math.max(value / max, 0), 1) : 0;
+  const hasValue = value != null;
+
+  const w = 140, h = 110;
+  const cx = w / 2, cy = 58, r = 44, strokeW = 10;
+  const gapDeg = 90;
+  const sweepDeg = 360 - gapDeg;
+  const startDeg = 90 + gapDeg / 2;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+
+  const pointAt = (frac: number) => {
+    const deg = startDeg + frac * sweepDeg;
+    const rad = toRad(deg);
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  };
+
+  const arcBetween = (f1: number, f2: number) => {
+    const s = pointAt(f1);
+    const e = pointAt(f2);
+    const sweep = (f2 - f1) * sweepDeg;
+    const largeArc = sweep > 180 ? 1 : 0;
+    return `M ${s.x} ${s.y} A ${r} ${r} 0 ${largeArc} 1 ${e.x} ${e.y}`;
+  };
+
+  // Threshold fractions (normalized to 0-1)
+  const warnFrac = thresholds[0] / max;
+  const critFrac = thresholds[1] / max;
+
+  // Color for current value
+  const normVal = value ?? 0;
+  const valColor = normVal >= thresholds[1] ? '#ef4444'
+    : normVal >= thresholds[0] ? '#f59e0b'
+    : '#22c55e';
+
+  // Needle position
+  const needlePt = pointAt(pct);
+  const displayText = display ?? (hasValue ? `${value % 1 === 0 ? value : value.toFixed(1)}${unit}` : '-');
+
+  return (
+    <Card sx={{
+      bgcolor: 'rgba(15,23,42,0.7)', border: '1px solid', borderColor: 'divider',
+      textAlign: 'center', px: 0.5, pt: 0, pb: 0.5, minWidth: 0, overflow: 'hidden',
+    }}>
+      {/* Label above gauge */}
+      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.65rem', display: 'block', pt: 0.75, pb: 0 }}>
+        {label}
+      </Typography>
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', margin: '0 auto' }}>
+        {/* Color-banded background track: green → yellow → red (dimmed) */}
+        <path d={arcBetween(0, warnFrac)} fill="none" stroke="rgba(34,197,94,0.2)" strokeWidth={strokeW} strokeLinecap="butt" />
+        <path d={arcBetween(warnFrac, critFrac)} fill="none" stroke="rgba(245,158,11,0.2)" strokeWidth={strokeW} strokeLinecap="butt" />
+        <path d={arcBetween(critFrac, 1)} fill="none" stroke="rgba(239,68,68,0.2)" strokeWidth={strokeW} strokeLinecap="butt" />
+
+        {/* Bright filled portion up to current value */}
+        {hasValue && pct > 0.005 && (() => {
+          const segments: JSX.Element[] = [];
+          const stops = [
+            { frac: Math.min(pct, warnFrac), color: '#22c55e' },
+            { frac: Math.min(pct, critFrac), color: '#f59e0b' },
+            { frac: pct, color: '#ef4444' },
+          ];
+          let prev = 0;
+          for (const s of stops) {
+            if (s.frac > prev) {
+              segments.push(
+                <path key={s.color + prev} d={arcBetween(prev, s.frac)} fill="none"
+                  stroke={s.color} strokeWidth={strokeW} strokeLinecap="butt" />
+              );
+              prev = s.frac;
+            }
+          }
+          return segments;
+        })()}
+
+        {/* Round caps at start and end of filled arc */}
+        {hasValue && pct > 0.005 && (
+          <>
+            <circle cx={pointAt(0).x} cy={pointAt(0).y} r={strokeW / 2} fill="#22c55e" />
+            <circle cx={needlePt.x} cy={needlePt.y} r={strokeW / 2} fill={valColor} />
+          </>
+        )}
+
+        {/* Bright needle dot */}
+        {hasValue && (
+          <circle cx={needlePt.x} cy={needlePt.y} r={strokeW / 2 + 2} fill={valColor} opacity={0.9} />
+        )}
+
+        {/* Center value — large */}
+        <text x={cx} y={cy + 6} textAnchor="middle" fill={hasValue ? '#e2e8f0' : 'rgba(255,255,255,0.3)'}
+          fontSize="20" fontWeight="700" fontFamily="monospace">
+          {displayText}
+        </text>
+
+        {/* Min / Max */}
+        <text x={pointAt(0).x} y={pointAt(0).y + 14} textAnchor="middle" fill="rgba(255,255,255,0.2)" fontSize="8">0</text>
+        <text x={pointAt(1).x} y={pointAt(1).y + 14} textAnchor="middle" fill="rgba(255,255,255,0.2)" fontSize="8">{max}</text>
+      </svg>
+    </Card>
+  );
+}
+
+/** Static info gauge — just shows a value, no arc. */
+function InfoGauge({ label, value }: { label: string; value: string }) {
+  return (
+    <Card sx={{
+      bgcolor: 'rgba(15,23,42,0.7)', border: '1px solid', borderColor: 'divider',
+      textAlign: 'center', px: 0.5, minWidth: 0,
+      display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
+      height: 140,
+    }}>
+      <Typography sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '1.25rem', color: '#94a3b8' }}>
+        {value}
+      </Typography>
+      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.625rem', mt: 1 }}>
+        {label}
+      </Typography>
+    </Card>
+  );
+}
+
+function fmtUptime(lastHeartbeat: string | null, createdAt: string): string {
+  if (!lastHeartbeat) return '-';
+  const ms = new Date(lastHeartbeat).getTime() - new Date(createdAt).getTime();
+  if (ms < 0) return '-';
+  const days = Math.floor(ms / 86400000);
+  const hours = Math.floor((ms % 86400000) / 3600000);
+  if (days > 0) return `${days}d ${hours}h`;
+  const mins = Math.floor((ms % 3600000) / 60000);
+  return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+}
+
+function fmtRam(mb: number | null | undefined): string {
+  if (mb == null) return '-';
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`;
+}
+
+// ---------------------------------------------------------------------------
 // Shared tooltip (Grafana-style: dark, compact, shows timestamp)
 // ---------------------------------------------------------------------------
 
@@ -404,6 +556,36 @@ export function ServerDetailPage() {
           . Showing last available historical data.
         </Alert>
       )}
+
+      {/* ============================================================= */}
+      {/* Gauge row (Grafana-style) */}
+      {/* ============================================================= */}
+      <Grid container spacing={1.5} mb={2}>
+        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
+          <Gauge label="CPU Busy" value={latest?.cpu ?? null} thresholds={[60, 85]} />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
+          <Gauge label="Sys Load" value={latest?.loadAvg1 ?? null} max={server.cpuCores ?? 4} unit="" thresholds={[(server.cpuCores ?? 4) * 0.7, (server.cpuCores ?? 4) * 0.9]} />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
+          <Gauge label="RAM Used" value={latest?.memory ?? null} thresholds={[60, 85]} />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
+          <Gauge label="SWAP Used" value={latest?.swapUsedPct ?? null} thresholds={[30, 60]} />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
+          <Gauge label="Disk Used" value={latest?.disk ?? null} thresholds={[75, 90]} />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
+          <InfoGauge label="CPU Cores" value={server.cpuCores != null ? String(server.cpuCores) : '-'} />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
+          <InfoGauge label="Uptime" value={fmtUptime(server.lastHeartbeat, server.createdAt)} />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 1.5 }}>
+          <InfoGauge label="RAM Total" value={fmtRam(server.totalRamMb)} />
+        </Grid>
+      </Grid>
 
       {/* ============================================================= */}
       {/* Time range picker (Grafana-style) */}

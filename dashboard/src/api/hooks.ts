@@ -9,6 +9,8 @@ export interface Project {
   id: string;
   name: string;
   description: string;
+  notes: string;
+  banner: string | null;
   createdAt: string;
   _count?: { servers: number; monitoredEndpoints: number };
 }
@@ -101,6 +103,21 @@ export function useTagKeys(projectId?: string) {
     queryKey: ['tag-keys', projectId],
     queryFn: () => apiClient<string[]>(`/api/v1/projects/${projectId}/tag-keys`),
     enabled: !!projectId,
+  });
+}
+
+export function useUpdateProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: string; name?: string; description?: string; notes?: string; banner?: string | null }) =>
+      apiClient<Project>(`/api/v1/projects/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['projects', vars.id] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
+    },
   });
 }
 

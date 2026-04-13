@@ -59,7 +59,7 @@ export async function create(input: CreateProjectInput) {
   });
 }
 
-export async function update(orgId: string, id: string, data: { name?: string; description?: string }) {
+export async function update(orgId: string, id: string, data: { name?: string; description?: string; notes?: string; banner?: string | null }) {
   const existing = await prisma.project.findFirst({ where: { id, orgId } });
   if (!existing) {
     throw new AppError('RESOURCE_NOT_FOUND', 'Project not found');
