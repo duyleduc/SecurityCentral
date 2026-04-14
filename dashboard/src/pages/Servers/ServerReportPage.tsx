@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Card, CardContent, Grid, Button, Chip, Stack,
@@ -6,7 +6,7 @@ import {
   TableHead, TableRow, Divider,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import PrintIcon from '@mui/icons-material/Print';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import WarningIcon from '@mui/icons-material/Warning';
@@ -44,6 +44,52 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 // ---------------------------------------------------------------------------
 
+// Print stylesheet — injected when report page mounts, removed on unmount.
+const PRINT_STYLES = `
+@media print {
+  /* Hide app shell: sidebar, topbar, scrollbars */
+  nav, header, [class*="AppShell"], [class*="sidebar"] { display: none !important; }
+  /* Hide non-print buttons */
+  .no-print, [data-no-print] { display: none !important; }
+  /* Reset background to white for readability */
+  body, #root { background: #fff !important; color: #1a1a1a !important; }
+  main { margin: 0 !important; padding: 0 !important; }
+  /* Cards: remove dark bg, add subtle border */
+  .MuiCard-root {
+    background: #fff !important;
+    border: 1px solid #e0e0e0 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+  .MuiCardContent-root { padding: 12px !important; }
+  /* Typography: force dark text */
+  .MuiTypography-root { color: #1a1a1a !important; }
+  .MuiTypography-root[class*="colorTextSecondary"],
+  .MuiTypography-root[class*="colorTextDisabled"] { color: #666 !important; }
+  /* Chips: visible borders */
+  .MuiChip-root { border: 1px solid #999 !important; color: #333 !important; }
+  .MuiChip-colorError { border-color: #d32f2f !important; color: #d32f2f !important; }
+  .MuiChip-colorWarning { border-color: #ed6c02 !important; color: #ed6c02 !important; }
+  .MuiChip-colorSuccess { border-color: #2e7d32 !important; color: #2e7d32 !important; }
+  .MuiChip-colorInfo { border-color: #0288d1 !important; color: #0288d1 !important; }
+  /* Tables */
+  .MuiTable-root { border-collapse: collapse; }
+  .MuiTableCell-root { border: 1px solid #ddd !important; color: #1a1a1a !important; padding: 4px 8px !important; font-size: 10px !important; }
+  .MuiTableHead-root .MuiTableCell-root { background: #f5f5f5 !important; font-weight: 600 !important; }
+  /* Links: show URL */
+  a { color: #1a56db !important; }
+  /* Page setup */
+  @page { size: A4; margin: 15mm; }
+  /* Section breaks */
+  h6 { break-after: avoid; }
+  /* Score badge: ensure visibility */
+  [class*="ScoreBadge"], [style*="border-radius: 50%"] { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  /* Force color printing for severity indicators */
+  .MuiChip-filled { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  svg { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+`;
+
 export function ServerReportPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -52,6 +98,15 @@ export function ServerReportPage() {
   const { data: vulns } = useServerVulnerabilities(id ?? '');
   const { data: inventory } = usePackageInventory(id ?? '');
   const { data: metrics } = useServerMetrics(id ?? '', 24);
+
+  // Inject print stylesheet on mount.
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.setAttribute('data-print-report', '');
+    style.textContent = PRINT_STYLES;
+    document.head.appendChild(style);
+    return () => { style.remove(); };
+  }, []);
 
   const score = useMemo(() => {
     const sevCounts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
@@ -86,12 +141,12 @@ export function ServerReportPage() {
 
   return (
     <Box sx={{ maxWidth: 1000, mx: 'auto' }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }} className="no-print">
         <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(`/servers/${id}`)}>
           Back to Server
         </Button>
-        <Button startIcon={<PrintIcon />} variant="outlined" size="small" onClick={() => window.print()}>
-          Print
+        <Button startIcon={<PictureAsPdfIcon />} variant="contained" size="small" onClick={() => window.print()}>
+          Export PDF
         </Button>
       </Stack>
 
@@ -401,6 +456,17 @@ export function ServerReportPage() {
           </Typography>
         </>
       )}
+
+      {/* Report footer */}
+      <Divider sx={{ mt: 4, mb: 2 }} />
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 4 }}>
+        <Typography variant="caption" color="text.disabled">
+          SecurityCentral &middot; Security Report &middot; {server.hostname}
+        </Typography>
+        <Typography variant="caption" color="text.disabled">
+          Generated {new Date().toLocaleString()} &middot; Page 1
+        </Typography>
+      </Stack>
     </Box>
   );
 }
