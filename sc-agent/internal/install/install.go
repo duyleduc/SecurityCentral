@@ -19,7 +19,7 @@ const (
 	configDir  = "/etc/securitycentral"
 	configFile = "/etc/securitycentral/agent.json"
 	binaryDst  = "/usr/local/bin/sc-agent"
-	unitFile   = "/etc/systemd/system/securitycentral-agent.service"
+	unitFile   = "/etc/systemd/system/sc-agent.service"
 )
 
 // Run performs the full installation flow.
@@ -78,8 +78,8 @@ func Run(token, apiURL string) error {
 	fmt.Printf("    Agent ID:  %s\n", resp.AgentID)
 	fmt.Printf("    Config:    %s\n", configFile)
 	fmt.Println()
-	fmt.Println("    Check status: sudo systemctl status securitycentral-agent")
-	fmt.Println("    View logs:    sudo journalctl -u securitycentral-agent -f")
+	fmt.Println("    Check status: sudo systemctl status sc-agent")
+	fmt.Println("    View logs:    sudo journalctl -u sc-agent -f")
 	fmt.Println("    Manual start: sudo sc-agent run")
 
 	return nil
@@ -148,8 +148,8 @@ func setupSystemd() error {
 
 	commands := [][]string{
 		{"systemctl", "daemon-reload"},
-		{"systemctl", "enable", "securitycentral-agent.service"},
-		{"systemctl", "start", "securitycentral-agent.service"},
+		{"systemctl", "enable", "sc-agent.service"},
+		{"systemctl", "start", "sc-agent.service"},
 	}
 
 	for _, args := range commands {

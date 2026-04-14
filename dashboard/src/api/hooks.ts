@@ -363,7 +363,7 @@ export interface CveFinding {
   title: string;
   description: string | null;
   cvssScore: number | null;
-  detail: { packageName?: string; installedVersion?: string; fixedVersion?: string | null; cisaKev?: boolean } | null;
+  detail: { packageName?: string; installedVersion?: string; fixedVersion?: string | null; cisaKev?: boolean; epss?: number | null; epssPercentile?: number | null; remediation?: string | null } | null;
   createdAt: string;
 }
 

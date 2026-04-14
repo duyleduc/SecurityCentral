@@ -22,9 +22,9 @@ import (
 
 const (
 	binaryPath = "/usr/local/bin/sc-agent"
-	unitName   = "securitycentral-agent"
+	unitName   = "sc-agent"
 	configDir  = "/etc/securitycentral"
-	unitFile   = "/etc/systemd/system/securitycentral-agent.service"
+	unitFile   = "/etc/systemd/system/sc-agent.service"
 )
 
 // VersionInfo is returned by GET /v1/agents/version.

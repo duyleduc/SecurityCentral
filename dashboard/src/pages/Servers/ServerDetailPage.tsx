@@ -31,6 +31,7 @@ import {
   IconButton,
   TextField,
   MenuItem,
+  Tooltip,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
@@ -915,9 +916,9 @@ function EditServerDialog({ open, server, projects, loading, onClose, onSave }: 
 // Delete Server Dialog
 // ---------------------------------------------------------------------------
 
-const UNINSTALL_CMD = `sudo systemctl stop securitycentral-agent
-sudo systemctl disable securitycentral-agent
-sudo rm -f /etc/systemd/system/securitycentral-agent.service
+const UNINSTALL_CMD = `sudo systemctl stop sc-agent
+sudo systemctl disable sc-agent
+sudo rm -f /etc/systemd/system/sc-agent.service
 sudo systemctl daemon-reload
 sudo rm -f /usr/local/bin/sc-agent
 sudo rm -rf /etc/securitycentral`;
@@ -1121,43 +1122,73 @@ function VulnerabilitiesTab({ serverId, vulns }: { serverId: string; vulns: CveF
                 <TableRow>
                   <TableCell>CVE</TableCell>
                   <TableCell>Package</TableCell>
-                  <TableCell>Installed</TableCell>
                   <TableCell>Fixed</TableCell>
                   <TableCell>Severity</TableCell>
-                  <TableCell>KEV</TableCell>
+                  <TableCell>EPSS</TableCell>
+                  <TableCell>Fix</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((v) => (
+                {filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((v) => {
+                  const epss = v.detail?.epss;
+                  const epssColor = epss != null ? (epss >= 0.5 ? 'error.main' : epss >= 0.1 ? 'warning.main' : 'text.secondary') : undefined;
+                  return (
                   <TableRow key={v.id} hover>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                      {v.cveId ? (
-                        <a href={v.cveId.startsWith('CVE-')
-                          ? `https://nvd.nist.gov/vuln/detail/${v.cveId}`
-                          : `https://osv.dev/vulnerability/${v.cveId}`}
-                          target="_blank" rel="noopener noreferrer"
-                          style={{ color: '#6366f1', textDecoration: 'none' }}>
-                          {v.cveId}
-                        </a>
-                      ) : '-'}
+                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                      <Stack spacing={0.25}>
+                        {v.cveId ? (
+                          <a href={v.cveId.startsWith('CVE-')
+                            ? `https://nvd.nist.gov/vuln/detail/${v.cveId}`
+                            : `https://osv.dev/vulnerability/${v.cveId}`}
+                            target="_blank" rel="noopener noreferrer"
+                            style={{ color: '#6366f1', textDecoration: 'none' }}>
+                            {v.cveId}
+                          </a>
+                        ) : '-'}
+                        <Stack direction="row" spacing={0.5}>
+                          {v.detail?.cisaKev && <Chip label="KEV" size="small" color="error" variant="filled" sx={{ fontSize: '0.55rem', height: 16 }} />}
+                          {v.cvssScore != null && <Chip label={`CVSS ${v.cvssScore.toFixed(1)}`} size="small" variant="outlined" sx={{ fontSize: '0.55rem', height: 16 }} />}
+                        </Stack>
+                      </Stack>
                     </TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{v.detail?.packageName ?? '-'}</TableCell>
-                    <TableCell sx={{ fontSize: '0.8rem' }}>{v.detail?.installedVersion ?? '-'}</TableCell>
-                    <TableCell sx={{ fontSize: '0.8rem' }}>
+                    <TableCell sx={{ fontSize: '0.75rem' }}>
+                      <Typography variant="caption" sx={{ fontFamily: 'monospace', display: 'block' }}>{v.detail?.packageName ?? '-'}</Typography>
+                      <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem' }}>{v.detail?.installedVersion ?? ''}</Typography>
+                    </TableCell>
+                    <TableCell sx={{ fontSize: '0.75rem' }}>
                       {v.detail?.fixedVersion ? (
-                        <Chip label={v.detail.fixedVersion} size="small" color="success" variant="outlined" sx={{ fontSize: '0.7rem' }} />
+                        <Chip label={v.detail.fixedVersion} size="small" color="success" variant="outlined" sx={{ fontSize: '0.65rem' }} />
                       ) : (
-                        <Typography variant="caption" color="text.secondary">no fix</Typography>
+                        <Typography variant="caption" color="text.disabled">-</Typography>
                       )}
                     </TableCell>
                     <TableCell>
-                      <Chip label={v.severity} size="small" color={severityColor(v.severity)} variant="outlined" />
+                      <Chip label={v.severity} size="small" color={severityColor(v.severity)} variant="outlined" sx={{ fontSize: '0.7rem' }} />
                     </TableCell>
                     <TableCell>
-                      {v.detail?.cisaKev && <Chip label="KEV" size="small" color="error" variant="filled" sx={{ fontSize: '0.65rem' }} />}
+                      {epss != null ? (
+                        <Tooltip title={`${(epss * 100).toFixed(1)}% chance of exploitation in 30 days (${Math.round((v.detail?.epssPercentile ?? 0) * 100)}th percentile)`} arrow>
+                          <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 600, color: epssColor, cursor: 'help' }}>
+                            {(epss * 100).toFixed(1)}%
+                          </Typography>
+                        </Tooltip>
+                      ) : (
+                        <Typography variant="caption" color="text.disabled">-</Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {v.detail?.remediation ? (
+                        <Tooltip title={v.detail.remediation} arrow>
+                          <Chip label="How to fix" size="small" variant="outlined" color="info"
+                            sx={{ fontSize: '0.6rem', height: 20, cursor: 'help' }} />
+                        </Tooltip>
+                      ) : (
+                        <Typography variant="caption" color="text.disabled">-</Typography>
+                      )}
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
                 {filtered.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6}>

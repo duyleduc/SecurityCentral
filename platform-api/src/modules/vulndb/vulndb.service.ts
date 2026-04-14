@@ -12,7 +12,9 @@ import { prisma } from '../../lib/prisma.js';
 import { logger } from '../../lib/logger.js';
 
 const CISA_KEV_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
+const EPSS_URL = 'https://api.first.org/data/v1/epss';
 const OSV_BATCH_URL = 'https://api.osv.dev/v1/querybatch';
+const OSV_VULN_URL = 'https://api.osv.dev/v1/vulns';
 
 // ---------------------------------------------------------------------------
 // Feed sync (only CISA KEV — small, ~1MB)
@@ -59,8 +61,80 @@ interface CveMatch {
   readonly installedVersion: string;
   readonly fixedVersion: string | null;
   readonly severity: string;
+  readonly cvssScore: number | null;
   readonly description: string;
   readonly cisaKev: boolean;
+  readonly epss: number | null;      // 0.0–1.0 probability of exploitation in 30 days
+  readonly epssPercentile: number | null;
+  readonly remediation: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// EPSS (Exploit Prediction Scoring System) from FIRST.org
+// ---------------------------------------------------------------------------
+
+/** Fetch EPSS scores for a batch of CVE IDs. Returns map of cveId → {epss, percentile}. */
+async function fetchEpssScores(cveIds: readonly string[]): Promise<Map<string, { epss: number; percentile: number }>> {
+  const result = new Map<string, { epss: number; percentile: number }>();
+  // Only query actual CVE IDs (not DSA-xxx etc.)
+  const validIds = cveIds.filter((id) => id.startsWith('CVE-'));
+  if (validIds.length === 0) return result;
+
+  // EPSS API accepts up to 100 CVEs per request via comma-separated query param.
+  const chunkSize = 100;
+  for (let i = 0; i < validIds.length; i += chunkSize) {
+    const chunk = validIds.slice(i, i + chunkSize);
+    try {
+      const url = `${EPSS_URL}?cve=${chunk.join(',')}`;
+      const resp = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+      if (!resp.ok) {
+        logger.warn('EPSS API failed', { status: resp.status, chunk: i });
+        continue;
+      }
+      const data = await resp.json() as {
+        data: Array<{ cve: string; epss: string; percentile: string }>;
+      };
+      for (const entry of data.data ?? []) {
+        result.set(entry.cve, {
+          epss: parseFloat(entry.epss),
+          percentile: parseFloat(entry.percentile),
+        });
+      }
+    } catch (err) {
+      logger.warn('EPSS fetch error', { error: (err as Error).message, chunk: i });
+    }
+  }
+
+  logger.info('EPSS scores fetched', { requested: validIds.length, received: result.size });
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Remediation command generator
+// ---------------------------------------------------------------------------
+
+function buildRemediation(osFamily: string, packageName: string, fixedVersion: string | null): string | null {
+  if (!fixedVersion) return null;
+  switch (osFamily) {
+    case 'debian':
+    case 'ubuntu':
+      return `sudo apt update && sudo apt install --only-upgrade ${packageName}`;
+    case 'rhel':
+    case 'centos':
+    case 'rocky':
+    case 'alma':
+    case 'almalinux':
+    case 'oracle':
+      return `sudo yum update ${packageName}`;
+    case 'fedora':
+      return `sudo dnf update ${packageName}`;
+    case 'amazon':
+      return `sudo yum update ${packageName}`;
+    case 'alpine':
+      return `sudo apk upgrade ${packageName}`;
+    default:
+      return `Update ${packageName} to ${fixedVersion}`;
+  }
 }
 
 /**
@@ -71,6 +145,15 @@ function osvEcosystem(osFamily: string): string | null {
     case 'debian': return 'Debian';
     case 'ubuntu': return 'Ubuntu';
     case 'alpine': return 'Alpine';
+    case 'rhel':
+    case 'centos':
+    case 'rocky':
+    case 'alma':
+    case 'almalinux':
+    case 'fedora':
+    case 'oracle':
+    case 'amazon':
+      return 'Linux';
     default: return null;
   }
 }
@@ -101,7 +184,9 @@ export async function matchServerPackages(
   }
 
   // Query OSV in batches of 1000.
-  const matches: CveMatch[] = [];
+  // Step 1: batch query returns lightweight {id, modified} per vuln.
+  // Step 2: fetch full vuln details (in parallel) to get CVSS severity.
+  const rawHits: Array<{ vulnId: string; pkg: PackageInput }> = [];
   const batchSize = 1000;
 
   for (let i = 0; i < packages.length; i += batchSize) {
@@ -124,35 +209,94 @@ export async function matchServerPackages(
         continue;
       }
 
-      const data = await resp.json() as { results: Array<{ vulns?: Array<OsvVuln> }> };
+      const data = await resp.json() as { results: Array<{ vulns?: Array<{ id: string }> }> };
 
       for (let j = 0; j < data.results.length; j++) {
         const vulns = data.results[j].vulns;
         if (!vulns || vulns.length === 0) continue;
-
         const pkg = batch[j];
-        for (const vuln of vulns) {
-          const cveId = extractCveId(vuln);
-          if (!cveId) continue;
-
-          const fixedVersion = extractFixedVersion(vuln, pkg.name, ecosystem);
-          const isCisaKev = kevSet.has(cveId);
-          const severity = isCisaKev ? 'critical' : osvSeverity(vuln);
-
-          matches.push({
-            cveId,
-            packageName: pkg.name,
-            installedVersion: pkg.version,
-            fixedVersion,
-            severity,
-            description: vuln.summary ?? vuln.details?.slice(0, 200) ?? '',
-            cisaKev: isCisaKev,
-          });
+        for (const v of vulns) {
+          rawHits.push({ vulnId: v.id, pkg });
         }
       }
     } catch (err) {
       logger.error('OSV batch query error', { error: (err as Error).message, batch: i });
     }
+  }
+
+  if (rawHits.length === 0) {
+    logger.info('OSV matching completed — no hits', { serverId, queried: packages.length });
+    return [];
+  }
+
+  // Step 2: fetch full details for unique vuln IDs (parallel, 20 at a time).
+  const uniqueIds = [...new Set(rawHits.map((h) => h.vulnId))];
+  const vulnCache = new Map<string, OsvVuln>();
+  const chunkSize = 20;
+
+  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+    const chunk = uniqueIds.slice(i, i + chunkSize);
+    const results = await Promise.allSettled(
+      chunk.map(async (vid) => {
+        const r = await fetch(`${OSV_VULN_URL}/${vid}`, { signal: AbortSignal.timeout(10_000) });
+        if (!r.ok) return null;
+        return r.json() as Promise<OsvVuln>;
+      }),
+    );
+    for (let j = 0; j < results.length; j++) {
+      const res = results[j];
+      if (res.status === 'fulfilled' && res.value) {
+        vulnCache.set(chunk[j], res.value);
+      }
+    }
+  }
+
+  logger.info('OSV vuln details fetched', { unique: uniqueIds.length, fetched: vulnCache.size });
+
+  // Step 3: collect unique CVE IDs for EPSS lookup.
+  const prelimCves: string[] = [];
+  for (const { vulnId } of rawHits) {
+    const vuln = vulnCache.get(vulnId);
+    if (!vuln) continue;
+    const cveId = extractCveId(vuln);
+    if (cveId) prelimCves.push(cveId);
+  }
+  const epssMap = await fetchEpssScores([...new Set(prelimCves)]);
+
+  // Step 4: build matches with severity, EPSS, CVSS, and remediation.
+  const matches: CveMatch[] = [];
+  const seen = new Set<string>(); // dedup by cveId+packageName
+
+  for (const { vulnId, pkg } of rawHits) {
+    const vuln = vulnCache.get(vulnId);
+    if (!vuln) continue;
+
+    const cveId = extractCveId(vuln);
+    if (!cveId) continue;
+
+    const dedupKey = `${cveId}:${pkg.name}`;
+    if (seen.has(dedupKey)) continue;
+    seen.add(dedupKey);
+
+    const fixedVersion = extractFixedVersion(vuln, pkg.name, ecosystem);
+    const isCisaKev = kevSet.has(cveId);
+    const severity = isCisaKev ? 'critical' : osvSeverity(vuln);
+    const cvssScore = osvCvssScore(vuln);
+    const epssEntry = epssMap.get(cveId);
+
+    matches.push({
+      cveId,
+      packageName: pkg.name,
+      installedVersion: pkg.version,
+      fixedVersion,
+      severity,
+      cvssScore,
+      description: vuln.summary ?? vuln.details?.slice(0, 200) ?? '',
+      cisaKev: isCisaKev,
+      epss: epssEntry?.epss ?? null,
+      epssPercentile: epssEntry?.percentile ?? null,
+      remediation: buildRemediation(osFamily, pkg.name, fixedVersion),
+    });
   }
 
   logger.info('OSV matching completed', { serverId, queried: packages.length, matched: matches.length });
@@ -188,12 +332,16 @@ export async function applyMatchesToFindings(
         status: 'open',
         title,
         cveId: m.cveId,
+        cvssScore: m.cvssScore,
         description: m.description || `${m.packageName} ${m.installedVersion} is vulnerable.${m.fixedVersion ? ` Fixed in ${m.fixedVersion}.` : ' No fix available yet.'}`,
         detail: JSON.parse(JSON.stringify({
           packageName: m.packageName,
           installedVersion: m.installedVersion,
           fixedVersion: m.fixedVersion,
           cisaKev: m.cisaKev,
+          epss: m.epss,
+          epssPercentile: m.epssPercentile,
+          remediation: m.remediation,
         })),
       },
     });
@@ -259,7 +407,10 @@ function extractCveId(vuln: OsvVuln): string | null {
 
 function extractFixedVersion(vuln: OsvVuln, pkgName: string, ecosystem: string): string | null {
   for (const aff of vuln.affected ?? []) {
-    if (aff.package?.name !== pkgName || aff.package?.ecosystem !== ecosystem) continue;
+    if (aff.package?.name !== pkgName) continue;
+    // OSV uses versioned ecosystems like "Debian:13" — match prefix.
+    const affEco = aff.package?.ecosystem ?? '';
+    if (affEco !== ecosystem && !affEco.startsWith(`${ecosystem}:`)) continue;
     for (const range of aff.ranges ?? []) {
       for (const event of range.events) {
         if (event.fixed) return event.fixed;
@@ -269,13 +420,69 @@ function extractFixedVersion(vuln: OsvVuln, pkgName: string, ecosystem: string):
   return null;
 }
 
-function osvSeverity(vuln: OsvVuln): string {
-  // Check for CVSS v3 score.
+/**
+ * Parse a CVSS v3 base score from either a numeric string ("9.8")
+ * or a CVSS vector ("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H").
+ * OSV.dev returns the vector string in the `score` field.
+ */
+function parseCvssScore(raw: string): number | null {
+  // Try direct numeric first.
+  const num = parseFloat(raw);
+  if (!isNaN(num) && num >= 0 && num <= 10) return num;
+
+  // Parse CVSS v3 vector — compute approximate base score from metrics.
+  // Format: CVSS:3.x/AV:X/AC:X/PR:X/UI:X/S:X/C:X/I:X/A:X
+  if (!raw.startsWith('CVSS:3')) return null;
+
+  const metrics: Record<string, string> = {};
+  for (const part of raw.split('/')) {
+    const [k, v] = part.split(':');
+    if (k && v) metrics[k] = v;
+  }
+
+  // Impact weights (simplified CVSS v3.1 base score approximation)
+  const avW: Record<string, number> = { N: 0.85, A: 0.62, L: 0.55, P: 0.20 };
+  const acW: Record<string, number> = { L: 0.77, H: 0.44 };
+  const prW: Record<string, number> = { N: 0.85, L: 0.62, H: 0.27 };
+  const uiW: Record<string, number> = { N: 0.85, R: 0.62 };
+  const ciaW: Record<string, number> = { H: 0.56, L: 0.22, N: 0 };
+
+  const av = avW[metrics['AV'] ?? ''] ?? 0.55;
+  const ac = acW[metrics['AC'] ?? ''] ?? 0.44;
+  const pr = prW[metrics['PR'] ?? ''] ?? 0.62;
+  const ui = uiW[metrics['UI'] ?? ''] ?? 0.62;
+  const c = ciaW[metrics['C'] ?? ''] ?? 0;
+  const i = ciaW[metrics['I'] ?? ''] ?? 0;
+  const a = ciaW[metrics['A'] ?? ''] ?? 0;
+
+  // ISS = 1 - [(1-C) * (1-I) * (1-A)]
+  const iss = 1 - (1 - c) * (1 - i) * (1 - a);
+  if (iss <= 0) return 0;
+
+  const scopeChanged = metrics['S'] === 'C';
+  const impact = scopeChanged ? 7.52 * (iss - 0.029) - 3.25 * Math.pow(iss - 0.02, 15) : 6.42 * iss;
+  const exploitability = 8.22 * av * ac * pr * ui;
+  const raw_score = scopeChanged
+    ? Math.min(1.08 * (impact + exploitability), 10)
+    : Math.min(impact + exploitability, 10);
+
+  return Math.round(raw_score * 10) / 10;
+}
+
+function osvCvssScore(vuln: OsvVuln): number | null {
   for (const s of vuln.severity ?? []) {
     if (s.type === 'CVSS_V3') {
-      // Parse base score from CVSS vector or score string.
-      const score = parseFloat(s.score);
-      if (!isNaN(score)) {
+      return parseCvssScore(s.score);
+    }
+  }
+  return null;
+}
+
+function osvSeverity(vuln: OsvVuln): string {
+  for (const s of vuln.severity ?? []) {
+    if (s.type === 'CVSS_V3') {
+      const score = parseCvssScore(s.score);
+      if (score != null) {
         if (score >= 9.0) return 'critical';
         if (score >= 7.0) return 'high';
         if (score >= 4.0) return 'medium';
