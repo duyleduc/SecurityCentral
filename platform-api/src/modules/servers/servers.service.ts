@@ -3,6 +3,75 @@ import { AppError } from '../../middleware/errors.js';
 import { matchServerPackages, applyMatchesToFindings, syncFeeds } from '../vulndb/vulndb.service.js';
 import { logger } from '../../lib/logger.js';
 
+// ---------------------------------------------------------------------------
+// Server-side security score computation
+// ---------------------------------------------------------------------------
+
+const SCORE_WEIGHTS: Record<string, number> = { critical: 25, high: 15, medium: 5, low: 2 };
+
+/**
+ * Recompute security score for a server from its open findings + security posture.
+ * Persists the score on the Server record and appends a history entry (max 1 per day).
+ */
+export async function recomputeScore(serverId: string): Promise<number> {
+  // Count open findings by severity.
+  const counts = await prisma.finding.groupBy({
+    by: ['severity'],
+    where: { serverId, status: { in: ['open', 'in_progress'] } },
+    _count: true,
+  });
+
+  const sevCounts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const row of counts) {
+    if (sevCounts[row.severity] !== undefined) {
+      sevCounts[row.severity] = row._count;
+    }
+  }
+
+  // Firewall penalty.
+  const posture = await prisma.securityPosture.findFirst({
+    where: { serverId },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (posture && !(posture as any).firewallActive) {
+    sevCounts.high += 1;
+  }
+
+  let score = 100;
+  for (const [sev, weight] of Object.entries(SCORE_WEIGHTS)) {
+    score -= (sevCounts[sev] ?? 0) * weight;
+  }
+  score = Math.max(0, Math.min(100, score));
+
+  // Persist on server record.
+  await prisma.server.update({
+    where: { id: serverId },
+    data: { securityScore: score },
+  });
+
+  // Append history — at most one entry per day per server.
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const existingToday = await prisma.serverScoreHistory.findFirst({
+    where: { serverId, createdAt: { gte: todayStart } },
+  });
+
+  if (existingToday) {
+    await prisma.serverScoreHistory.update({
+      where: { id: existingToday.id },
+      data: { score, breakdown: sevCounts },
+    });
+  } else {
+    await prisma.serverScoreHistory.create({
+      data: { serverId, score, breakdown: sevCounts },
+    });
+  }
+
+  logger.info('server score recomputed', { serverId, score, ...sevCounts });
+  return score;
+}
+
 // BigInt fields from Prisma need conversion to Number for JSON serialization.
 function serializeMetric(m: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -134,12 +203,16 @@ export async function triggerCveScan(orgId: string, serverId: string) {
   const matches = await matchServerPackages(serverId, inventory.osFamily, packages);
   const result = await applyMatchesToFindings(orgId, serverId, server.hostname, matches);
 
+  // Recompute score after scan.
+  const score = await recomputeScore(serverId);
+
   logger.info('Manual CVE scan completed', {
     serverId,
     hostname: server.hostname,
     matched: matches.length,
     created: result.created,
     resolved: result.resolved,
+    score,
   });
 
   return {
@@ -148,6 +221,7 @@ export async function triggerCveScan(orgId: string, serverId: string) {
     resolved: result.resolved,
     packages: packages.length,
     osFamily: inventory.osFamily,
+    score,
     scannedAt: new Date().toISOString(),
   };
 }
@@ -213,5 +287,19 @@ export async function getSecurityPosture(orgId: string, serverId: string) {
   return prisma.securityPosture.findFirst({
     where: { serverId },
     orderBy: { createdAt: 'desc' },
+  });
+}
+
+export async function getScoreHistory(orgId: string, serverId: string, days: number = 90) {
+  const server = await prisma.server.findFirst({ where: { id: serverId, orgId } });
+  if (!server) {
+    throw new AppError('RESOURCE_NOT_FOUND', 'Server not found');
+  }
+
+  const since = new Date(Date.now() - days * 86_400_000);
+  return prisma.serverScoreHistory.findMany({
+    where: { serverId, createdAt: { gte: since } },
+    orderBy: { createdAt: 'asc' },
+    select: { score: true, breakdown: true, createdAt: true },
   });
 }

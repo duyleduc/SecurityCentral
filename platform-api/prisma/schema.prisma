@@ -144,6 +144,7 @@ model Server {
   totalDiskGb   Int?      @map("total_disk_gb")
   ipAddresses   Json?     @map("ip_addresses") @db.Json  // ["192.168.1.10", ...]
   status        String    @default("offline") @db.VarChar(20) // online | offline | warning | critical
+  securityScore Int?      @map("security_score")  // 0–100, computed server-side
   tags          Json      @default("[]") @db.Json
   lastHeartbeat DateTime? @map("last_heartbeat") @db.DateTime(3)
   apiKeyHash    String?   @map("api_key_hash") @db.VarChar(64)
@@ -155,10 +156,24 @@ model Server {
   findings           Finding[]
   securityPosture    SecurityPosture[]
   packageInventories PackageInventory[]
+  scoreHistory       ServerScoreHistory[]
 
   @@index([orgId])
   @@index([projectId])
   @@map("servers")
+}
+
+model ServerScoreHistory {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  serverId  String   @map("server_id") @db.VarChar(36)
+  score     Int      // 0–100
+  breakdown Json     @db.Json  // {critical:N, high:N, medium:N, low:N}
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  server Server @relation(fields: [serverId], references: [id])
+
+  @@index([serverId, createdAt])
+  @@map("server_score_history")
 }
 
 // ---------------------------------------------------------------------------

@@ -127,6 +127,21 @@ serversRouter.get(
   },
 );
 
+// GET /api/v1/servers/:id/score-history
+serversRouter.get(
+  '/:id/score-history',
+  requirePermission('view_dashboard'),
+  validate({ params: ServerIdParamsSchema }),
+  async (req, res, next) => {
+    try {
+      const history = await serversService.getScoreHistory(req.auth!.orgId, req.params.id);
+      res.json(successEnvelope(history));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // GET /api/v1/servers/:id/packages
 serversRouter.get(
   '/:id/packages',

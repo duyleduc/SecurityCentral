@@ -429,6 +429,15 @@ export async function storeSecurityPosture(input: SecurityPostureInput) {
     ports: input.listeningPorts.length,
     audits: input.auditResults?.length ?? 0,
   });
+
+  // Recompute score — audit failures affect it.
+  try {
+    const { recomputeScore } = await import('../servers/servers.service.js');
+    await recomputeScore(server.id);
+  } catch (err) {
+    logger.warn('Score recompute failed after posture update', { error: (err as Error).message });
+  }
+
   return { stored: true };
 }
 
@@ -494,6 +503,10 @@ export async function storePackageInventory(input: PackageInventoryInput) {
         created: cveResult.created,
         resolved: cveResult.resolved,
       });
+
+      // Recompute security score after CVE changes.
+      const { recomputeScore } = await import('../servers/servers.service.js');
+      await recomputeScore(server.id);
     } catch (err) {
       logger.error('CVE matching failed', { serverId: server.id, error: (err as Error).message });
     }

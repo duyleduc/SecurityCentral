@@ -247,10 +247,17 @@ export interface Server {
   ipAddresses: string[] | null;
   tags: Array<{ key: string; value: string }>;
   status: string;
+  securityScore: number | null;
   lastHeartbeat: string | null;
   createdAt: string;
   _count?: { metrics: number; findings: number };
   metrics?: ServerMetric[];
+}
+
+export interface ScoreHistoryEntry {
+  score: number;
+  breakdown: { critical: number; high: number; medium: number; low: number };
+  createdAt: string;
 }
 
 export interface ServerMetric {
@@ -393,6 +400,14 @@ export function useServerVulnerabilities(id: string) {
     queryFn: () => apiClient<CveFinding[]>(`/api/v1/servers/${id}/vulnerabilities`),
     enabled: !!id,
     refetchInterval: 60_000,
+  });
+}
+
+export function useScoreHistory(id: string) {
+  return useQuery({
+    queryKey: ['servers', id, 'score-history'],
+    queryFn: () => apiClient<ScoreHistoryEntry[]>(`/api/v1/servers/${id}/score-history`),
+    enabled: !!id,
   });
 }
 

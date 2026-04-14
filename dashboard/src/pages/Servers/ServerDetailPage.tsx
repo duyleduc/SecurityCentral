@@ -58,7 +58,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { useServer, useServerMetrics, useSecurityPosture, useServerVulnerabilities, usePackageInventory, useTriggerCveScan, useDeleteServer, useUpdateServer, useProjects, useAgentLatestVersion } from '../../api/hooks';
+import { useServer, useServerMetrics, useSecurityPosture, useServerVulnerabilities, usePackageInventory, useTriggerCveScan, useDeleteServer, useUpdateServer, useProjects, useAgentLatestVersion, useScoreHistory } from '../../api/hooks';
 import type { CveFinding } from '../../api/hooks';
 import type { SecurityPosture, ServerMetric } from '../../api/hooks';
 import { ScoreBadge, computeScore } from '../../components/ScoreBadge';
@@ -449,6 +449,7 @@ export function ServerDetailPage() {
   const { data: vulns } = useServerVulnerabilities(id ?? '');
   const { data: projects } = useProjects();
   const { data: latestAgent } = useAgentLatestVersion();
+  const { data: scoreHistory } = useScoreHistory(id ?? '');
   const deleteMutation = useDeleteServer();
   const updateMutation = useUpdateServer();
 
@@ -535,7 +536,25 @@ export function ServerDetailPage() {
 
       {/* Header */}
       <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
-        <ScoreBadge score={serverScore.score} breakdown={serverScore.breakdown} size="medium" />
+        <Stack alignItems="center" spacing={0.5}>
+          <ScoreBadge score={server.securityScore ?? serverScore.score} breakdown={serverScore.breakdown} size="medium" />
+          {/* Score trend sparkline */}
+          {scoreHistory && scoreHistory.length > 1 && (
+            <Box sx={{ width: 48, height: 20 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={scoreHistory.map((h) => ({ s: h.score }))} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#6366f1" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="s" stroke="#6366f1" strokeWidth={1.5} fill="url(#sparkGrad)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </Box>
+          )}
+        </Stack>
         <Box sx={{ flex: 1 }}>
           <Stack direction="row" spacing={1.5} alignItems="center">
             <Typography variant="h4">{server.hostname}</Typography>
