@@ -1,6 +1,7 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errors.js';
 import { matchServerPackages, applyMatchesToFindings, syncFeeds } from '../vulndb/vulndb.service.js';
+import { enrichWithCis, cisSummary } from '../../lib/cis-benchmarks.js';
 import { logger } from '../../lib/logger.js';
 
 // ---------------------------------------------------------------------------
@@ -284,11 +285,23 @@ export async function getSecurityPosture(orgId: string, serverId: string) {
     throw new AppError('RESOURCE_NOT_FOUND', 'Server not found');
   }
 
-  // Return the latest posture report.
-  return prisma.securityPosture.findFirst({
+  const posture = await prisma.securityPosture.findFirst({
     where: { serverId },
     orderBy: { createdAt: 'desc' },
   });
+
+  if (!posture) return null;
+
+  // Enrich audit results with CIS Benchmark mappings.
+  const rawAudits = (posture.auditResults as Array<{ id: string; category: string; title: string; status: string; severity: string; detail: string }>) ?? [];
+  const enrichedAudits = enrichWithCis(rawAudits);
+  const compliance = cisSummary(rawAudits);
+
+  return {
+    ...posture,
+    auditResults: enrichedAudits,
+    cisSummary: compliance,
+  };
 }
 
 export async function getScoreHistory(orgId: string, serverId: string, days: number = 90) {

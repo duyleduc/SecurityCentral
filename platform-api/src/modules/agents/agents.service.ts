@@ -5,6 +5,7 @@ import { AppError } from '../../middleware/errors.js';
 import { logger } from '../../lib/logger.js';
 import { emitAgentConnected, emitServerMetrics } from '../../ws/hooks.js';
 import { matchServerPackages, applyMatchesToFindings } from '../vulndb/vulndb.service.js';
+import { getCisControl } from '../../lib/cis-benchmarks.js';
 
 // ---------------------------------------------------------------------------
 // Install Tokens
@@ -404,7 +405,11 @@ export async function storeSecurityPosture(input: SecurityPostureInput) {
           status: 'open',
           title,
           description: check.detail,
-          detail: JSON.parse(JSON.stringify({ checkId: check.id, category: check.category })),
+          detail: JSON.parse(JSON.stringify({
+            checkId: check.id,
+            category: check.category,
+            cis: getCisControl(check.id),
+          })),
         },
       });
     }

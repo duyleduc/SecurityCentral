@@ -1435,6 +1435,12 @@ function SecurityPostureTab({ posture }: { posture: SecurityPosture | null }) {
             color={auditFail.length === 0 ? 'success' : auditFail.length <= 3 ? 'warning' : 'error'}
             variant="outlined" />
         )}
+        {posture.cisSummary && posture.cisSummary.mapped > 0 && (
+          <Chip size="small"
+            label={`CIS: ${posture.cisSummary.passing}/${posture.cisSummary.mapped} controls`}
+            color={posture.cisSummary.failing === 0 ? 'success' : 'warning'}
+            variant="outlined" />
+        )}
       </Stack>
 
       {/* Expanded listening ports (toggle) */}
@@ -1465,6 +1471,10 @@ function SecurityPostureTab({ posture }: { posture: SecurityPosture | null }) {
                   ? <CancelIcon sx={{ fontSize: 14, color: 'error.main' }} />
                   : <WarningIcon sx={{ fontSize: 14, color: 'warning.main' }} />}
                 <Typography variant="body2" sx={{ flex: 1, fontSize: '0.8rem' }}>{item.title}</Typography>
+                {item.cis && (
+                  <Chip label={`${item.cis.benchmark} ${item.cis.controlId}`} size="small" variant="outlined"
+                    sx={{ fontSize: '0.55rem', height: 18, borderColor: 'info.main', color: 'info.main' }} />
+                )}
                 <Chip label={item.severity} size="small" variant="outlined" sx={{ fontSize: '0.6rem', height: 18 }}
                   color={item.severity === 'critical' ? 'error' : item.severity === 'high' ? 'warning' : 'default'} />
               </Stack>

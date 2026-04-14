@@ -70,8 +70,9 @@ export function ServerReportPage() {
   if (!server) return <Typography>Server not found</Typography>;
 
   const latest = metrics?.[metrics.length - 1];
-  const auditResults: Array<{ id: string; category: string; title: string; status: string; severity: string; detail: string }> =
+  const auditResults: Array<{ id: string; category: string; title: string; status: string; severity: string; detail: string; cis?: { controlId: string; benchmark: string; title: string; level: number } | null }> =
     (posture as any)?.auditResults ?? [];
+  const cisComplianceSummary = (posture as any)?.cisSummary as { total: number; mapped: number; passing: number; failing: number } | undefined;
   const auditCategories = [...new Set(auditResults.map((r) => r.category))];
   const passCount = auditResults.filter((r) => r.status === 'pass').length;
   const failCount = auditResults.filter((r) => r.status === 'fail').length;
@@ -292,6 +293,7 @@ export function ServerReportPage() {
         <>
           <SectionTitle>
             Hardening Audit — {passCount} passed, {failCount} failed
+            {cisComplianceSummary && ` (CIS: ${cisComplianceSummary.passing}/${cisComplianceSummary.mapped} controls)`}
           </SectionTitle>
 
           {auditCategories.map((cat) => {
@@ -308,6 +310,10 @@ export function ServerReportPage() {
                      item.status === 'fail' ? <CancelIcon sx={{ fontSize: 14, color: 'error.main' }} /> :
                      <WarningIcon sx={{ fontSize: 14, color: 'warning.main' }} />}
                     <Typography variant="body2" sx={{ flex: 1, fontSize: '0.8rem' }}>{item.title}</Typography>
+                    {item.cis && (
+                      <Chip label={`${item.cis.benchmark} ${item.cis.controlId}`} size="small" variant="outlined"
+                        sx={{ fontSize: '0.55rem', height: 18, borderColor: 'info.main', color: 'info.main' }} />
+                    )}
                     {item.status !== 'pass' && (
                       <Chip label={item.severity} size="small" variant="outlined" sx={{ fontSize: '0.6rem', height: 18 }}
                         color={severityColor(item.severity)} />

@@ -315,7 +315,9 @@ export interface SecurityPosture {
     status: 'pass' | 'fail' | 'warn';
     severity: 'critical' | 'high' | 'medium' | 'low';
     detail: string;
+    cis: { controlId: string; benchmark: string; title: string; level: number } | null;
   }> | null;
+  cisSummary?: { total: number; mapped: number; passing: number; failing: number };
   createdAt: string;
 }
 
