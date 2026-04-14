@@ -200,7 +200,8 @@ export async function triggerCveScan(orgId: string, serverId: string) {
   await syncFeeds();
 
   const packages = inventory.packages as Array<{ name: string; version: string }>;
-  const matches = await matchServerPackages(serverId, inventory.osFamily, packages);
+  const binaryVersions = (inventory as any).binaryVersions as Array<{ name: string; version: string }> | undefined;
+  const matches = await matchServerPackages(serverId, inventory.osFamily, packages, binaryVersions);
   const result = await applyMatchesToFindings(orgId, serverId, server.hostname, matches);
 
   // Recompute score after scan.

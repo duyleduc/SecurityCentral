@@ -158,19 +158,81 @@ function osvEcosystem(osFamily: string): string | null {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Binary version parsing + OSV mapping
+// ---------------------------------------------------------------------------
+
+interface BinaryInput {
+  readonly name: string;
+  readonly version: string; // raw version string from the agent
+}
+
+/** Map binary probe name → OSV package name per ecosystem. */
+function binaryToOsv(name: string, ecosystem: string): { pkg: string; ecosystem: string } | null {
+  // Package names differ by distro ecosystem.
+  const map: Record<string, Record<string, string>> = {
+    openssl:    { Debian: 'openssl', Linux: 'openssl' },
+    sshd:       { Debian: 'openssh', Linux: 'openssh' },
+    curl:       { Debian: 'curl', Linux: 'curl' },
+    nginx:      { Debian: 'nginx', Linux: 'nginx' },
+    glibc:      { Debian: 'glibc', Linux: 'glibc' },
+    docker:     { Debian: 'docker.io', Linux: 'docker' },
+    containerd: { Debian: 'containerd', Linux: 'containerd.io' },
+    runc:       { Debian: 'runc', Linux: 'runc' },
+  };
+  const entry = map[name];
+  if (!entry) return null;
+  const pkg = entry[ecosystem];
+  if (!pkg) return null;
+  return { pkg, ecosystem };
+}
+
+/** Extract a semver-like version from a raw binary output string. */
+function parseBinaryVersion(name: string, raw: string): string | null {
+  // OpenSSL 3.5.5 27 Jan 2026 → 3.5.5
+  // curl 8.14.1 (aarch64-...) → 8.14.1
+  // ldd (Debian GLIBC 2.41-12+deb13u2) 2.41 → 2.41
+  // OpenSSH_10.0p2 Debian-7+deb13u1 → 10.0p2 → not semver, use Debian pkg version
+  // nginx version: nginx/1.24.0 → 1.24.0
+  // containerd containerd.io 1.6.28 → 1.6.28
+
+  // Try to extract N.N.N or N.N pattern
+  const m = raw.match(/(\d+\.\d+(?:\.\d+)?(?:[-.]\d+[^\s,)]*)?)/);
+  if (m) return m[1];
+  return null;
+}
+
 /**
  * Match packages against OSV.dev in batches.
+ * Also matches system binary versions when provided.
  * OSV querybatch allows up to 1000 queries per request.
  */
 export async function matchServerPackages(
   serverId: string,
   osFamily: string,
   packages: readonly PackageInput[],
+  binaryVersions?: readonly BinaryInput[],
 ): Promise<CveMatch[]> {
   const ecosystem = osvEcosystem(osFamily);
   if (!ecosystem) {
     logger.info('CVE matching not yet supported for OS family', { osFamily });
     return [];
+  }
+
+  // Build additional package queries from binary versions.
+  const binaryPackages: Array<PackageInput & { ecosystem: string; binaryName: string }> = [];
+  for (const bin of binaryVersions ?? []) {
+    const mapping = binaryToOsv(bin.name, ecosystem);
+    if (!mapping) continue;
+    const ver = parseBinaryVersion(bin.name, bin.version);
+    if (!ver) continue;
+    binaryPackages.push({ name: mapping.pkg, version: ver, ecosystem: mapping.ecosystem, binaryName: bin.name });
+  }
+  if (binaryPackages.length > 0) {
+    logger.info('Binary versions to match', {
+      serverId,
+      binaries: binaryPackages.map((b) => `${b.name}@${b.version}`),
+    });
   }
 
   // Load CISA KEV for cross-reference.
@@ -221,6 +283,36 @@ export async function matchServerPackages(
       }
     } catch (err) {
       logger.error('OSV batch query error', { error: (err as Error).message, batch: i });
+    }
+  }
+
+  // Also query binary versions (separate batch — may use different ecosystems).
+  if (binaryPackages.length > 0) {
+    const binQueries = binaryPackages.map((b) => ({
+      package: { name: b.name, ecosystem: b.ecosystem },
+      version: b.version,
+    }));
+    try {
+      const resp = await fetch(OSV_BATCH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ queries: binQueries }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (resp.ok) {
+        const data = await resp.json() as { results: Array<{ vulns?: Array<{ id: string }> }> };
+        for (let j = 0; j < data.results.length; j++) {
+          const vulns = data.results[j].vulns;
+          if (!vulns || vulns.length === 0) continue;
+          const bin = binaryPackages[j];
+          for (const v of vulns) {
+            rawHits.push({ vulnId: v.id, pkg: { name: `${bin.name} (binary)`, version: bin.version } });
+          }
+        }
+        logger.info('Binary CVE matching done', { binaries: binaryPackages.length, hits: rawHits.length });
+      }
+    } catch (err) {
+      logger.warn('Binary OSV batch query failed', { error: (err as Error).message });
     }
   }
 

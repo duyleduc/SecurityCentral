@@ -495,7 +495,7 @@ export async function storePackageInventory(input: PackageInventoryInput) {
   let cveResult = { created: 0, resolved: 0 };
   if (changed) {
     try {
-      const matches = await matchServerPackages(server.id, input.osFamily, input.packages);
+      const matches = await matchServerPackages(server.id, input.osFamily, input.packages, input.binaryVersions);
       cveResult = await applyMatchesToFindings(server.orgId, server.id, server.hostname, matches);
       logger.info('CVE matching completed', {
         serverId: server.id,
