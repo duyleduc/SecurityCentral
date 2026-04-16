@@ -58,7 +58,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { useServer, useServerMetrics, useSecurityPosture, useServerVulnerabilities, usePackageInventory, useTriggerCveScan, useDeleteServer, useUpdateServer, useProjects, useAgentLatestVersion, useScoreHistory } from '../../api/hooks';
+import { useServer, useServerMetrics, useSecurityPosture, useServerVulnerabilities, usePackageInventory, useTriggerCveScan, useDeleteServer, useUpdateServer, useProjects, useAgentLatestVersion, useScoreHistory, useAttackSurfaceScan, useTriggerAttackSurfaceScan } from '../../api/hooks';
 import type { CveFinding } from '../../api/hooks';
 import type { SecurityPosture, ServerMetric } from '../../api/hooks';
 import { ScoreBadge, computeScore } from '../../components/ScoreBadge';
@@ -810,12 +810,13 @@ export function ServerDetailPage() {
       </Grid>
 
       {/* ============================================================= */}
-      {/* Tabs: Security | Vulnerabilities | Docker */}
+      {/* Tabs: Security | Vulnerabilities | Attack Surface | Docker */}
       {/* ============================================================= */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
         <Tabs value={tab} onChange={(_, v) => setTab(v)}>
           <Tab icon={<SecurityIcon fontSize="small" />} iconPosition="start" label="Security" />
           <Tab label={`Vulnerabilities${vulns?.length ? ` (${vulns.length})` : ''}`} />
+          <Tab label="Attack Surface" />
           <Tab icon={<ViewInArIcon fontSize="small" />} iconPosition="start" label="Docker" />
         </Tabs>
       </Box>
@@ -824,7 +825,9 @@ export function ServerDetailPage() {
 
       {tab === 1 && <VulnerabilitiesTab serverId={server.id} vulns={vulns ?? []} />}
 
-      {tab === 2 && <DockerTab latest={latest ?? null} />}
+      {tab === 2 && <AttackSurfaceTab serverId={server.id} />}
+
+      {tab === 3 && <DockerTab latest={latest ?? null} />}
 
       {/* Delete Confirmation Dialog */}
       <DeleteServerDialog
@@ -1233,6 +1236,116 @@ function VulnerabilitiesTab({ serverId, vulns }: { serverId: string; vulns: CveF
           )}
         </CardContent>
       </Card>
+    </Stack>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Attack Surface Tab
+// ---------------------------------------------------------------------------
+
+function AttackSurfaceTab({ serverId }: { serverId: string }) {
+  const { data: scan } = useAttackSurfaceScan(serverId);
+  const scanMutation = useTriggerAttackSurfaceScan();
+
+  const isRunning = scan?.status === 'running';
+  const openPorts = scan?.openPorts ?? [];
+  const adminPanels = scan?.adminPanels ?? [];
+  const summary = scan?.summary;
+
+  return (
+    <Stack spacing={1.5}>
+      {/* Header */}
+      <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Typography variant="body2" color="text.secondary">
+          {scan?.completedAt
+            ? `Last scan: ${new Date(scan.completedAt).toLocaleString()} — ${scan.targetIp}`
+            : 'No scan yet'}
+        </Typography>
+        <Button
+          size="small" variant="outlined"
+          disabled={scanMutation.isPending || isRunning}
+          onClick={() => scanMutation.mutate(serverId)}
+        >
+          {isRunning ? 'Scanning...' : 'Run Scan'}
+        </Button>
+      </Stack>
+
+      {scanMutation.isError && (
+        <Alert severity="error" sx={{ py: 0.5 }}>{(scanMutation.error as Error).message}</Alert>
+      )}
+
+      {/* Summary chips */}
+      {summary && (
+        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+          <Chip size="small" label={`${summary.totalOpen} open ports`} variant="outlined" />
+          {summary.critical > 0 && <Chip size="small" label={`${summary.critical} critical`} color="error" variant="outlined" />}
+          {summary.high > 0 && <Chip size="small" label={`${summary.high} high`} color="warning" variant="outlined" />}
+          {summary.adminPanels > 0 && <Chip size="small" label={`${summary.adminPanels} admin panels`} color="error" variant="outlined" />}
+        </Stack>
+      )}
+
+      {/* Open ports table */}
+      {openPorts.length > 0 && (
+        <Card>
+          <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Port</TableCell>
+                    <TableCell>Service</TableCell>
+                    <TableCell>Version</TableCell>
+                    <TableCell>Risk</TableCell>
+                    <TableCell>Response</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {openPorts.map((p) => (
+                    <TableRow key={p.port}>
+                      <TableCell sx={{ fontFamily: 'monospace' }}>{p.port}</TableCell>
+                      <TableCell>
+                        {p.service}
+                        {p.isDatabase && <Chip label="DB" size="small" color="error" variant="outlined" sx={{ ml: 0.5, fontSize: '0.6rem', height: 16 }} />}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '0.75rem' }}>{p.version ?? '-'}</TableCell>
+                      <TableCell>
+                        <Chip label={p.riskLevel} size="small" variant="outlined"
+                          color={p.riskLevel === 'critical' ? 'error' : p.riskLevel === 'high' ? 'warning' : p.riskLevel === 'medium' ? 'info' : 'default'} />
+                      </TableCell>
+                      <TableCell sx={{ fontSize: '0.75rem' }}>{p.responseMs}ms</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Admin panels */}
+      {adminPanels.length > 0 && (
+        <Card>
+          <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, color: 'error.main' }}>Exposed Admin Panels</Typography>
+            {adminPanels.map((p, i) => (
+              <Stack key={i} direction="row" spacing={1} alignItems="center" sx={{ py: 0.25 }}>
+                <CancelIcon sx={{ fontSize: 14, color: 'error.main' }} />
+                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                  :{p.port}{p.path}
+                </Typography>
+                <Chip label={`HTTP ${p.status}`} size="small" variant="outlined" sx={{ fontSize: '0.6rem', height: 16 }} />
+              </Stack>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {!scan && !scanMutation.isPending && (
+        <Typography variant="body2" color="text.secondary">
+          Run an attack surface scan to discover what's externally reachable on this server.
+        </Typography>
+      )}
     </Stack>
   );
 }

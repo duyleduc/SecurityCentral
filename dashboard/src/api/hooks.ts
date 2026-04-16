@@ -414,6 +414,40 @@ export function useScoreHistory(id: string) {
   });
 }
 
+export interface AttackSurfaceScan {
+  id: string;
+  targetIp: string;
+  status: string;
+  openPorts: Array<{ port: number; service: string; version: string | null; banner: string | null; riskLevel: string; isDatabase: boolean; responseMs: number }> | null;
+  adminPanels: Array<{ port: number; path: string; status: number }> | null;
+  summary: { totalOpen: number; critical: number; high: number; medium: number; low: number; adminPanels: number } | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+export function useAttackSurfaceScan(id: string) {
+  return useQuery({
+    queryKey: ['servers', id, 'attack-surface-scan'],
+    queryFn: () => apiClient<AttackSurfaceScan | null>(`/api/v1/servers/${id}/attack-surface-scan`),
+    enabled: !!id,
+    refetchInterval: 10_000, // poll while scan is running
+  });
+}
+
+export function useTriggerAttackSurfaceScan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (serverId: string) =>
+      apiClient<{ scanId: string; targetIp: string }>(`/api/v1/servers/${serverId}/attack-surface-scan`, {
+        method: 'POST',
+        body: JSON.stringify({ checkAdminPanels: true }),
+      }),
+    onSuccess: (_data, serverId) => {
+      qc.invalidateQueries({ queryKey: ['servers', serverId, 'attack-surface-scan'] });
+    },
+  });
+}
+
 export interface PackageInventory {
   id: string;
   serverId: string;

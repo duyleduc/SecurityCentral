@@ -20,6 +20,7 @@ import { auditRouter } from './modules/audit/audit.router.js';
 import { notificationsRouter } from './modules/notifications/notifications.router.js';
 import { apiKeysRouter } from './modules/apikeys/apikeys.router.js';
 import { organizationsRouter } from './modules/organizations/organizations.router.js';
+import { attackSurfaceRouter } from './modules/attack-surface/index.js';
 
 const app = express();
 
@@ -59,6 +60,7 @@ app.use('/api/v1/audit-logs', auditRouter);
 app.use('/api/v1/notifications', notificationsRouter);
 app.use('/api/v1/api-keys', apiKeysRouter);
 app.use('/api/v1/organization', organizationsRouter);
+app.use('/api/v1/servers', attackSurfaceRouter);
 
 // ---------------------------------------------------------------------------
 // Error handler (must be last)
