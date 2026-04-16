@@ -97,8 +97,42 @@ func (tc *ThresholdChecker) CheckSnapshot(snap collector.Snapshot) []platform.Al
 		if d, ok := snap.Data.(collector.SecurityData); ok {
 			return tc.checkSecurity(d)
 		}
+	case "suspicious":
+		if d, ok := snap.Data.(collector.SuspiciousData); ok {
+			return tc.checkSuspicious(d)
+		}
 	}
 	return nil
+}
+
+func (tc *ThresholdChecker) checkSuspicious(d collector.SuspiciousData) []platform.Alert {
+	var alerts []platform.Alert
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	for _, det := range d.Detections {
+		var alertType string
+		switch det.Reason {
+		case "known_miner":
+			alertType = "crypto_miner_detected"
+		case "reverse_shell":
+			alertType = "reverse_shell_detected"
+		case "high_cpu_sustained":
+			alertType = "sustained_high_cpu_process"
+		case "suspicious_path":
+			alertType = "suspicious_binary_path"
+		default:
+			continue
+		}
+
+		alerts = append(alerts, platform.Alert{
+			Type:      alertType,
+			Value:     det.CPU,
+			Threshold: 0,
+			Since:     fmt.Sprintf("%s|%s|%d", now, det.Name, det.PID),
+		})
+	}
+
+	return alerts
 }
 
 func (tc *ThresholdChecker) checkCPU(d collector.CPUData) []platform.Alert {

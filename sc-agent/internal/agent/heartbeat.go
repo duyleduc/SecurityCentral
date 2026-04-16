@@ -45,6 +45,7 @@ func New(cfg *config.Config, log *logging.Logger) *Agent {
 	reg.Register(collector.NewDocker())
 	reg.Register(collector.NewPackageInventory())
 	reg.Register(collector.NewAudit())
+	reg.Register(collector.NewSuspicious())
 
 	return &Agent{
 		cfg:       cfg,
@@ -99,6 +100,10 @@ func (a *Agent) processLoop(ctx context.Context, results <-chan collector.Snapsh
 			// Package inventory goes to a separate endpoint (daily, large payload).
 			if snap.Key == "packages" {
 				go a.sendPackageInventory()
+			}
+			// Suspicious process detections go to a separate endpoint.
+			if snap.Key == "suspicious" {
+				go a.sendSuspiciousProcesses()
 			}
 		}
 	}
@@ -207,6 +212,44 @@ func (a *Agent) sendPackageInventory() {
 		"packages": len(req.Packages),
 		"binaries": len(req.BinaryVersions),
 		"hash":     req.PackageHash,
+	})
+}
+
+func (a *Agent) sendSuspiciousProcesses() {
+	snap, ok := a.store.Latest("suspicious")
+	if !ok {
+		return
+	}
+	data, ok := snap.Data.(collector.SuspiciousData)
+	if !ok || len(data.Detections) == 0 {
+		return
+	}
+
+	req := platform.SuspiciousProcessRequest{
+		AgentID:     a.cfg.AgentID,
+		CollectedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	for _, d := range data.Detections {
+		req.Detections = append(req.Detections, platform.SuspiciousDetEntry{
+			PID:        d.PID,
+			Name:       d.Name,
+			User:       d.User,
+			CPU:        d.CPU,
+			RAM:        d.RAM,
+			Cmdline:    d.Cmdline,
+			ParentName: d.ParentName,
+			Reason:     d.Reason,
+			HasNetwork: d.HasNetwork,
+			Duration:   d.Duration,
+		})
+	}
+
+	if err := a.client.SendSuspiciousProcesses(req); err != nil {
+		a.log.Error("suspicious process send failed", map[string]interface{}{"error": err.Error()})
+		return
+	}
+	a.log.Warn("suspicious processes reported", map[string]interface{}{
+		"detections": len(req.Detections),
 	})
 }
 

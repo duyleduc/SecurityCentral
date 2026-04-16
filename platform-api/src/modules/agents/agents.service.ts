@@ -526,6 +526,114 @@ export async function storePackageInventory(input: PackageInventoryInput) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Suspicious Process Detection
+// ---------------------------------------------------------------------------
+
+interface SuspiciousProcessInput {
+  readonly agentId: string;
+  readonly collectedAt: string;
+  readonly detections: ReadonlyArray<{
+    pid: number;
+    name: string;
+    user: string;
+    cpu: number;
+    ram: number;
+    cmdline: string;
+    parentName: string;
+    reason: string;
+    hasNetwork: boolean;
+    duration: number;
+  }>;
+}
+
+const REASON_SEVERITY: Record<string, string> = {
+  known_miner: 'critical',
+  reverse_shell: 'critical',
+  suspicious_path: 'high',
+  high_cpu_sustained: 'high',
+};
+
+const REASON_TITLE: Record<string, string> = {
+  known_miner: 'Crypto miner detected',
+  reverse_shell: 'Potential reverse shell',
+  suspicious_path: 'Suspicious binary location',
+  high_cpu_sustained: 'Sustained high CPU process',
+};
+
+export async function processSuspiciousDetections(input: SuspiciousProcessInput) {
+  const server = await prisma.server.findUnique({ where: { agentId: input.agentId } });
+  if (!server) {
+    throw new AppError('RESOURCE_NOT_FOUND', 'Agent not registered');
+  }
+
+  let created = 0;
+  for (const det of input.detections) {
+    const severity = REASON_SEVERITY[det.reason] ?? 'high';
+    const titlePrefix = REASON_TITLE[det.reason] ?? 'Suspicious process';
+    const title = `${titlePrefix}: ${det.name} (PID ${det.pid}) on ${server.hostname}`;
+
+    // Dedup by title.
+    const existing = await prisma.finding.findFirst({
+      where: { orgId: server.orgId, serverId: server.id, source: 'suspicious_process', title, status: { in: ['open', 'in_progress'] } },
+    });
+    if (existing) continue;
+
+    await prisma.finding.create({
+      data: {
+        orgId: server.orgId,
+        serverId: server.id,
+        source: 'suspicious_process',
+        severity,
+        status: 'open',
+        title,
+        description: det.reason === 'known_miner'
+          ? `Crypto mining process "${det.name}" detected running as ${det.user}. This process is consuming ${det.cpu.toFixed(1)}% CPU. Immediate action recommended: kill the process and investigate how it was installed.`
+          : det.reason === 'reverse_shell'
+          ? `Process "${det.name}" (PID ${det.pid}) has an active network connection and was spawned by shell "${det.parentName}". This pattern indicates a potential reverse shell. Investigate immediately.`
+          : det.reason === 'suspicious_path'
+          ? `Process "${det.name}" is running from a suspicious location (temp/writable directory). Binary: ${det.cmdline.slice(0, 200)}`
+          : `Process "${det.name}" has been consuming ${det.cpu.toFixed(1)}% CPU for ${Math.round(det.duration / 60)} minutes. Investigate if this is expected workload.`,
+        detail: JSON.parse(JSON.stringify({
+          pid: det.pid,
+          name: det.name,
+          user: det.user,
+          cpu: det.cpu,
+          ram: det.ram,
+          cmdline: det.cmdline,
+          parentName: det.parentName,
+          reason: det.reason,
+          hasNetwork: det.hasNetwork,
+          duration: det.duration,
+          remediation: det.reason === 'known_miner'
+            ? `sudo kill -9 ${det.pid} && sudo find /tmp /dev/shm /var/tmp -name "${det.name}" -delete`
+            : det.reason === 'reverse_shell'
+            ? `sudo kill -9 ${det.pid} && sudo netstat -tlnp | grep ${det.pid}`
+            : null,
+        })),
+      },
+    });
+    created++;
+  }
+
+  if (created > 0) {
+    try {
+      const { recomputeScore } = await import('../servers/servers.service.js');
+      await recomputeScore(server.id);
+    } catch (err) {
+      logger.warn('Score recompute failed after suspicious process', { error: (err as Error).message });
+    }
+  }
+
+  logger.info('Suspicious process detections processed', {
+    serverId: server.id,
+    detections: input.detections.length,
+    created,
+  });
+
+  return { processed: input.detections.length, created };
+}
+
 const ALERT_SEVERITY: Record<string, string> = {
   cpu_high: 'high',
   ram_high: 'high',
@@ -538,6 +646,10 @@ const ALERT_SEVERITY: Record<string, string> = {
   cpu_spike: 'medium',
   ram_spike: 'medium',
   ssh_brute_force: 'high',
+  crypto_miner_detected: 'critical',
+  reverse_shell_detected: 'critical',
+  sustained_high_cpu_process: 'high',
+  suspicious_binary_path: 'high',
 };
 
 async function createAgentFindings(

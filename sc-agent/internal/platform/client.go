@@ -274,6 +274,30 @@ func (c *Client) SendPackageInventory(req PackageInventoryRequest) error {
 	return c.post("/v1/agents/package-inventory", req, nil)
 }
 
+// SuspiciousProcessRequest is sent to POST /v1/agents/suspicious-processes.
+type SuspiciousProcessRequest struct {
+	AgentID     string                 `json:"agentId"`
+	CollectedAt string                 `json:"collectedAt"`
+	Detections  []SuspiciousDetEntry   `json:"detections"`
+}
+
+type SuspiciousDetEntry struct {
+	PID        int32   `json:"pid"`
+	Name       string  `json:"name"`
+	User       string  `json:"user"`
+	CPU        float64 `json:"cpu"`
+	RAM        float64 `json:"ram"`
+	Cmdline    string  `json:"cmdline"`
+	ParentName string  `json:"parentName"`
+	Reason     string  `json:"reason"` // known_miner | high_cpu_sustained | reverse_shell | suspicious_path
+	HasNetwork bool    `json:"hasNetwork"`
+	Duration   int     `json:"duration"`
+}
+
+func (c *Client) SendSuspiciousProcesses(req SuspiciousProcessRequest) error {
+	return c.post("/v1/agents/suspicious-processes", req, nil)
+}
+
 func (c *Client) post(path string, body interface{}, result interface{}) error {
 	data, err := json.Marshal(body)
 	if err != nil {

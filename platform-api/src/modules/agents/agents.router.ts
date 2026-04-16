@@ -14,6 +14,7 @@ import {
   AgentFindingsSchema,
   SecurityPostureSchema,
   PackageInventorySchema,
+  SuspiciousProcessSchema,
 } from './agents.validation.js';
 import * as agentsService from './agents.service.js';
 
@@ -160,6 +161,16 @@ agentRouter.post('/security-posture', validate({ body: SecurityPostureSchema }),
 agentRouter.post('/package-inventory', validate({ body: PackageInventorySchema }), async (req, res, next) => {
   try {
     const result = await agentsService.storePackageInventory(req.body);
+    res.json(successEnvelope(result));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /v1/agents/suspicious-processes
+agentRouter.post('/suspicious-processes', validate({ body: SuspiciousProcessSchema }), async (req, res, next) => {
+  try {
+    const result = await agentsService.processSuspiciousDetections(req.body);
     res.json(successEnvelope(result));
   } catch (err) {
     next(err);

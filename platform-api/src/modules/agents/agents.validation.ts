@@ -203,3 +203,20 @@ export const PackageInventorySchema = z.object({
   unattendedUpgrades: z.boolean().default(false),
   packageHash: z.string(),
 });
+
+export const SuspiciousProcessSchema = z.object({
+  agentId: z.string().uuid(),
+  collectedAt: z.string(),
+  detections: nullableArray(z.object({
+    pid: z.number().int(),
+    name: z.string(),
+    user: z.string(),
+    cpu: z.number(),
+    ram: z.number(),
+    cmdline: z.string().max(2000),
+    parentName: z.string(),
+    reason: z.enum(['known_miner', 'high_cpu_sustained', 'reverse_shell', 'suspicious_path']),
+    hasNetwork: z.boolean(),
+    duration: z.number().int().default(0),
+  })).default([]),
+});
