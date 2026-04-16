@@ -9,7 +9,21 @@ import { logger } from '../../lib/logger.js';
 // Server-side security score computation
 // ---------------------------------------------------------------------------
 
-const SCORE_WEIGHTS: Record<string, number> = { critical: 25, high: 15, medium: 5, low: 2 };
+/**
+ * Capped deductions per severity tier — keeps the score meaningful.
+ * Same formula used client-side in ScoreBadge.tsx.
+ *
+ *   Critical: 8 pts each, max 35     High: 4 pts each, max 25
+ *   Medium:   1 pt each,  max 20     Low:  0.25 each,  max 10
+ *
+ * Grades: A (90+), B (80+), C (70+), D (60+), F (<60)
+ */
+const SCORE_TIERS = [
+  { sev: 'critical', perItem: 8, cap: 35 },
+  { sev: 'high',     perItem: 4, cap: 25 },
+  { sev: 'medium',   perItem: 1, cap: 20 },
+  { sev: 'low',      perItem: 0.25, cap: 10 },
+];
 
 /**
  * Recompute security score for a server from its open findings + security posture.
@@ -40,10 +54,11 @@ export async function recomputeScore(serverId: string): Promise<number> {
   }
 
   let score = 100;
-  for (const [sev, weight] of Object.entries(SCORE_WEIGHTS)) {
-    score -= (sevCounts[sev] ?? 0) * weight;
+  for (const { sev, perItem, cap } of SCORE_TIERS) {
+    const deduction = Math.min((sevCounts[sev] ?? 0) * perItem, cap);
+    score -= deduction;
   }
-  score = Math.max(0, Math.min(100, score));
+  score = Math.max(0, Math.min(100, Math.round(score)));
 
   // Persist on server record (raw SQL — Prisma client not yet regenerated).
   await prisma.$executeRawUnsafe(
