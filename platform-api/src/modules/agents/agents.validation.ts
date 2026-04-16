@@ -136,6 +136,7 @@ export const ServerMetricsQuerySchema = z.object({
 });
 
 export const UpdateServerSchema = z.object({
+  label: z.string().max(100).optional(),
   hostname: z.string().min(1).max(255).optional(),
   projectId: z.string().uuid().nullable().optional(),
   tags: z.array(TagSchema).max(20).optional(),

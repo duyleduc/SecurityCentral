@@ -132,6 +132,7 @@ model Server {
   id            String    @id @default(uuid()) @db.VarChar(36)
   orgId         String    @map("org_id") @db.VarChar(36)
   projectId     String?   @map("project_id") @db.VarChar(36)
+  label         String    @default("") @db.VarChar(100)
   hostname      String    @db.VarChar(255)
   agentId       String?   @unique @map("agent_id") @db.VarChar(36)
   agentVersion  String?   @map("agent_version") @db.VarChar(20)

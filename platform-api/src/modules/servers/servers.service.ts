@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errors.js';
 import { matchServerPackages, applyMatchesToFindings, syncFeeds } from '../vulndb/vulndb.service.js';
@@ -44,29 +45,33 @@ export async function recomputeScore(serverId: string): Promise<number> {
   }
   score = Math.max(0, Math.min(100, score));
 
-  // Persist on server record.
-  await prisma.server.update({
-    where: { id: serverId },
-    data: { securityScore: score },
-  });
+  // Persist on server record (raw SQL — Prisma client not yet regenerated).
+  await prisma.$executeRawUnsafe(
+    'UPDATE servers SET security_score = ? WHERE id = ?',
+    score, serverId,
+  );
 
   // Append history — at most one entry per day per server.
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const existingToday = await prisma.serverScoreHistory.findFirst({
-    where: { serverId, createdAt: { gte: todayStart } },
-  });
+  const existing: Array<{ id: string }> = await prisma.$queryRawUnsafe(
+    'SELECT id FROM server_score_history WHERE server_id = ? AND created_at >= ? LIMIT 1',
+    serverId, todayStart,
+  );
 
-  if (existingToday) {
-    await prisma.serverScoreHistory.update({
-      where: { id: existingToday.id },
-      data: { score, breakdown: sevCounts },
-    });
+  const breakdownJson = JSON.stringify(sevCounts);
+  if (existing.length > 0) {
+    await prisma.$executeRawUnsafe(
+      'UPDATE server_score_history SET score = ?, breakdown = ? WHERE id = ?',
+      score, breakdownJson, existing[0].id,
+    );
   } else {
-    await prisma.serverScoreHistory.create({
-      data: { serverId, score, breakdown: sevCounts },
-    });
+    const id = crypto.randomUUID();
+    await prisma.$executeRawUnsafe(
+      'INSERT INTO server_score_history (id, server_id, score, breakdown) VALUES (?, ?, ?, ?)',
+      id, serverId, score, breakdownJson,
+    );
   }
 
   logger.info('server score recomputed', { serverId, score, ...sevCounts });
@@ -159,7 +164,7 @@ export async function getMetrics(orgId: string, serverId: string, hours: number)
 export async function updateServer(
   orgId: string,
   serverId: string,
-  data: { hostname?: string; projectId?: string | null; tags?: Array<{ key: string; value: string }> },
+  data: { label?: string; hostname?: string; projectId?: string | null; tags?: Array<{ key: string; value: string }> },
 ) {
   const server = await prisma.server.findFirst({ where: { id: serverId, orgId } });
   if (!server) {
@@ -167,6 +172,7 @@ export async function updateServer(
   }
 
   const update: Record<string, unknown> = {};
+  if (data.label !== undefined) update.label = data.label;
   if (data.hostname !== undefined) update.hostname = data.hostname;
   if (data.projectId !== undefined) update.projectId = data.projectId;
   if (data.tags !== undefined) update.tags = JSON.parse(JSON.stringify(data.tags));
@@ -241,6 +247,9 @@ export async function deleteServer(orgId: string, serverId: string) {
   });
 
   // Cascade delete related data, then the server itself.
+  // Use raw SQL for tables not yet in the generated Prisma client.
+  await prisma.$executeRawUnsafe('DELETE FROM package_inventories WHERE server_id = ?', serverId);
+  await prisma.$executeRawUnsafe('DELETE FROM server_score_history WHERE server_id = ?', serverId);
   await prisma.$transaction([
     prisma.serverMetricSnapshot.deleteMany({ where: { serverId } }),
     prisma.securityPosture.deleteMany({ where: { serverId } }),
@@ -311,9 +320,8 @@ export async function getScoreHistory(orgId: string, serverId: string, days: num
   }
 
   const since = new Date(Date.now() - days * 86_400_000);
-  return prisma.serverScoreHistory.findMany({
-    where: { serverId, createdAt: { gte: since } },
-    orderBy: { createdAt: 'asc' },
-    select: { score: true, breakdown: true, createdAt: true },
-  });
+  return prisma.$queryRawUnsafe(
+    'SELECT score, breakdown, created_at AS createdAt FROM server_score_history WHERE server_id = ? AND created_at >= ? ORDER BY created_at ASC',
+    serverId, since,
+  );
 }

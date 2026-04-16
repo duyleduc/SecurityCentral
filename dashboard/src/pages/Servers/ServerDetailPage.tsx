@@ -525,11 +525,11 @@ export function ServerDetailPage() {
           <Button
             startIcon={<DeleteIcon />}
             color="error"
-            variant="outlined"
+            variant={server.status === 'dead' ? 'contained' : 'outlined'}
             size="small"
             onClick={() => setDeleteOpen(true)}
           >
-            Delete
+            {server.status === 'dead' ? 'Delete Server' : 'Delete'}
           </Button>
         </Stack>
       </Stack>

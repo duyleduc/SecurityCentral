@@ -232,6 +232,7 @@ export function useHeartbeats(endpointId: string, limit = 20) {
 
 export interface Server {
   id: string;
+  label: string;
   hostname: string;
   projectId: string | null;
   project: { id: string; name: string } | null;

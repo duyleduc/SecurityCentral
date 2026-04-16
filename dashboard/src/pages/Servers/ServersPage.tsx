@@ -157,26 +157,26 @@ export function ServersPage() {
                 <CardContent>
                   <Box display="flex" alignItems="center" gap={1} mb={1}>
                     <StorageIcon color={srv.status === 'online' ? 'success' : srv.status === 'critical' ? 'error' : 'disabled'} />
-                    <Typography variant="h6" noWrap>{srv.hostname}</Typography>
+                    <Typography variant="h6" noWrap>{srv.label || srv.hostname}</Typography>
                   </Box>
                   <Box display="flex" gap={0.5} flexWrap="wrap" mb={1}>
+                    <Chip icon={<StorageIcon sx={{ fontSize: 14 }} />} label={srv.hostname} size="small" variant="outlined" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
                     <Chip label={srv.status} size="small" color={StatusColor(srv.status)} />
                     {srv.project && (
                       <Chip icon={<FolderIcon sx={{ fontSize: 14 }} />} label={srv.project.name} size="small" variant="outlined" />
                     )}
-                    {srv.osFamily && <Chip label={srv.osFamily} size="small" variant="outlined" />}
-                    {srv.agentVersion && <Chip label={`v${srv.agentVersion}`} size="small" variant="outlined" />}
+                    {srv.tags.map((t) => (
+                      <Chip key={t.key} label={t.value ? `${t.key}: ${t.value}` : t.key} size="small"
+                        variant="outlined" sx={{ fontSize: '0.7rem', borderColor: 'primary.dark' }} />
+                    ))}
                     {srv.agentVersion && latestAgent?.version && srv.agentVersion !== latestAgent.version && srv.agentVersion !== 'dev' && (
                       <Chip icon={<UpgradeIcon sx={{ fontSize: 14 }} />} label="update" size="small" color="info" variant="outlined" />
                     )}
                   </Box>
-                  {srv.tags.length > 0 && (
-                    <Box display="flex" gap={0.5} flexWrap="wrap" mb={1}>
-                      {srv.tags.map((t) => (
-                        <Chip key={t.key} label={t.value ? `${t.key}:${t.value}` : t.key} size="small"
-                          sx={{ fontSize: '0.65rem', bgcolor: 'action.selected' }} />
-                      ))}
-                    </Box>
+                  {srv.osFamily && (
+                    <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem' }}>
+                      {srv.osFamily} {srv.osVersion ?? ''} {srv.agentVersion ? `· agent v${srv.agentVersion}` : ''}
+                    </Typography>
                   )}
                   {srv.lastHeartbeat && (
                     <Typography variant="caption" color="text.secondary">

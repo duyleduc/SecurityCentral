@@ -99,6 +99,7 @@ export async function registerAgent(input: AgentRegisterInput) {
       data: {
         orgId: installToken.orgId,
         projectId: installToken.projectId,
+        label: installToken.label || input.hostname,
         hostname: input.hostname,
         agentId,
         agentVersion: input.agentVersion,
