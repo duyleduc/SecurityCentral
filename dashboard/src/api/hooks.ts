@@ -319,6 +319,17 @@ export interface SecurityPosture {
     cis: { controlId: string; benchmark: string; title: string; level: number } | null;
   }> | null;
   cisSummary?: { total: number; mapped: number; passing: number; failing: number };
+  bruteForce?: {
+    sshVelocity: number;
+    sshUniqueIps: number;
+    sshTopAttackers: Array<{ ip: string; count: number }>;
+    sshCompromise: Array<{ ip: string; failuresBefore: number; successUser: string; successAt: string }>;
+    httpVelocity: number;
+    httpUniqueIps: number;
+    isActiveAttack: boolean;
+    isDistributed: boolean;
+    hasCompromise: boolean;
+  };
   createdAt: string;
 }
 

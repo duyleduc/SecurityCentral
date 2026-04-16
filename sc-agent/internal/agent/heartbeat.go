@@ -148,6 +148,30 @@ func (a *Agent) sendSecurityPosture() {
 		})
 	}
 
+	// Include brute force analysis.
+	bf := sec.BruteForce
+	if bf.SSHVelocity > 0 || bf.HTTPVelocity > 0 || bf.HasCompromise {
+		bfData := &platform.BruteForceData{
+			SSHVelocity:  bf.SSHVelocity,
+			SSHUniqueIPs: bf.SSHUniqueIPs,
+			HTTPVelocity: bf.HTTPVelocity,
+			HTTPUniqueIPs: bf.HTTPUniqueIPs,
+			IsActiveAttack: bf.IsActiveAttack,
+			IsDistributed:  bf.IsDistributed,
+			HasCompromise:  bf.HasCompromise,
+		}
+		for _, a := range bf.SSHTopAttackers {
+			bfData.SSHTopAttackers = append(bfData.SSHTopAttackers, platform.IPCountEntry{IP: a.IP, Count: a.Count})
+		}
+		for _, c := range bf.SSHCompromise {
+			bfData.SSHCompromise = append(bfData.SSHCompromise, platform.CompromiseEntry{
+				IP: c.IP, FailuresBefore: c.FailuresBefore,
+				SuccessUser: c.SuccessUser, SuccessAt: c.SuccessAt.UTC().Format(time.RFC3339),
+			})
+		}
+		req.BruteForce = bfData
+	}
+
 	// Include audit results if available.
 	if auditSnap, ok := a.store.Latest("audit"); ok {
 		if ad, ok := auditSnap.Data.(collector.AuditData); ok {

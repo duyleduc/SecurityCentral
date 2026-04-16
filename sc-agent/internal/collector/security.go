@@ -22,6 +22,7 @@ type SecurityData struct {
 	ShellUsers      []string
 	PendingReboot   bool
 	OpenFDs         FDInfo
+	BruteForce      BruteForceReport
 }
 
 type PortInfo struct {
@@ -57,10 +58,13 @@ type FDInfo struct {
 type securityCollector struct {
 	prevSSHFailures int
 	sshInited       bool
+	bfAnalyzer      *BruteForceAnalyzer
 }
 
 func NewSecurity() Collector {
-	return &securityCollector{}
+	return &securityCollector{
+		bfAnalyzer: NewBruteForceAnalyzer(),
+	}
 }
 
 func (c *securityCollector) Name() string     { return "security" }
@@ -94,6 +98,10 @@ func (c *securityCollector) Collect() (*Snapshot, error) {
 	}
 	c.prevSSHFailures = curFail
 	c.sshInited = true
+
+	// Brute force analysis from log sliding windows.
+	c.bfAnalyzer.Update()
+	d.BruteForce = c.bfAnalyzer.Analyze()
 
 	return &Snapshot{Key: "security", Data: d, At: time.Now()}, nil
 }

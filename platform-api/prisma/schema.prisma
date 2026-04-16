@@ -283,6 +283,7 @@ model SecurityPosture {
   openFdAlloc    Int?     @map("open_fd_alloc")
   openFdMax      Int?     @map("open_fd_max")
   auditResults   Json?    @map("audit_results") @db.Json   // [{id,category,title,status,severity,detail}]
+  bruteForce     Json?    @map("brute_force") @db.Json    // {sshVelocity, sshUniqueIps, ...}
   createdAt      DateTime @default(now()) @map("created_at") @db.DateTime(3)
 
   server Server @relation(fields: [serverId], references: [id])

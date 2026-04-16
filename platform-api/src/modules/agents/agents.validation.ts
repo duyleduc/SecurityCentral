@@ -181,6 +181,25 @@ export const SecurityPostureSchema = z.object({
     severity: z.enum(['critical', 'high', 'medium', 'low']),
     detail: z.string(),
   })).default([]),
+  bruteForce: z.object({
+    sshVelocity: z.number().int().default(0),
+    sshUniqueIps: z.number().int().default(0),
+    sshTopAttackers: nullableArray(z.object({
+      ip: z.string(),
+      count: z.number().int(),
+    })).default([]),
+    sshCompromise: nullableArray(z.object({
+      ip: z.string(),
+      failuresBefore: z.number().int(),
+      successUser: z.string(),
+      successAt: z.string(),
+    })).default([]),
+    httpVelocity: z.number().int().default(0),
+    httpUniqueIps: z.number().int().default(0),
+    isActiveAttack: z.boolean().default(false),
+    isDistributed: z.boolean().default(false),
+    hasCompromise: z.boolean().default(false),
+  }).optional(),
 });
 
 export const PackageInventorySchema = z.object({

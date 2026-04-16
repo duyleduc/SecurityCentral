@@ -1625,6 +1625,52 @@ function SecurityPostureTab({ posture }: { posture: SecurityPosture | null }) {
         </Card>
       )}
 
+      {/* Brute force activity */}
+      {posture.bruteForce && (posture.bruteForce.sshVelocity > 0 || posture.bruteForce.httpVelocity > 0) && (() => {
+        const bf = posture.bruteForce!;
+        return (
+          <Card sx={{ bgcolor: bf.isActiveAttack || bf.hasCompromise ? 'rgba(239,68,68,0.08)' : 'rgba(15,23,42,0.5)' }}>
+            <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+                <Typography variant="subtitle2" sx={{ color: bf.isActiveAttack ? 'error.main' : 'text.secondary' }}>
+                  {bf.isActiveAttack ? 'Active Attack Detected' : 'Brute Force Activity'}
+                </Typography>
+                {bf.isActiveAttack && <Chip label="ACTIVE" size="small" color="error" variant="filled" sx={{ fontSize: '0.6rem', height: 18 }} />}
+                {bf.isDistributed && <Chip label="DISTRIBUTED" size="small" color="warning" variant="outlined" sx={{ fontSize: '0.6rem', height: 18 }} />}
+              </Stack>
+
+              <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+                {bf.sshVelocity > 0 && (
+                  <Typography variant="body2" fontSize="0.8rem">
+                    SSH: <strong>{bf.sshVelocity}</strong> failures/5min from <strong>{bf.sshUniqueIps}</strong> IPs
+                  </Typography>
+                )}
+                {bf.httpVelocity > 0 && (
+                  <Typography variant="body2" fontSize="0.8rem">
+                    HTTP: <strong>{bf.httpVelocity}</strong> 401/403s/5min from <strong>{bf.httpUniqueIps}</strong> IPs
+                  </Typography>
+                )}
+              </Stack>
+
+              {bf.sshTopAttackers && bf.sshTopAttackers.length > 0 && (
+                <Stack direction="row" spacing={0.5} mt={0.75} flexWrap="wrap" useFlexGap>
+                  {bf.sshTopAttackers.map((a) => (
+                    <Chip key={a.ip} label={`${a.ip} (${a.count}x)`} size="small" variant="outlined"
+                      sx={{ fontFamily: 'monospace', fontSize: '0.65rem' }} />
+                  ))}
+                </Stack>
+              )}
+
+              {bf.hasCompromise && bf.sshCompromise?.map((c, i) => (
+                <Alert key={i} severity="error" sx={{ mt: 1, py: 0.5 }}>
+                  <strong>Potential compromise:</strong> {c.ip} failed {c.failuresBefore}x then logged in as "{c.successUser}"
+                </Alert>
+              ))}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem' }}>
         Last scan: {new Date(posture.collectedAt).toLocaleString()}
       </Typography>

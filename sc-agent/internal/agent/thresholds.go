@@ -247,5 +247,28 @@ func (tc *ThresholdChecker) checkSecurity(d collector.SecurityData) []platform.A
 		})
 	}
 
+	// Brute force pattern detection.
+	bf := d.BruteForce
+	if bf.IsActiveAttack {
+		alerts = append(alerts, platform.Alert{
+			Type: "ssh_active_attack", Value: float64(bf.SSHVelocity), Threshold: 50, Since: now,
+		})
+	}
+	if bf.IsDistributed {
+		alerts = append(alerts, platform.Alert{
+			Type: "ssh_distributed_attack", Value: float64(bf.SSHUniqueIPs), Threshold: 10, Since: now,
+		})
+	}
+	if bf.HasCompromise {
+		alerts = append(alerts, platform.Alert{
+			Type: "ssh_potential_compromise", Value: 1, Threshold: 0, Since: now,
+		})
+	}
+	if bf.HTTPVelocity > 100 {
+		alerts = append(alerts, platform.Alert{
+			Type: "http_brute_force", Value: float64(bf.HTTPVelocity), Threshold: 100, Since: now,
+		})
+	}
+
 	return alerts
 }

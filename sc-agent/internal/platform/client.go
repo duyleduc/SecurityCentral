@@ -101,6 +101,31 @@ type ServiceMetrics struct {
 	FailedUnits []string `json:"failedUnits"`
 }
 
+// BruteForceData is the brute force analysis sent with security posture.
+type BruteForceData struct {
+	SSHVelocity     int               `json:"sshVelocity"`
+	SSHUniqueIPs    int               `json:"sshUniqueIps"`
+	SSHTopAttackers []IPCountEntry    `json:"sshTopAttackers"`
+	SSHCompromise   []CompromiseEntry `json:"sshCompromise"`
+	HTTPVelocity    int               `json:"httpVelocity"`
+	HTTPUniqueIPs   int               `json:"httpUniqueIps"`
+	IsActiveAttack  bool              `json:"isActiveAttack"`
+	IsDistributed   bool              `json:"isDistributed"`
+	HasCompromise   bool              `json:"hasCompromise"`
+}
+
+type IPCountEntry struct {
+	IP    string `json:"ip"`
+	Count int    `json:"count"`
+}
+
+type CompromiseEntry struct {
+	IP             string `json:"ip"`
+	FailuresBefore int    `json:"failuresBefore"`
+	SuccessUser    string `json:"successUser"`
+	SuccessAt      string `json:"successAt"`
+}
+
 // SecurityPostureRequest is sent to POST /v1/agents/security-posture.
 type SecurityPostureRequest struct {
 	AgentID        string            `json:"agentId"`
@@ -114,6 +139,7 @@ type SecurityPostureRequest struct {
 	PendingReboot  bool              `json:"pendingReboot"`
 	OpenFDs        FDEntry           `json:"openFDs"`
 	AuditResults   []AuditResultEntry `json:"auditResults,omitempty"`
+	BruteForce     *BruteForceData    `json:"bruteForce,omitempty"`
 }
 
 type AuditResultEntry struct {

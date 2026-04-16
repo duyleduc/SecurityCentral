@@ -383,8 +383,80 @@ export async function storeSecurityPosture(input: SecurityPostureInput) {
       openFdAlloc: input.openFDs.allocated,
       openFdMax: Math.min(input.openFDs.max, 2_147_483_647),
       auditResults: input.auditResults ? JSON.parse(JSON.stringify(input.auditResults)) : undefined,
+      bruteForce: input.bruteForce ? JSON.parse(JSON.stringify(input.bruteForce)) : undefined,
     },
   });
+
+  // Create findings for brute force events.
+  if (input.bruteForce) {
+    const bf = input.bruteForce;
+    if (bf.isActiveAttack) {
+      const title = `Active SSH brute force on ${server.hostname} (${bf.sshVelocity} attempts/5min)`;
+      const existing = await prisma.finding.findFirst({
+        where: { orgId: server.orgId, serverId: server.id, source: 'brute_force', title: { startsWith: 'Active SSH brute force' }, status: { in: ['open', 'in_progress'] } },
+      });
+      if (!existing) {
+        await prisma.finding.create({
+          data: {
+            orgId: server.orgId, serverId: server.id,
+            source: 'brute_force', severity: 'critical', status: 'open', title,
+            description: `${bf.sshVelocity} SSH login failures in the last 5 minutes from ${bf.sshUniqueIps} unique IPs. Top attackers: ${(bf.sshTopAttackers ?? []).map((a: { ip: string; count: number }) => `${a.ip} (${a.count}x)`).join(', ')}`,
+            detail: JSON.parse(JSON.stringify({ type: 'active_attack', ...bf })),
+          },
+        });
+      }
+    }
+    if (bf.isDistributed) {
+      const title = `Distributed SSH attack on ${server.hostname} from ${bf.sshUniqueIps} IPs`;
+      const existing = await prisma.finding.findFirst({
+        where: { orgId: server.orgId, serverId: server.id, source: 'brute_force', title: { startsWith: 'Distributed SSH' }, status: { in: ['open', 'in_progress'] } },
+      });
+      if (!existing) {
+        await prisma.finding.create({
+          data: {
+            orgId: server.orgId, serverId: server.id,
+            source: 'brute_force', severity: 'high', status: 'open', title,
+            description: `SSH login attempts from ${bf.sshUniqueIps} distinct IP addresses in a 5-minute window. This indicates a coordinated attack.`,
+            detail: JSON.parse(JSON.stringify({ type: 'distributed_attack', ...bf })),
+          },
+        });
+      }
+    }
+    if (bf.hasCompromise) {
+      for (const c of bf.sshCompromise ?? []) {
+        const title = `Potential SSH compromise on ${server.hostname}: login from attacker IP ${(c as { ip: string }).ip}`;
+        const existing = await prisma.finding.findFirst({
+          where: { orgId: server.orgId, serverId: server.id, source: 'brute_force', title, status: { in: ['open', 'in_progress'] } },
+        });
+        if (!existing) {
+          await prisma.finding.create({
+            data: {
+              orgId: server.orgId, serverId: server.id,
+              source: 'brute_force', severity: 'critical', status: 'open', title,
+              description: `IP ${(c as { ip: string }).ip} had ${(c as { failuresBefore: number }).failuresBefore} failed SSH attempts, then successfully logged in as "${(c as { successUser: string }).successUser}". This strongly indicates a compromised account. Change passwords immediately and review access logs.`,
+              detail: JSON.parse(JSON.stringify({ type: 'compromise', ...c })),
+            },
+          });
+        }
+      }
+    }
+    if (bf.httpVelocity > 100) {
+      const title = `HTTP brute force on ${server.hostname} (${bf.httpVelocity} failures/5min)`;
+      const existing = await prisma.finding.findFirst({
+        where: { orgId: server.orgId, serverId: server.id, source: 'brute_force', title: { startsWith: 'HTTP brute force' }, status: { in: ['open', 'in_progress'] } },
+      });
+      if (!existing) {
+        await prisma.finding.create({
+          data: {
+            orgId: server.orgId, serverId: server.id,
+            source: 'brute_force', severity: 'high', status: 'open', title,
+            description: `${bf.httpVelocity} HTTP 401/403 responses in 5 minutes from ${bf.httpUniqueIps} IPs. Web application may be under credential stuffing attack.`,
+            detail: JSON.parse(JSON.stringify({ type: 'http_brute_force', ...bf })),
+          },
+        });
+      }
+    }
+  }
 
   // Auto-create findings from failed audit checks.
   if (input.auditResults) {
@@ -650,6 +722,10 @@ const ALERT_SEVERITY: Record<string, string> = {
   reverse_shell_detected: 'critical',
   sustained_high_cpu_process: 'high',
   suspicious_binary_path: 'high',
+  ssh_active_attack: 'critical',
+  ssh_distributed_attack: 'high',
+  ssh_potential_compromise: 'critical',
+  http_brute_force: 'high',
 };
 
 async function createAgentFindings(
