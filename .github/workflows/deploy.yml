@@ -61,7 +61,6 @@ jobs:
             DATABASE_URL=${{ secrets.TIDB_DATABASE_URL }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             NODE_ENV=production
-            PORT=3000
             CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
           flags: >-
             --allow-unauthenticated
