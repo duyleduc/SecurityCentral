@@ -1,0 +1,141 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  GCP_REGION: us-east1
+  GCS_BUCKET: sc-dashboard-securitycentral-491719
+  REGISTRY: us-east1-docker.pkg.dev/securitycentral-491719/securitycentral
+
+jobs:
+  # ---------------------------------------------------------------
+  # Stage 1: Migrate database
+  # ---------------------------------------------------------------
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: platform-api/package-lock.json
+      - name: Run Prisma migration
+        run: |
+          cd platform-api
+          npm ci
+          npx prisma db push --accept-data-loss
+        env:
+          DATABASE_URL: ${{ secrets.TIDB_DATABASE_URL }}
+
+  # ---------------------------------------------------------------
+  # Stage 2: Deploy API to Cloud Run (after migrate)
+  # ---------------------------------------------------------------
+  deploy-api:
+    needs: migrate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      api_url: ${{ steps.get-url.outputs.url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auth to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Auth Docker
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push image
+        run: |
+          docker build -t ${{ env.REGISTRY }}/api:${{ github.sha }} -t ${{ env.REGISTRY }}/api:latest ./platform-api
+          docker push ${{ env.REGISTRY }}/api:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/api:latest
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: sc-api
+          image: ${{ env.REGISTRY }}/api:${{ github.sha }}
+          region: ${{ env.GCP_REGION }}
+          env_vars: |
+            DATABASE_URL=${{ secrets.TIDB_DATABASE_URL }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            NODE_ENV=production
+            CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
+          flags: >-
+            --allow-unauthenticated
+            --memory=512Mi
+            --cpu=1
+            --min-instances=0
+            --max-instances=3
+
+      - name: Get API URL
+        id: get-url
+        run: |
+          URL=$(gcloud run services describe sc-api --region=${{ env.GCP_REGION }} --format='value(status.url)')
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------
+  # Stage 3: Deploy Dashboard to GCS (after API)
+  # ---------------------------------------------------------------
+  deploy-dashboard:
+    needs: deploy-api
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auth to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Build dashboard
+        run: |
+          cd dashboard
+          npm ci
+          VITE_API_URL=${{ needs.deploy-api.outputs.api_url }} npm run build
+
+      - name: Setup GCS bucket
+        run: |
+          gsutil ls -b gs://${{ env.GCS_BUCKET }} 2>/dev/null || \
+            gsutil mb -p securitycentral-491719 -l ${{ env.GCP_REGION }} gs://${{ env.GCS_BUCKET }}
+          gsutil web set -m index.html -e index.html gs://${{ env.GCS_BUCKET }}
+          gsutil iam ch allUsers:objectViewer gs://${{ env.GCS_BUCKET }}
+
+      - name: Upload to GCS
+        run: |
+          gsutil -m rsync -r -d dashboard/dist gs://${{ env.GCS_BUCKET }}
+          gsutil -m setmeta -h "Cache-Control:no-cache" gs://${{ env.GCS_BUCKET }}/index.html
+
+      - name: Update API CORS
+        run: |
+          DASHBOARD_URL="https://storage.googleapis.com/${{ env.GCS_BUCKET }}"
+          API_URL="${{ needs.deploy-api.outputs.api_url }}"
+          gcloud run services update sc-api \
+            --region=${{ env.GCP_REGION }} \
+            --set-env-vars="^||^CORS_ORIGINS=${DASHBOARD_URL},${API_URL}||DATABASE_URL=${{ secrets.TIDB_DATABASE_URL }}||JWT_SECRET=${{ secrets.JWT_SECRET }}||NODE_ENV=production"
