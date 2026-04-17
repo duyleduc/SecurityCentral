@@ -99,7 +99,6 @@ export async function registerAgent(input: AgentRegisterInput) {
       data: {
         orgId: installToken.orgId,
         projectId: installToken.projectId,
-        label: installToken.label || input.hostname,
         hostname: input.hostname,
         agentId,
         agentVersion: input.agentVersion,
@@ -112,6 +111,10 @@ export async function registerAgent(input: AgentRegisterInput) {
       },
     });
   });
+
+  // Set label (raw SQL — field not yet in generated Prisma client).
+  const label = installToken.label || input.hostname;
+  await prisma.$executeRawUnsafe('UPDATE servers SET label = ? WHERE id = ?', label, server.id);
 
   emitAgentConnected(installToken.orgId, { id: server.id, hostname: input.hostname });
 
@@ -360,6 +363,17 @@ interface SecurityPostureInput {
   readonly pendingReboot: boolean;
   readonly openFDs: { allocated: number; max: number };
   readonly auditResults?: readonly AuditResultItem[];
+  readonly bruteForce?: {
+    readonly sshVelocity: number;
+    readonly sshUniqueIps: number;
+    readonly sshTopAttackers: ReadonlyArray<{ ip: string; count: number }>;
+    readonly sshCompromise: ReadonlyArray<{ ip: string; failuresBefore: number; successUser: string; successAt: string }>;
+    readonly httpVelocity: number;
+    readonly httpUniqueIps: number;
+    readonly isActiveAttack: boolean;
+    readonly isDistributed: boolean;
+    readonly hasCompromise: boolean;
+  };
 }
 
 export async function storeSecurityPosture(input: SecurityPostureInput) {
@@ -368,7 +382,7 @@ export async function storeSecurityPosture(input: SecurityPostureInput) {
     throw new AppError('RESOURCE_NOT_FOUND', 'Agent not registered');
   }
 
-  await prisma.securityPosture.create({
+  const posture = await prisma.securityPosture.create({
     data: {
       serverId: server.id,
       collectedAt: new Date(input.collectedAt),
@@ -383,9 +397,16 @@ export async function storeSecurityPosture(input: SecurityPostureInput) {
       openFdAlloc: input.openFDs.allocated,
       openFdMax: Math.min(input.openFDs.max, 2_147_483_647),
       auditResults: input.auditResults ? JSON.parse(JSON.stringify(input.auditResults)) : undefined,
-      bruteForce: input.bruteForce ? JSON.parse(JSON.stringify(input.bruteForce)) : undefined,
     },
   });
+
+  // Store bruteForce data (raw SQL — field not yet in generated Prisma client).
+  if (input.bruteForce) {
+    await prisma.$executeRawUnsafe(
+      'UPDATE security_postures SET brute_force = ? WHERE id = ?',
+      JSON.stringify(input.bruteForce), (posture as any).id,
+    );
+  }
 
   // Create findings for brute force events.
   if (input.bruteForce) {
