@@ -1,0 +1,25 @@
+{$DOMAIN} {
+	# Dashboard (React SPA)
+	handle {
+		reverse_proxy sc-dashboard:80
+	}
+
+	# API routes
+	handle /api/* {
+		reverse_proxy sc-api:3000
+	}
+	handle /auth/* {
+		reverse_proxy sc-api:3000
+	}
+	handle /v1/* {
+		reverse_proxy sc-api:3000
+	}
+	handle /health {
+		reverse_proxy sc-api:3000
+	}
+
+	# WebSocket
+	handle /ws {
+		reverse_proxy sc-api:3000
+	}
+}

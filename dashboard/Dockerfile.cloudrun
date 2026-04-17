@@ -1,0 +1,43 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# --- Production (nginx serving static + reverse proxy to API) ---
+FROM nginx:alpine
+
+ARG API_URL=http://localhost:3000
+
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Generate nginx config with API_URL
+RUN cat > /etc/nginx/conf.d/default.conf <<NGINX
+server {
+    listen 8080;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # SPA fallback
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    # Proxy API calls to Cloud Run API service
+    location /api/ { proxy_pass ${API_URL}; }
+    location /auth/ { proxy_pass ${API_URL}; }
+    location /v1/  { proxy_pass ${API_URL}; }
+    location /health { proxy_pass ${API_URL}; }
+    location /ws {
+        proxy_pass ${API_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+NGINX
+
+EXPOSE 8080
+CMD ["nginx", "-g", "daemon off;"]

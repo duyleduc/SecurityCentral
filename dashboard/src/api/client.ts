@@ -1,3 +1,5 @@
+import { API_BASE } from '../config';
+
 interface ApiEnvelope<T> {
   data: T | null;
   meta: Record<string, unknown> | null;
@@ -15,7 +17,7 @@ export function getAccessToken(): string | null {
 }
 
 async function refreshToken(): Promise<string> {
-  const res = await fetch('/auth/refresh', {
+  const res = await fetch(`${API_BASE}/auth/refresh`, {
     method: 'POST',
     credentials: 'include',
   });
@@ -37,14 +39,14 @@ export async function apiClient<T>(
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
-  let res = await fetch(path, { ...options, headers, credentials: 'include' });
+  let res = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' });
 
   // Auto-refresh on 401
   if (res.status === 401 && accessToken) {
     try {
       const newToken = await refreshToken();
       headers.set('Authorization', `Bearer ${newToken}`);
-      res = await fetch(path, { ...options, headers, credentials: 'include' });
+      res = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' });
     } catch {
       accessToken = null;
       window.location.href = '/login';

@@ -2,7 +2,10 @@ package poller
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -16,6 +19,21 @@ func Run(ctx context.Context, cfg config.Config) error {
 	client := platform.New(cfg.APIURL, cfg.APIKey)
 	ticker := time.NewTicker(cfg.PollInterval)
 	defer ticker.Stop()
+
+	// Start a minimal health HTTP server (needed for Cloud Run).
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintln(w, "sc-monitor ok")
+		})
+		slog.Info("health server listening", "port", port)
+		_ = http.ListenAndServe(":"+port, mux)
+	}()
 
 	slog.Info("monitor started", "apiUrl", cfg.APIURL, "poll", cfg.PollInterval, "concurrency", cfg.Concurrency)
 

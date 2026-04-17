@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { getAccessToken } from '../api/client';
+import { API_BASE } from '../config';
 
 let socket: Socket | null = null;
 
@@ -13,7 +14,7 @@ export function connectSocket(): Socket {
   const token = getAccessToken();
   if (!token) throw new Error('No access token for WebSocket');
 
-  socket = io(window.location.origin, {
+  socket = io(API_BASE || window.location.origin, {
     path: '/ws',
     auth: { token },
     transports: ['websocket'],
