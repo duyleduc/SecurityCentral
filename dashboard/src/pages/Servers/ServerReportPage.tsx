@@ -413,7 +413,12 @@ export function ServerReportPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {(vulns ?? []).map((v) => (
+                  {[...(vulns ?? [])].sort((a, b) => {
+                    const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+                    const diff = (order[a.severity] ?? 5) - (order[b.severity] ?? 5);
+                    if (diff !== 0) return diff;
+                    return (a.cveId ?? '').localeCompare(b.cveId ?? '');
+                  }).map((v) => (
                     <TableRow key={v.id}>
                       <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
                         {v.cveId ? (

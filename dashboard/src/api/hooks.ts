@@ -134,10 +134,14 @@ export function useDeleteProject() {
 // Monitoring Endpoints
 // ---------------------------------------------------------------------------
 
-export function useEndpoints() {
+export function useEndpoints(filters?: { status?: string; tags?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.tags) params.set('tags', filters.tags);
+  const qs = params.toString();
   return useQuery({
-    queryKey: ['endpoints'],
-    queryFn: () => apiClient<MonitoredEndpoint[]>('/api/v1/monitoring/endpoints'),
+    queryKey: ['endpoints', filters?.status ?? '', filters?.tags ?? ''],
+    queryFn: () => apiClient<MonitoredEndpoint[]>(`/api/v1/monitoring/endpoints${qs ? `?${qs}` : ''}`),
   });
 }
 

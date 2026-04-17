@@ -11,10 +11,14 @@ export const monitoringRouter = Router();
 
 monitoringRouter.use(requireAuth);
 
-// GET /api/v1/monitoring/endpoints
+// GET /api/v1/monitoring/endpoints?status=healthy&tags=env=prod,tier=web
 monitoringRouter.get('/', requirePermission('view_dashboard'), async (req, res, next) => {
   try {
-    const endpoints = await monitoringService.list(req.auth!.orgId);
+    const filters = {
+      status: req.query.status as string | undefined,
+      tags: req.query.tags as string | undefined,
+    };
+    const endpoints = await monitoringService.list(req.auth!.orgId, filters);
     res.json(successEnvelope(endpoints));
   } catch (err) {
     next(err);

@@ -9,8 +9,11 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import ClearIcon from '@mui/icons-material/Clear';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import LockIcon from '@mui/icons-material/Lock';
+import SearchIcon from '@mui/icons-material/Search';
 import { useEndpoints, useCreateEndpoint, useDeleteEndpoint, useTriggerCheck, useProjects, useTagKeys } from '../../api/hooks';
 import { useRealtimeHeartbeat } from '../../ws/useRealtimeHeartbeat';
 import { TagsInput, type Tag } from '../../components/TagsInput';
@@ -34,7 +37,14 @@ function relativeTime(dateStr: string | null): string {
 }
 
 export function DomainsPage() {
-  const { data: endpoints, isLoading } = useEndpoints();
+  const [statusFilter, setStatusFilter] = useState('');
+  const [tagQuery, setTagQuery] = useState('');
+  const [tagInput, setTagInput] = useState('');
+  const filters = {
+    status: statusFilter || undefined,
+    tags: tagQuery || undefined,
+  };
+  const { data: endpoints, isLoading } = useEndpoints(filters);
   const { data: projects } = useProjects();
   const createEndpoint = useCreateEndpoint();
   const deleteEndpoint = useDeleteEndpoint();
@@ -48,6 +58,7 @@ export function DomainsPage() {
 
   const healthy = endpoints?.filter((e) => e.status === 'healthy').length ?? 0;
   const total = endpoints?.length ?? 0;
+  const hasFilters = !!statusFilter || !!tagQuery;
 
   return (
     <Box>
@@ -55,12 +66,58 @@ export function DomainsPage() {
         <Box>
           <Typography variant="h5">Domain Monitoring</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {total > 0 ? `${healthy}/${total} healthy` : 'Monitor TLS certificates and endpoint reachability'}
+            {total > 0 ? `${healthy}/${total} healthy${hasFilters ? ' (filtered)' : ''}` : 'Monitor TLS certificates and endpoint reachability'}
           </Typography>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setShowAdd(!showAdd)}>
           Add Domains
         </Button>
+      </Stack>
+
+      {/* Filters */}
+      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+        <FilterListIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+        <FormControl size="small" sx={{ minWidth: 120 }}>
+          <InputLabel>Status</InputLabel>
+          <Select
+            value={statusFilter}
+            label="Status"
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <MenuItem value="">All</MenuItem>
+            <MenuItem value="healthy">Healthy</MenuItem>
+            <MenuItem value="degraded">Degraded</MenuItem>
+            <MenuItem value="down">Down</MenuItem>
+            <MenuItem value="pending">Pending</MenuItem>
+          </Select>
+        </FormControl>
+        <TextField
+          size="small"
+          placeholder="Filter by tags: env=prod, tier=web"
+          value={tagInput}
+          onChange={(e) => setTagInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') setTagQuery(tagInput); }}
+          slotProps={{
+            input: {
+              endAdornment: tagInput ? (
+                <IconButton size="small" onClick={() => { setTagInput(''); setTagQuery(''); }}>
+                  <ClearIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              ) : (
+                <SearchIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+              ),
+            },
+          }}
+          sx={{ width: 280 }}
+        />
+        {tagInput && tagInput !== tagQuery && (
+          <Button size="small" variant="outlined" onClick={() => setTagQuery(tagInput)}>
+            Apply
+          </Button>
+        )}
+        {hasFilters && (
+          <Chip label="Clear filters" size="small" variant="outlined" onDelete={() => { setStatusFilter(''); setTagQuery(''); setTagInput(''); }} />
+        )}
       </Stack>
 
       {showAdd && <AddDomainsForm projects={projects ?? []} onDone={() => setShowAdd(false)} />}

@@ -17,9 +17,15 @@ interface CreateEndpointInput {
   readonly tags?: ReadonlyArray<{ key: string; value: string }>;
 }
 
-export async function list(orgId: string) {
+export async function list(orgId: string, filters?: { status?: string; tags?: string }) {
+  const where: Record<string, unknown> = { orgId };
+
+  if (filters?.status) {
+    where.status = filters.status;
+  }
+
   const endpoints = await prisma.monitoredEndpoint.findMany({
-    where: { orgId },
+    where,
     include: {
       project: { select: { id: true, name: true } },
       heartbeats: {
@@ -30,11 +36,29 @@ export async function list(orgId: string) {
     orderBy: { createdAt: 'desc' },
   });
 
-  if (endpoints.length === 0) return endpoints;
+  // Filter by tags in-memory (MySQL JSON queries are less ergonomic).
+  // Tags query format: "key=value,key2=value2" (AND logic).
+  let filtered = endpoints;
+  if (filters?.tags) {
+    const tagFilters = filters.tags.split(',').map((t) => {
+      const [key, ...rest] = t.trim().split('=');
+      return { key: key.trim(), value: rest.join('=').trim() };
+    }).filter((t) => t.key);
+
+    filtered = endpoints.filter((ep) => {
+      const epTags = ep.tags as Array<{ key: string; value: string }> | null;
+      if (!epTags || !Array.isArray(epTags)) return false;
+      return tagFilters.every((tf) =>
+        epTags.some((et) => et.key === tf.key && (!tf.value || et.value === tf.value)),
+      );
+    });
+  }
+
+  if (filtered.length === 0) return filtered;
 
   // Fetch latest SSL heartbeat per endpoint
   const sslHbs = await Promise.all(
-    endpoints.map((ep) =>
+    filtered.map((ep) =>
       prisma.endpointHeartbeat.findFirst({
         where: { endpointId: ep.id, sslValid: { not: null } },
         orderBy: { createdAt: 'desc' },
@@ -55,7 +79,7 @@ export async function list(orgId: string) {
     });
   }
 
-  return endpoints.map((ep) => ({
+  return filtered.map((ep) => ({
     ...ep,
     latestSsl: sslByEndpoint.get(ep.id) ?? null,
   }));
