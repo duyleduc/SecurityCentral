@@ -55,6 +55,7 @@ export async function create(input: CreateProjectInput) {
       orgId: input.orgId,
       name: input.name,
       description: input.description,
+      notes: '',
     },
   });
 }
