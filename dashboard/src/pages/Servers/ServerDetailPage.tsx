@@ -1526,15 +1526,33 @@ function SecurityPostureTab({ posture }: { posture: SecurityPosture | null }) {
     <Stack spacing={1.5}>
       {/* Quick status chips */}
       <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
-        <Chip size="small" icon={fwOk ? <CheckCircleIcon /> : <CancelIcon />}
-          label={fwOk ? `Firewall (${posture.firewallType})` : 'No firewall'}
-          color={fwOk ? 'success' : 'error'} variant="outlined" />
-        <Chip size="small" icon={sshOk ? <CheckCircleIcon /> : <CancelIcon />}
-          label={sshOk ? 'SSH hardened' : 'SSH weak'}
-          color={sshOk ? 'success' : 'error'} variant="outlined" />
-        {posture.pendingReboot && <Chip size="small" icon={<WarningIcon />} label="Reboot pending" color="warning" variant="outlined" />}
-        {posture.sshFailures > 0 && <Chip size="small" label={`${posture.sshFailures} SSH fail attempts`}
-          color={posture.sshFailures > 10 ? 'error' : 'warning'} variant="outlined" />}
+        <Tooltip title={fwOk
+          ? `${posture.firewallType} firewall is active and blocking unauthorized traffic.`
+          : 'CRITICAL: No firewall detected. Server is directly exposed to the internet. Enable ufw, nftables, or iptables immediately.'} arrow>
+          <Chip size="small" icon={fwOk ? <CheckCircleIcon /> : <CancelIcon />}
+            label={fwOk ? `Firewall (${posture.firewallType})` : 'No firewall'}
+            color={fwOk ? 'success' : 'error'} variant="outlined" />
+        </Tooltip>
+        <Tooltip title={sshOk
+          ? 'SSH is hardened: root login disabled and password authentication disabled (key-based auth only).'
+          : 'CRITICAL: SSH allows root login or password authentication. Attackers can brute force. Edit /etc/ssh/sshd_config: set PermitRootLogin no and PasswordAuthentication no.'} arrow>
+          <Chip size="small" icon={sshOk ? <CheckCircleIcon /> : <CancelIcon />}
+            label={sshOk ? 'SSH hardened' : 'SSH weak'}
+            color={sshOk ? 'success' : 'error'} variant="outlined" />
+        </Tooltip>
+        {posture.pendingReboot && (
+          <Tooltip title="Kernel or system packages were updated but the new versions are not yet active. Reboot when convenient to apply patches. Not urgent, but don't leave indefinitely." arrow>
+            <Chip size="small" icon={<WarningIcon />} label="Reboot pending" color="warning" variant="outlined" />
+          </Tooltip>
+        )}
+        {posture.sshFailures > 0 && (
+          <Tooltip title={posture.sshFailures > 10
+            ? `CRITICAL: ${posture.sshFailures} failed SSH login attempts detected. This indicates an active brute-force attack. Consider blocking attacker IPs via fail2ban or firewall.`
+            : `${posture.sshFailures} failed SSH login attempts detected. Monitor and block the source IPs if the count grows.`} arrow>
+            <Chip size="small" label={`${posture.sshFailures} SSH fail attempts`}
+              color={posture.sshFailures > 10 ? 'error' : 'warning'} variant="outlined" />
+          </Tooltip>
+        )}
         <Chip size="small" label={`${publicPorts.length} public ports`}
           color={publicPorts.length > 5 ? 'warning' : 'default'} variant="outlined"
           onClick={() => setShowPorts(!showPorts)} sx={{ cursor: 'pointer' }} />

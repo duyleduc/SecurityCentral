@@ -20,7 +20,9 @@ func NewClient(baseURL, apiKey string) *Client {
 		baseURL: baseURL,
 		apiKey:  apiKey,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			// Generous timeout to handle Cloud Run cold starts (~5-10s) plus
+			// slow operations like CVE matching against external feeds.
+			Timeout: 120 * time.Second,
 		},
 	}
 }
