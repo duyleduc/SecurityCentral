@@ -106,6 +106,18 @@ jobs:
       - name: Auth Docker
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build agent binaries into API build context
+        run: |
+          mkdir -p platform-api/agent-bin
+          cd sc-agent
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ../platform-api/agent-bin/sc-agent-linux-amd64 ./cmd/sc-agent
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o ../platform-api/agent-bin/sc-agent-linux-arm64 ./cmd/sc-agent
+
       - name: Build and push image
         run: |
           docker build -t ${{ env.REGISTRY }}/api:${{ github.sha }} -t ${{ env.REGISTRY }}/api:latest ./platform-api

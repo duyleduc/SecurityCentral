@@ -24,6 +24,10 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/dist ./dist
 
+# Agent binaries served by /v1/agents/download. Copied from build context.
+# The CI builds sc-agent binaries into platform-api/agent-bin/ before docker build.
+COPY agent-bin/ /sc-agent/bin/
+
 ENV NODE_ENV=production
 ENV PORT=3000
 

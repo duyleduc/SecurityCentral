@@ -50,3 +50,7 @@ prisma/migrations/*.sql.bak
 # OS
 Thumbs.db
 .playwright-mcp/
+
+# CI-built agent binaries for Docker context
+platform-api/agent-bin/*
+!platform-api/agent-bin/.gitkeep
