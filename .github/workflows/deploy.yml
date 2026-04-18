@@ -12,9 +12,37 @@ env:
 
 jobs:
   # ---------------------------------------------------------------
-  # Stage 1: Migrate database
+  # Detect what changed
+  # ---------------------------------------------------------------
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      dashboard: ${{ steps.filter.outputs.dashboard }}
+      monitor: ${{ steps.filter.outputs.monitor }}
+      schema: ${{ steps.filter.outputs.schema }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'platform-api/**'
+              - 'sc-agent/**'
+            dashboard:
+              - 'dashboard/**'
+            monitor:
+              - 'sc-monitor/**'
+            schema:
+              - 'platform-api/prisma/**'
+
+  # ---------------------------------------------------------------
+  # Stage 1: Migrate database (only when schema changes)
   # ---------------------------------------------------------------
   migrate:
+    needs: changes
+    if: needs.changes.outputs.schema == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -32,10 +60,11 @@ jobs:
           DATABASE_URL: ${{ secrets.TIDB_DATABASE_URL }}
 
   # ---------------------------------------------------------------
-  # Stage 2: Deploy API to Cloud Run (after migrate)
+  # Stage 2: Deploy API (only when api source changes)
   # ---------------------------------------------------------------
   deploy-api:
-    needs: migrate
+    needs: [changes, migrate]
+    if: always() && (needs.changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch') && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -88,10 +117,11 @@ jobs:
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
   # ---------------------------------------------------------------
-  # Stage 3: Deploy Dashboard to GCS (after API)
+  # Stage 3: Deploy Dashboard (only when dashboard source changes)
   # ---------------------------------------------------------------
   deploy-dashboard:
-    needs: deploy-api
+    needs: [changes, deploy-api]
+    if: always() && (needs.changes.outputs.dashboard == 'true' || github.event_name == 'workflow_dispatch') && (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -114,11 +144,17 @@ jobs:
           cache: npm
           cache-dependency-path: dashboard/package-lock.json
 
+      - name: Get API URL
+        id: api-url
+        run: |
+          URL=$(gcloud run services describe sc-api --region=${{ env.GCP_REGION }} --format='value(status.url)' 2>/dev/null || echo "")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
       - name: Build dashboard
         run: |
           cd dashboard
           npm ci
-          VITE_API_URL=${{ needs.deploy-api.outputs.api_url }} VITE_BASE_URL=/sc-dashboard-securitycentral-491719/ npm run build
+          VITE_API_URL=${{ steps.api-url.outputs.url }} VITE_BASE_URL=/sc-dashboard-securitycentral-491719/ npm run build
 
       - name: Setup GCS bucket
         run: |
@@ -135,16 +171,17 @@ jobs:
       - name: Update API CORS
         run: |
           DASHBOARD_URL="https://storage.googleapis.com/${{ env.GCS_BUCKET }}"
-          API_URL="${{ needs.deploy-api.outputs.api_url }}"
+          API_URL="${{ steps.api-url.outputs.url }}"
           gcloud run services update sc-api \
             --region=${{ env.GCP_REGION }} \
             --set-env-vars="^||^CORS_ORIGINS=${DASHBOARD_URL},${API_URL}||DATABASE_URL=${{ secrets.TIDB_DATABASE_URL }}||JWT_SECRET=${{ secrets.JWT_SECRET }}||NODE_ENV=production"
 
   # ---------------------------------------------------------------
-  # Stage 4: Deploy Monitor to GCE e2-micro (free tier, always-on)
+  # Stage 4: Deploy Monitor (only when sc-monitor changes)
   # ---------------------------------------------------------------
   deploy-monitor:
-    needs: [deploy-api, deploy-dashboard]
+    needs: [changes, deploy-api]
+    if: always() && (needs.changes.outputs.monitor == 'true' || github.event_name == 'workflow_dispatch') && (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -171,16 +208,20 @@ jobs:
           cd sc-monitor
           GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/sc-monitor-linux-amd64 ./cmd/sc-monitor
 
+      - name: Get API URL
+        id: api-url
+        run: |
+          URL=$(gcloud run services describe sc-api --region=${{ env.GCP_REGION }} --format='value(status.url)' 2>/dev/null || echo "")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
       - name: Deploy to GCE
         run: |
-          API_URL="${{ needs.deploy-api.outputs.api_url }}"
+          API_URL="${{ steps.api-url.outputs.url }}"
           ZONE="us-central1-a"
           VM="sc-monitor"
 
-          # Upload binary to GCS
           gsutil cp sc-monitor/bin/sc-monitor-linux-amd64 gs://${{ env.GCS_BUCKET }}/bin/sc-monitor
 
-          # Create VM if it doesn't exist
           if ! gcloud compute instances describe $VM --zone=$ZONE --quiet 2>/dev/null; then
             gcloud compute instances create $VM \
               --zone=$ZONE \
@@ -209,7 +250,6 @@ jobs:
           systemctl start sc-monitor" \
               --quiet
           else
-            # VM exists — update binary and restart
             gcloud compute ssh $VM --zone=$ZONE --command="sudo gsutil cp gs://${{ env.GCS_BUCKET }}/bin/sc-monitor /usr/local/bin/sc-monitor && sudo chmod +x /usr/local/bin/sc-monitor && sudo systemctl restart sc-monitor" --quiet 2>/dev/null || \
-              echo "SSH failed — VM may need manual update. Binary uploaded to gs://${{ env.GCS_BUCKET }}/bin/sc-monitor"
+              echo "SSH failed — binary uploaded to gs://${{ env.GCS_BUCKET }}/bin/sc-monitor"
           fi
