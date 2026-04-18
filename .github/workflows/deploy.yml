@@ -197,11 +197,12 @@ jobs:
 
       - name: Update API CORS
         run: |
-          DASHBOARD_URL="https://storage.googleapis.com/${{ env.GCS_BUCKET }}"
           API_URL="${{ steps.api-url.outputs.url }}"
+          # Origin headers from browsers only contain scheme+host (no path),
+          # so we allow the bare GCS origin.
           gcloud run services update sc-api \
             --region=${{ env.GCP_REGION }} \
-            --set-env-vars="^||^CORS_ORIGINS=${DASHBOARD_URL},${API_URL}||DATABASE_URL=${{ secrets.TIDB_DATABASE_URL }}||JWT_SECRET=${{ secrets.JWT_SECRET }}||NODE_ENV=production||SC_MONITOR_API_KEY=${{ secrets.SC_MONITOR_API_KEY }}"
+            --set-env-vars="^||^CORS_ORIGINS=https://storage.googleapis.com,${API_URL}||DATABASE_URL=${{ secrets.TIDB_DATABASE_URL }}||JWT_SECRET=${{ secrets.JWT_SECRET }}||NODE_ENV=production||SC_MONITOR_API_KEY=${{ secrets.SC_MONITOR_API_KEY }}"
 
   # ---------------------------------------------------------------
   # Stage 4: Deploy Monitor (only when sc-monitor changes)
