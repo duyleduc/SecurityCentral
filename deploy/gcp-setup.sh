@@ -52,6 +52,7 @@ gcloud config set project "$PROJECT_ID"
 echo "[2/8] Enabling required APIs..."
 gcloud services enable \
   run.googleapis.com \
+  compute.googleapis.com \
   sqladmin.googleapis.com \
   artifactregistry.googleapis.com \
   cloudbuild.googleapis.com \
@@ -67,7 +68,7 @@ gcloud iam service-accounts describe "$SA_EMAIL" &>/dev/null 2>&1 || \
     --display-name="GitHub Actions Deploy" --quiet
 
 # Grant roles
-for ROLE in roles/run.admin roles/storage.admin roles/artifactregistry.writer roles/iam.serviceAccountUser; do
+for ROLE in roles/run.admin roles/storage.admin roles/artifactregistry.writer roles/iam.serviceAccountUser roles/compute.admin; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="$ROLE" --quiet
