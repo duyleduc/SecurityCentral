@@ -1,11 +1,11 @@
-.PHONY: start stop restart dev dev-stop dev-restart test build migrate seed ensure-mysql
+.PHONY: start stop restart dev dev-stop dev-restart test build migrate seed ensure-db
 
 # Infrastructure
 start:
 	docker compose up -d
-	@echo "Waiting for MySQL to be healthy..."
-	@until docker compose exec mysql mysqladmin ping -h localhost -u root -prootpassword --silent 2>/dev/null; do sleep 1; done
-	@echo "MySQL is ready."
+	@echo "Waiting for Postgres to be healthy..."
+	@until docker compose exec postgres pg_isready -U securitycentral -d securitycentral 2>/dev/null; do sleep 1; done
+	@echo "Postgres is ready."
 
 stop:
 	-@lsof -ti:3000 | xargs kill -9 2>/dev/null || true
@@ -14,12 +14,12 @@ stop:
 
 restart: stop start
 
-# Ensure MySQL is running (no-op if already up)
-ensure-mysql:
-	@docker compose exec mysql mysqladmin ping -h localhost -u root -prootpassword --silent 2>/dev/null || $(MAKE) start
+# Ensure Postgres is running (no-op if already up)
+ensure-db:
+	@docker compose exec postgres pg_isready -U securitycentral -d securitycentral 2>/dev/null || $(MAKE) start
 
 # Development (starts infra + API + dashboard + monitor)
-dev: ensure-mysql build-monitor
+dev: ensure-db build-monitor
 	cd platform-api && npm run dev &
 	cd dashboard && npm run dev &
 	cd sc-monitor && ./bin/sc-monitor &
@@ -38,7 +38,7 @@ dev-restart:
 	-@pkill -9 sc-monitor 2>/dev/null || true
 	@sleep 1
 	@cd sc-monitor && go build -o bin/sc-monitor ./cmd/sc-monitor
-	@docker compose exec mysql mysqladmin ping -h localhost -u root -prootpassword --silent 2>/dev/null || $(MAKE) start
+	@docker compose exec postgres pg_isready -U securitycentral -d securitycentral 2>/dev/null || $(MAKE) start
 	cd platform-api && npm run dev &
 	cd dashboard && npm run dev &
 	cd sc-monitor && ./bin/sc-monitor &

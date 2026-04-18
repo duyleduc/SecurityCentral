@@ -1,24 +1,21 @@
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: sc-mysql
+  postgres:
+    image: postgres:16-alpine
+    container_name: sc-postgres
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: securitycentral
-      MYSQL_USER: securitycentral
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      POSTGRES_DB: securitycentral
+      POSTGRES_USER: securitycentral
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - mysql-data:/var/lib/mysql
-      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD-SHELL", "pg_isready -U securitycentral -d securitycentral"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
-    command: --default-authentication-plugin=mysql_native_password
-    # Don't expose MySQL to the internet
+    # Don't expose Postgres to the internet
     networks:
       - internal
 
@@ -27,10 +24,10 @@ services:
     container_name: sc-api
     restart: unless-stopped
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: mysql://securitycentral:${MYSQL_PASSWORD}@mysql:3306/securitycentral
+      DATABASE_URL: postgresql://securitycentral:${POSTGRES_PASSWORD}@postgres:5432/securitycentral
       JWT_SECRET: ${JWT_SECRET}
       PORT: "3000"
       NODE_ENV: production
@@ -82,7 +79,7 @@ services:
       - web
 
 volumes:
-  mysql-data:
+  postgres-data:
   caddy-data:
   caddy-config:
 

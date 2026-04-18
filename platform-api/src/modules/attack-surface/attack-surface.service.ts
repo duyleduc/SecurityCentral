@@ -65,7 +65,7 @@ export async function triggerScan(
 
   // Store scan record (raw SQL — model not yet in generated Prisma client).
   await prisma.$executeRawUnsafe(
-    `INSERT INTO attack_surface_scans (id, server_id, org_id, target_ip, status) VALUES (?, ?, ?, ?, 'running')`,
+    `INSERT INTO attack_surface_scans (id, server_id, org_id, target_ip, status) VALUES ($1, $2, $3, $4, 'running')`,
     scanId, serverId, orgId, publicIp,
   );
 
@@ -124,7 +124,7 @@ async function executeScan(
 
     // 5. Persist results.
     await prisma.$executeRawUnsafe(
-      `UPDATE attack_surface_scans SET status = 'completed', open_ports = ?, admin_panels = ?, summary = ?, started_at = ?, completed_at = ? WHERE id = ?`,
+      `UPDATE attack_surface_scans SET status = 'completed', open_ports = $1::jsonb, admin_panels = $2::jsonb, summary = $3::jsonb, started_at = $4, completed_at = $5 WHERE id = $6`,
       JSON.stringify(openPorts),
       JSON.stringify(adminPanels),
       JSON.stringify(summary),
@@ -140,7 +140,7 @@ async function executeScan(
   } catch (err) {
     logger.error('Attack surface scan failed', { scanId, error: (err as Error).message });
     await prisma.$executeRawUnsafe(
-      `UPDATE attack_surface_scans SET status = 'failed', completed_at = ? WHERE id = ?`,
+      `UPDATE attack_surface_scans SET status = 'failed', completed_at = $1 WHERE id = $2`,
       new Date(), scanId,
     );
   }
@@ -227,8 +227,8 @@ export async function getLatestScan(orgId: string, serverId: string): Promise<un
   }
 
   const rows: unknown[] = await prisma.$queryRawUnsafe(
-    `SELECT id, target_ip AS targetIp, status, open_ports AS openPorts, admin_panels AS adminPanels, summary, started_at AS startedAt, completed_at AS completedAt, created_at AS createdAt
-     FROM attack_surface_scans WHERE server_id = ? ORDER BY created_at DESC LIMIT 1`,
+    `SELECT id, target_ip AS "targetIp", status, open_ports AS "openPorts", admin_panels AS "adminPanels", summary, started_at AS "startedAt", completed_at AS "completedAt", created_at AS "createdAt"
+     FROM attack_surface_scans WHERE server_id = $1 ORDER BY created_at DESC LIMIT 1`,
     serverId,
   );
 
@@ -245,8 +245,8 @@ export async function listScans(orgId: string, serverId: string): Promise<unknow
   }
 
   return prisma.$queryRawUnsafe(
-    `SELECT id, target_ip AS targetIp, status, summary, completed_at AS completedAt, created_at AS createdAt
-     FROM attack_surface_scans WHERE server_id = ? ORDER BY created_at DESC LIMIT 20`,
+    `SELECT id, target_ip AS "targetIp", status, summary, completed_at AS "completedAt", created_at AS "createdAt"
+     FROM attack_surface_scans WHERE server_id = $1 ORDER BY created_at DESC LIMIT 20`,
     serverId,
   );
 }

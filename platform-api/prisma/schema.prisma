@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -16,8 +16,8 @@ model Organization {
   name      String   @db.VarChar(100)
   slug      String   @unique @db.VarChar(120)
   plan      String   @default("free") @db.VarChar(20)
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(3)
 
   users                  User[]
   apiKeys                ApiKey[]
@@ -44,8 +44,8 @@ model User {
   name         String   @db.VarChar(100)
   role         String   @default("member") @db.VarChar(20) // owner | admin | member | viewer
   passwordHash String   @map("password_hash") @db.VarChar(255)
-  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamp(3)
 
   org Organization @relation(fields: [orgId], references: [id])
 
@@ -64,10 +64,10 @@ model ApiKey {
   name       String    @db.VarChar(100)
   keyHash    String    @map("key_hash") @db.VarChar(64)
   keyPrefix  String    @map("key_prefix") @db.VarChar(30)
-  scopes     Json      @default("[]") @db.Json
-  lastUsedAt DateTime? @map("last_used_at") @db.DateTime(3)
-  expiresAt  DateTime? @map("expires_at") @db.DateTime(3)
-  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  scopes     Json      @default("[]") @db.JsonB
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamp(3)
+  expiresAt  DateTime? @map("expires_at") @db.Timestamp(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp(3)
 
   org Organization @relation(fields: [orgId], references: [id])
 
@@ -86,11 +86,11 @@ model InstallToken {
   projectId String?   @map("project_id") @db.VarChar(36)
   tokenHash String    @map("token_hash") @db.VarChar(64)
   label     String    @default("") @db.VarChar(100)
-  tags      Json      @default("[]") @db.Json
-  usedAt    DateTime? @map("used_at") @db.DateTime(3)
+  tags      Json      @default("[]") @db.JsonB
+  usedAt    DateTime? @map("used_at") @db.Timestamp(3)
   usedBy    String?   @map("used_by") @db.VarChar(36)
-  expiresAt DateTime  @map("expires_at") @db.DateTime(3)
-  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  expiresAt DateTime  @map("expires_at") @db.Timestamp(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(3)
 
   org     Organization @relation(fields: [orgId], references: [id])
   project Project?     @relation(fields: [projectId], references: [id])
@@ -111,8 +111,8 @@ model Project {
   description String   @default("") @db.VarChar(1000)
   notes       String   @db.Text
   banner      String?  @db.VarChar(500)
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(3)
 
   org               Organization       @relation(fields: [orgId], references: [id])
   servers           Server[]
@@ -143,14 +143,14 @@ model Server {
   cpuModel      String?   @map("cpu_model") @db.VarChar(200)
   totalRamMb    Int?      @map("total_ram_mb")
   totalDiskGb   Int?      @map("total_disk_gb")
-  ipAddresses   Json?     @map("ip_addresses") @db.Json  // ["192.168.1.10", ...]
+  ipAddresses   Json?     @map("ip_addresses") @db.JsonB  // ["192.168.1.10", ...]
   status        String    @default("offline") @db.VarChar(20) // online | offline | warning | critical
   securityScore Int?      @map("security_score")  // 0–100, computed server-side
-  tags          Json      @default("[]") @db.Json
-  lastHeartbeat DateTime? @map("last_heartbeat") @db.DateTime(3)
+  tags          Json      @default("[]") @db.JsonB
+  lastHeartbeat DateTime? @map("last_heartbeat") @db.Timestamp(3)
   apiKeyHash    String?   @map("api_key_hash") @db.VarChar(64)
-  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(3)
 
   project            Project?              @relation(fields: [projectId], references: [id])
   metrics            ServerMetricSnapshot[]
@@ -171,12 +171,12 @@ model AttackSurfaceScan {
   orgId       String    @map("org_id") @db.VarChar(36)
   targetIp    String    @map("target_ip") @db.VarChar(45)
   status      String    @default("pending") @db.VarChar(20) // pending | running | completed | failed
-  openPorts   Json?     @map("open_ports") @db.Json
-  adminPanels Json?     @map("admin_panels") @db.Json
-  summary     Json?     @db.Json
-  startedAt   DateTime? @map("started_at") @db.DateTime(3)
-  completedAt DateTime? @map("completed_at") @db.DateTime(3)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  openPorts   Json?     @map("open_ports") @db.JsonB
+  adminPanels Json?     @map("admin_panels") @db.JsonB
+  summary     Json?     @db.JsonB
+  startedAt   DateTime? @map("started_at") @db.Timestamp(3)
+  completedAt DateTime? @map("completed_at") @db.Timestamp(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(3)
 
   server Server @relation(fields: [serverId], references: [id])
 
@@ -189,8 +189,8 @@ model ServerScoreHistory {
   id        String   @id @default(uuid()) @db.VarChar(36)
   serverId  String   @map("server_id") @db.VarChar(36)
   score     Int      // 0–100
-  breakdown Json     @db.Json  // {critical:N, high:N, medium:N, low:N}
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  breakdown Json     @db.JsonB  // {critical:N, high:N, medium:N, low:N}
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(3)
 
   server Server @relation(fields: [serverId], references: [id])
 
@@ -214,10 +214,10 @@ model Repository {
   defaultBranch String    @default("main") @map("default_branch") @db.VarChar(100)
   language      String?   @db.VarChar(50)
   cloneUrl      String?   @map("clone_url") @db.VarChar(500)
-  lastScanAt    DateTime? @map("last_scan_at") @db.DateTime(3)
-  settings      Json      @default("{}") @db.Json
-  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  lastScanAt    DateTime? @map("last_scan_at") @db.Timestamp(3)
+  settings      Json      @default("{}") @db.JsonB
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(3)
 
   org         Organization @relation(fields: [orgId], references: [id])
   project     Project?     @relation(fields: [projectId], references: [id])
@@ -243,7 +243,7 @@ model ServerMetricSnapshot {
   memory        Float
   disk          Float
   urgent        Boolean  @default(false)
-  alerts        Json     @default("[]") @db.Json
+  alerts        Json     @default("[]") @db.JsonB
   cpuIoWait     Float?   @map("cpu_io_wait")
   swapUsedPct   Float?   @map("swap_used_pct")
   loadAvg1      Float?   @map("load_avg_1")
@@ -255,8 +255,8 @@ model ServerMetricSnapshot {
   netRxBps      BigInt?  @map("net_rx_bps")
   netTxBps      BigInt?  @map("net_tx_bps")
   netErrors     Int?     @map("net_errors")
-  docker        Json?    @db.Json
-  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  docker        Json?    @db.JsonB
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(3)
 
   server Server @relation(fields: [serverId], references: [id])
 
@@ -271,20 +271,20 @@ model ServerMetricSnapshot {
 model SecurityPosture {
   id             String   @id @default(uuid()) @db.VarChar(36)
   serverId       String   @map("server_id") @db.VarChar(36)
-  collectedAt    DateTime @map("collected_at") @db.DateTime(3)
-  listeningPorts Json     @map("listening_ports") @db.Json     // [{port,proto,process,bind}]
-  sshConfig      Json     @map("ssh_config") @db.Json          // {rootLogin,passwordAuth,port,permitEmptyPwd}
+  collectedAt    DateTime @map("collected_at") @db.Timestamp(3)
+  listeningPorts Json     @map("listening_ports") @db.JsonB     // [{port,proto,process,bind}]
+  sshConfig      Json     @map("ssh_config") @db.JsonB          // {rootLogin,passwordAuth,port,permitEmptyPwd}
   firewallActive Boolean  @map("firewall_active")
   firewallType   String   @map("firewall_type") @db.VarChar(20)
-  loggedInUsers  Json     @map("logged_in_users") @db.Json     // [{user,from,since}]
+  loggedInUsers  Json     @map("logged_in_users") @db.JsonB     // [{user,from,since}]
   sshFailures    Int      @map("ssh_failures") @default(0)
-  shellUsers     Json     @map("shell_users") @db.Json         // ["root","ubuntu"]
+  shellUsers     Json     @map("shell_users") @db.JsonB         // ["root","ubuntu"]
   pendingReboot  Boolean  @map("pending_reboot") @default(false)
   openFdAlloc    Int?     @map("open_fd_alloc")
   openFdMax      Int?     @map("open_fd_max")
-  auditResults   Json?    @map("audit_results") @db.Json   // [{id,category,title,status,severity,detail}]
-  bruteForce     Json?    @map("brute_force") @db.Json    // {sshVelocity, sshUniqueIps, ...}
-  createdAt      DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  auditResults   Json?    @map("audit_results") @db.JsonB   // [{id,category,title,status,severity,detail}]
+  bruteForce     Json?    @map("brute_force") @db.JsonB    // {sshVelocity, sshUniqueIps, ...}
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(3)
 
   server Server @relation(fields: [serverId], references: [id])
 
@@ -299,17 +299,17 @@ model SecurityPosture {
 model PackageInventory {
   id                     String   @id @default(uuid()) @db.VarChar(36)
   serverId               String   @map("server_id") @db.VarChar(36)
-  collectedAt            DateTime @map("collected_at") @db.DateTime(3)
+  collectedAt            DateTime @map("collected_at") @db.Timestamp(3)
   osFamily               String   @map("os_family") @db.VarChar(50)
-  packages               Json     @db.Json
-  binaryVersions         Json     @map("binary_versions") @db.Json
+  packages               Json     @db.JsonB
+  binaryVersions         Json     @map("binary_versions") @db.JsonB
   pendingSecurityUpdates Int      @map("pending_security_updates") @default(0)
-  heldPackages           Json     @map("held_packages") @db.Json
+  heldPackages           Json     @map("held_packages") @db.JsonB
   kernelRunning          String?  @map("kernel_running") @db.VarChar(100)
   kernelInstalled        String?  @map("kernel_installed") @db.VarChar(100)
   unattendedUpgrades     Boolean  @map("unattended_upgrades") @default(false)
   packageHash            String   @map("package_hash") @db.VarChar(32)
-  createdAt              DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamp(3)
 
   server Server @relation(fields: [serverId], references: [id])
 
@@ -324,10 +324,10 @@ model PackageInventory {
 model VulnerabilityFeed {
   id         String   @id @default(uuid()) @db.VarChar(36)
   source     String   @unique @db.VarChar(50)
-  lastSyncAt DateTime @map("last_sync_at") @db.DateTime(3)
-  data       Json     @db.Json
-  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  lastSyncAt DateTime @map("last_sync_at") @db.Timestamp(3)
+  data       Json     @db.JsonB
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamp(3)
 
   @@map("vulnerability_feeds")
 }
@@ -344,19 +344,19 @@ model MonitoredEndpoint {
   port            Int      @default(443)
   protocol        String   @default("https") @db.VarChar(10)
   // Tags — [{key: "env", value: "prod"}, ...]
-  tags            Json     @default("[]") @db.Json
+  tags            Json     @default("[]") @db.JsonB
   // Uptime check settings
   uptimeInterval  Int      @default(15)  @map("uptime_interval")  // seconds between pings
   uptimeTimeout   Int      @default(30)  @map("uptime_timeout")   // seconds before timeout
   // SSL/DNS check — runs on create, then daily via scheduler
-  lastSslCheckAt  DateTime? @map("last_ssl_check_at") @db.DateTime(3)
+  lastSslCheckAt  DateTime? @map("last_ssl_check_at") @db.Timestamp(3)
   // Legacy field kept for backwards compat
   checkInterval   String   @default("1h") @map("check_interval") @db.VarChar(10)
   status          String   @default("pending") @db.VarChar(20) // healthy | degraded | down | pending
-  lastCheckAt     DateTime? @map("last_check_at") @db.DateTime(3)
-  nextCheckAt     DateTime? @map("next_check_at") @db.DateTime(3)
-  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  lastCheckAt     DateTime? @map("last_check_at") @db.Timestamp(3)
+  nextCheckAt     DateTime? @map("next_check_at") @db.Timestamp(3)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp(3)
 
   project    Project?            @relation(fields: [projectId], references: [id])
   heartbeats EndpointHeartbeat[]
@@ -378,16 +378,16 @@ model EndpointHeartbeat {
   responseMs Int?     @map("response_ms")
   isUp       Boolean  @map("is_up")
   sslValid   Boolean? @map("ssl_valid")
-  sslExpiry  DateTime? @map("ssl_expiry") @db.DateTime(3)
+  sslExpiry  DateTime? @map("ssl_expiry") @db.Timestamp(3)
   sslIssuer  String?  @map("ssl_issuer") @db.VarChar(255)
   sslDaysLeft Int?    @map("ssl_days_left")
   tlsVersion String?  @map("tls_version") @db.VarChar(20)
   dnsSpf     String?  @map("dns_spf") @db.VarChar(20)   // pass | fail | missing
   dnsDkim    String?  @map("dns_dkim") @db.VarChar(20)
   dnsDmarc   String?  @map("dns_dmarc") @db.VarChar(20)
-  details    Json?    @db.Json
+  details    Json?    @db.JsonB
   error      String?  @db.Text
-  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(3)
 
   endpoint MonitoredEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
 
@@ -409,10 +409,10 @@ model Scan {
   branch        String?   @db.VarChar(255)
   duration      Int?      // milliseconds
   findingsTotal Int       @default(0) @map("findings_total")
-  meta          Json?     @db.Json
-  startedAt     DateTime? @map("started_at") @db.DateTime(3)
-  completedAt   DateTime? @map("completed_at") @db.DateTime(3)
-  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  meta          Json?     @db.JsonB
+  startedAt     DateTime? @map("started_at") @db.Timestamp(3)
+  completedAt   DateTime? @map("completed_at") @db.Timestamp(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(3)
 
   org        Organization @relation(fields: [orgId], references: [id])
   repository Repository?  @relation(fields: [repositoryId], references: [id])
@@ -441,10 +441,10 @@ model Finding {
   description  String?   @db.Text
   cveId        String?   @map("cve_id") @db.VarChar(30)
   cvssScore    Float?    @map("cvss_score")
-  detail       Json?     @db.Json
-  resolvedAt   DateTime? @map("resolved_at") @db.DateTime(3)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  detail       Json?     @db.JsonB
+  resolvedAt   DateTime? @map("resolved_at") @db.Timestamp(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamp(3)
 
   org        Organization @relation(fields: [orgId], references: [id])
   scan       Scan?        @relation(fields: [scanId], references: [id])
@@ -466,14 +466,14 @@ model Integration {
   id            String   @id @default(uuid()) @db.VarChar(36)
   orgId         String   @map("org_id") @db.VarChar(36)
   provider      String   @db.VarChar(20) // github | gitlab
-  config        Json     @db.Json // encrypted tokens, appId, installationId, etc.
+  config        Json     @db.JsonB // encrypted tokens, appId, installationId, etc.
   baseUrl       String?  @map("base_url") @db.VarChar(500) // self-hosted URL (null = cloud)
   verifySsl     Boolean  @default(true) @map("verify_ssl")
   webhookSecret String?  @map("webhook_secret") @db.VarChar(255)
   status        String   @default("active") @db.VarChar(20) // active | error | revoked
   enabled       Boolean  @default(true)
-  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamp(3)
 
   org          Organization @relation(fields: [orgId], references: [id])
   repositories Repository[]
@@ -493,9 +493,9 @@ model AuditLog {
   action     String   @db.VarChar(50)
   entityType String   @map("entity_type") @db.VarChar(50)
   entityId   String?  @map("entity_id") @db.VarChar(36)
-  oldValues  Json?    @map("old_values") @db.Json
-  newValues  Json?    @map("new_values") @db.Json
-  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  oldValues  Json?    @map("old_values") @db.JsonB
+  newValues  Json?    @map("new_values") @db.JsonB
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(3)
 
   org Organization @relation(fields: [orgId], references: [id])
 
@@ -513,9 +513,9 @@ model NotificationPreference {
   channel   String   @db.VarChar(20) // email | slack | webhook
   eventType String   @map("event_type") @db.VarChar(50)
   enabled   Boolean  @default(true)
-  config    Json?    @db.Json
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  config    Json?    @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(3)
 
   org Organization @relation(fields: [orgId], references: [id])
 

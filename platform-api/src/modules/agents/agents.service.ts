@@ -114,7 +114,7 @@ export async function registerAgent(input: AgentRegisterInput) {
 
   // Set label (raw SQL — field not yet in generated Prisma client).
   const label = installToken.label || input.hostname;
-  await prisma.$executeRawUnsafe('UPDATE servers SET label = ? WHERE id = ?', label, server.id);
+  await prisma.$executeRawUnsafe('UPDATE servers SET label = $1 WHERE id = $2', label, server.id);
 
   emitAgentConnected(installToken.orgId, { id: server.id, hostname: input.hostname });
 
@@ -403,7 +403,7 @@ export async function storeSecurityPosture(input: SecurityPostureInput) {
   // Store bruteForce data (raw SQL — field not yet in generated Prisma client).
   if (input.bruteForce) {
     await prisma.$executeRawUnsafe(
-      'UPDATE security_postures SET brute_force = ? WHERE id = ?',
+      'UPDATE security_postures SET brute_force = $1::jsonb WHERE id = $2',
       JSON.stringify(input.bruteForce), (posture as any).id,
     );
   }

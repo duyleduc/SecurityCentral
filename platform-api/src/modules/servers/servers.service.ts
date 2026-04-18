@@ -62,7 +62,7 @@ export async function recomputeScore(serverId: string): Promise<number> {
 
   // Persist on server record (raw SQL — Prisma client not yet regenerated).
   await prisma.$executeRawUnsafe(
-    'UPDATE servers SET security_score = ? WHERE id = ?',
+    'UPDATE servers SET security_score = $1 WHERE id = $2',
     score, serverId,
   );
 
@@ -71,20 +71,20 @@ export async function recomputeScore(serverId: string): Promise<number> {
   todayStart.setHours(0, 0, 0, 0);
 
   const existing: Array<{ id: string }> = await prisma.$queryRawUnsafe(
-    'SELECT id FROM server_score_history WHERE server_id = ? AND created_at >= ? LIMIT 1',
+    'SELECT id FROM server_score_history WHERE server_id = $1 AND created_at >= $2 LIMIT 1',
     serverId, todayStart,
   );
 
   const breakdownJson = JSON.stringify(sevCounts);
   if (existing.length > 0) {
     await prisma.$executeRawUnsafe(
-      'UPDATE server_score_history SET score = ?, breakdown = ? WHERE id = ?',
+      'UPDATE server_score_history SET score = $1, breakdown = $2::jsonb WHERE id = $3',
       score, breakdownJson, existing[0].id,
     );
   } else {
     const id = crypto.randomUUID();
     await prisma.$executeRawUnsafe(
-      'INSERT INTO server_score_history (id, server_id, score, breakdown) VALUES (?, ?, ?, ?)',
+      'INSERT INTO server_score_history (id, server_id, score, breakdown) VALUES ($1, $2, $3, $4::jsonb)',
       id, serverId, score, breakdownJson,
     );
   }
@@ -263,8 +263,8 @@ export async function deleteServer(orgId: string, serverId: string) {
 
   // Cascade delete related data, then the server itself.
   // Use raw SQL for tables not yet in the generated Prisma client.
-  await prisma.$executeRawUnsafe('DELETE FROM package_inventories WHERE server_id = ?', serverId);
-  await prisma.$executeRawUnsafe('DELETE FROM server_score_history WHERE server_id = ?', serverId);
+  await prisma.$executeRawUnsafe('DELETE FROM package_inventories WHERE server_id = $1', serverId);
+  await prisma.$executeRawUnsafe('DELETE FROM server_score_history WHERE server_id = $1', serverId);
   await prisma.$transaction([
     prisma.serverMetricSnapshot.deleteMany({ where: { serverId } }),
     prisma.securityPosture.deleteMany({ where: { serverId } }),
@@ -336,7 +336,7 @@ export async function getScoreHistory(orgId: string, serverId: string, days: num
 
   const since = new Date(Date.now() - days * 86_400_000);
   return prisma.$queryRawUnsafe(
-    'SELECT score, breakdown, created_at AS createdAt FROM server_score_history WHERE server_id = ? AND created_at >= ? ORDER BY created_at ASC',
+    'SELECT score, breakdown, created_at AS "createdAt" FROM server_score_history WHERE server_id = $1 AND created_at >= $2 ORDER BY created_at ASC',
     serverId, since,
   );
 }

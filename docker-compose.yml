@@ -1,35 +1,32 @@
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: sc-mysql
+  postgres:
+    image: postgres:16-alpine
+    container_name: sc-postgres
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: securitycentral
-      MYSQL_USER: securitycentral
-      MYSQL_PASSWORD: securitycentral
+      POSTGRES_DB: securitycentral
+      POSTGRES_USER: securitycentral
+      POSTGRES_PASSWORD: securitycentral
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql-data:/var/lib/mysql
-      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      test: ["CMD-SHELL", "pg_isready -U securitycentral -d securitycentral"]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 10s
-    command: --default-authentication-plugin=mysql_native_password
 
   platform-api:
     build: ./platform-api
     container_name: sc-api
     restart: unless-stopped
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: mysql://securitycentral:securitycentral@mysql:3306/securitycentral
+      DATABASE_URL: postgresql://securitycentral:securitycentral@postgres:5432/securitycentral
       JWT_SECRET: change-me-in-production
       PORT: "3000"
       NODE_ENV: production
@@ -49,4 +46,4 @@ services:
       - "80:80"
 
 volumes:
-  mysql-data:
+  postgres-data:

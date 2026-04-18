@@ -21,7 +21,7 @@ Rebuilding from scratch. Previous implementation preserved in `archived/` for re
 ## Dev Commands
 
 ```bash
-# Start MySQL (required first)
+# Start Postgres (required first)
 make start                    # docker compose up -d + wait for healthy
 
 # Platform API (port 3000)
@@ -58,7 +58,7 @@ Three deployable components in a monorepo:
 - **Auth:** JWT Bearer for browser, API key (`X-Agent-Key`) for Go agents. Middleware in `src/middleware/auth.ts` + `rbac.ts`
 - **Validation:** Zod schemas in `*.validation.ts`, applied via `src/middleware/validate.ts`
 - **Error handling:** `AppError` class with typed error codes in `src/middleware/errors.ts`. All responses wrapped in `successEnvelope()` / error envelope `{ data, meta, errors }`
-- **Database:** MySQL 8 via Prisma ORM. Schema at `prisma/schema.prisma`. Client singleton in `src/lib/prisma.ts`
+- **Database:** PostgreSQL 16 via Prisma ORM. Schema at `prisma/schema.prisma`. Client singleton in `src/lib/prisma.ts`
 - **Env config:** Zod-validated in `src/lib/env.ts` (dotenv loaded)
 - **Scheduled tasks:** In-process `setInterval` in `src/scheduler.ts` (domain checks, offline detection). No Redis/BullMQ for MVP.
 
@@ -84,7 +84,7 @@ Three deployable components in a monorepo:
 
 | Decision | Rationale |
 |----------|-----------|
-| MySQL 8 instead of PostgreSQL | Cloud SQL MySQL, team familiarity |
+| PostgreSQL 16 | Better free cloud options (Neon, Supabase), native JSONB, no TiDB SSL quirks |
 | No Redis/BullMQ for MVP | Async work runs in-process; add later for scaling |
 | Express 4 (not 5) | Stable types, Express 5 types not yet mature |
 | API key auth for agents (not mTLS) | Simpler onboarding |
@@ -110,6 +110,5 @@ Assets grouped under **Projects** within an **Organization** (multi-tenant).
 
 ## Infrastructure
 
-- **MySQL 8** on Docker: `localhost:3306`, credentials `securitycentral:securitycentral`
-- DB connection string: `mysql://securitycentral:securitycentral@localhost:3306/securitycentral`
-- Docker init script: `docker/mysql/init.sql`
+- **PostgreSQL 16** on Docker: `localhost:5432`, credentials `securitycentral:securitycentral`
+- DB connection string: `postgresql://securitycentral:securitycentral@localhost:5432/securitycentral`
