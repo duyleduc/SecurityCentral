@@ -15,12 +15,12 @@ jobs:
   # Stage 1: Migrate database
   # ---------------------------------------------------------------
   migrate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: platform-api/package-lock.json
       - name: Run Prisma migration
@@ -36,7 +36,7 @@ jobs:
   # ---------------------------------------------------------------
   deploy-api:
     needs: migrate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write
@@ -92,7 +92,7 @@ jobs:
   # ---------------------------------------------------------------
   deploy-dashboard:
     needs: deploy-api
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write
@@ -110,7 +110,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: dashboard/package-lock.json
 
@@ -139,3 +139,77 @@ jobs:
           gcloud run services update sc-api \
             --region=${{ env.GCP_REGION }} \
             --set-env-vars="^||^CORS_ORIGINS=${DASHBOARD_URL},${API_URL}||DATABASE_URL=${{ secrets.TIDB_DATABASE_URL }}||JWT_SECRET=${{ secrets.JWT_SECRET }}||NODE_ENV=production"
+
+  # ---------------------------------------------------------------
+  # Stage 4: Deploy Monitor to GCE e2-micro (free tier, always-on)
+  # ---------------------------------------------------------------
+  deploy-monitor:
+    needs: deploy-api
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auth to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build monitor binary
+        run: |
+          cd sc-monitor
+          GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o bin/sc-monitor-linux-amd64 ./cmd/sc-monitor
+
+      - name: Deploy to GCE
+        run: |
+          API_URL="${{ needs.deploy-api.outputs.api_url }}"
+          ZONE="us-central1-a"
+          VM="sc-monitor"
+
+          # Upload binary to GCS
+          gsutil cp sc-monitor/bin/sc-monitor-linux-amd64 gs://${{ env.GCS_BUCKET }}/bin/sc-monitor
+
+          # Create VM if it doesn't exist
+          if ! gcloud compute instances describe $VM --zone=$ZONE --quiet 2>/dev/null; then
+            gcloud compute instances create $VM \
+              --zone=$ZONE \
+              --machine-type=e2-micro \
+              --image-family=debian-12 \
+              --image-project=debian-cloud \
+              --boot-disk-size=10GB \
+              --tags=sc-monitor \
+              --metadata=startup-script="#!/bin/bash
+          gsutil cp gs://${{ env.GCS_BUCKET }}/bin/sc-monitor /usr/local/bin/sc-monitor
+          chmod +x /usr/local/bin/sc-monitor
+          cat > /etc/systemd/system/sc-monitor.service <<EOF
+          [Unit]
+          Description=SecurityCentral Monitor
+          After=network-online.target
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/sc-monitor --api-url ${API_URL}
+          Restart=always
+          RestartSec=5
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+          systemctl daemon-reload
+          systemctl enable sc-monitor
+          systemctl start sc-monitor" \
+              --quiet
+          else
+            # VM exists — update binary and restart
+            gcloud compute ssh $VM --zone=$ZONE --command="sudo gsutil cp gs://${{ env.GCS_BUCKET }}/bin/sc-monitor /usr/local/bin/sc-monitor && sudo chmod +x /usr/local/bin/sc-monitor && sudo systemctl restart sc-monitor" --quiet 2>/dev/null || \
+              echo "SSH failed — VM may need manual update. Binary uploaded to gs://${{ env.GCS_BUCKET }}/bin/sc-monitor"
+          fi
