@@ -208,10 +208,11 @@ jobs:
   # Stage 4: Deploy Monitor (only when sc-monitor changes)
   # ---------------------------------------------------------------
   deploy-monitor:
-    needs: [changes, deploy-api]
+    needs: [changes, deploy-api, deploy-dashboard]
     if: |
       always()
       && (needs.deploy-api.result == 'success' || needs.deploy-api.result == 'skipped')
+      && (needs.deploy-dashboard.result == 'success' || needs.deploy-dashboard.result == 'skipped')
       && (
         (github.event_name == 'push' && needs.changes.outputs.monitor == 'true')
         || (github.event_name == 'workflow_dispatch' && (inputs.target == 'all' || inputs.target == 'monitor'))
