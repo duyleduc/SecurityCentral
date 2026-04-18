@@ -72,6 +72,7 @@ jobs:
           npx prisma db push --accept-data-loss
         env:
           DATABASE_URL: ${{ secrets.TIDB_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
 
   # ---------------------------------------------------------------
   # Stage 2: Deploy API (only when api source changes)
