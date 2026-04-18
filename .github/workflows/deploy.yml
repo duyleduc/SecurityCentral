@@ -103,6 +103,7 @@ jobs:
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             NODE_ENV=production
             CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
+            SC_MONITOR_API_KEY=${{ secrets.SC_MONITOR_API_KEY }}
           flags: >-
             --allow-unauthenticated
             --memory=512Mi
@@ -174,7 +175,7 @@ jobs:
           API_URL="${{ steps.api-url.outputs.url }}"
           gcloud run services update sc-api \
             --region=${{ env.GCP_REGION }} \
-            --set-env-vars="^||^CORS_ORIGINS=${DASHBOARD_URL},${API_URL}||DATABASE_URL=${{ secrets.TIDB_DATABASE_URL }}||JWT_SECRET=${{ secrets.JWT_SECRET }}||NODE_ENV=production"
+            --set-env-vars="^||^CORS_ORIGINS=${DASHBOARD_URL},${API_URL}||DATABASE_URL=${{ secrets.TIDB_DATABASE_URL }}||JWT_SECRET=${{ secrets.JWT_SECRET }}||NODE_ENV=production||SC_MONITOR_API_KEY=${{ secrets.SC_MONITOR_API_KEY }}"
 
   # ---------------------------------------------------------------
   # Stage 4: Deploy Monitor (only when sc-monitor changes)
@@ -239,6 +240,7 @@ jobs:
           After=network-online.target
           [Service]
           Type=simple
+          Environment=SC_API_KEY=${{ secrets.SC_MONITOR_API_KEY }}
           ExecStart=/usr/local/bin/sc-monitor --api-url ${API_URL}
           Restart=always
           RestartSec=5
