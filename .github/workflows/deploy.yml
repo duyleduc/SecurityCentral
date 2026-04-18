@@ -144,7 +144,7 @@ jobs:
   # Stage 4: Deploy Monitor to GCE e2-micro (free tier, always-on)
   # ---------------------------------------------------------------
   deploy-monitor:
-    needs: deploy-dashboard
+    needs: [deploy-api, deploy-dashboard]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
