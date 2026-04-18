@@ -181,7 +181,7 @@ jobs:
         run: |
           cd dashboard
           npm ci
-          VITE_API_URL=${{ steps.api-url.outputs.url }} npm run build
+          VITE_API_URL=${{ steps.api-url.outputs.url }} VITE_BASE_URL=/sc-dashboard-securitycentral-491719/ npm run build
 
       - name: Setup GCS bucket
         run: |

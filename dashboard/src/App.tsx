@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -38,7 +38,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <BrowserRouter>
+        <BrowserRouter basename={import.meta.env.BASE_URL}>
           <AuthProvider>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
@@ -67,6 +67,9 @@ export default function App() {
                 <Route path="/integrations/:provider/repos" element={<RepoSelectionPage />} />
                 <Route path="/onboarding" element={<OnboardingPage />} />
               </Route>
+
+              {/* Catch-all: e.g. /index.html from GCS bucket root */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </AuthProvider>
         </BrowserRouter>
