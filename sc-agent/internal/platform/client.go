@@ -168,8 +168,10 @@ type SSHConfig struct {
 }
 
 type FWInfo struct {
-	Active bool   `json:"active"`
-	Type   string `json:"type"`
+	Active        bool     `json:"active"`
+	Type          string   `json:"type"`
+	DefaultPolicy string   `json:"defaultPolicy,omitempty"`
+	Issues        []string `json:"issues,omitempty"`
 }
 
 type SessionInfo struct {

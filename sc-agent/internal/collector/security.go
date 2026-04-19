@@ -41,7 +41,10 @@ type SSHConfigInfo struct {
 
 type FirewallInfo struct {
 	Active bool
-	Type   string // "ufw", "iptables", "nftables", "none"
+	Type   string // "ufw", "iptables", "nftables", "none", "iptables+fail2ban"
+	// Quality checks — set when firewall is active but rules are problematic.
+	DefaultPolicy string   // "drop" / "accept" / "reject" (INPUT chain policy)
+	Issues        []string // list of misconfigurations found
 }
 
 type UserSession struct {
@@ -214,40 +217,150 @@ func parseSSHConfig() SSHConfigInfo {
 // --- Firewall ---
 
 func detectFirewall() FirewallInfo {
-	// Check ufw first.
-	if out, err := exec.Command("ufw", "status").Output(); err == nil {
+	// Check ufw — if active, analyze its policy.
+	if out, err := exec.Command("ufw", "status", "verbose").Output(); err == nil {
 		status := strings.ToLower(string(out))
 		if strings.Contains(status, "status: active") {
-			return FirewallInfo{Active: true, Type: "ufw"}
+			return analyzeUFW(string(out))
 		}
-		return FirewallInfo{Active: false, Type: "ufw"}
+		// ufw installed but inactive — don't return, check iptables/nftables next.
 	}
 
-	// Check nftables.
+	// Check nftables (modern default on Debian 10+).
 	if out, err := exec.Command("nft", "list", "ruleset").Output(); err == nil {
 		if strings.TrimSpace(string(out)) != "" {
-			return FirewallInfo{Active: true, Type: "nftables"}
+			return analyzeNftables(string(out))
 		}
 	}
 
-	// Check iptables.
-	if out, err := exec.Command("iptables", "-L", "-n").Output(); err == nil {
-		lines := strings.Split(string(out), "\n")
-		// More than 3 lines means rules exist beyond default headers.
-		ruleCount := 0
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if line != "" && !strings.HasPrefix(line, "Chain") && !strings.HasPrefix(line, "target") {
-				ruleCount++
+	// Check iptables (legacy or iptables-nft backend).
+	if out, err := exec.Command("iptables", "-L", "-n", "-v").Output(); err == nil {
+		raw := string(out)
+		fw := analyzeIptables(raw)
+		if fw.Active {
+			// Check for fail2ban augmentation.
+			if strings.Contains(raw, "f2b-") {
+				fw.Type = "iptables+fail2ban"
+			}
+			return fw
+		}
+	}
+
+	// Fail2ban alone (service running) counts as basic protection.
+	if out, err := exec.Command("systemctl", "is-active", "fail2ban").Output(); err == nil {
+		if strings.TrimSpace(string(out)) == "active" {
+			return FirewallInfo{
+				Active: true, Type: "fail2ban",
+				Issues: []string{"fail2ban active but no host firewall (iptables/nftables/ufw) — only protects against brute force, not unauthorized port access"},
 			}
 		}
-		if ruleCount > 0 {
-			return FirewallInfo{Active: true, Type: "iptables"}
-		}
-		return FirewallInfo{Active: false, Type: "iptables"}
 	}
 
 	return FirewallInfo{Active: false, Type: "none"}
+}
+
+// analyzeUFW parses `ufw status verbose` and checks default policies.
+func analyzeUFW(output string) FirewallInfo {
+	fw := FirewallInfo{Active: true, Type: "ufw"}
+	var issues []string
+	hasIncomingRule := false
+	defaultInPolicy := "unknown"
+
+	for _, line := range strings.Split(output, "\n") {
+		l := strings.ToLower(strings.TrimSpace(line))
+		if strings.HasPrefix(l, "default:") {
+			// "Default: deny (incoming), allow (outgoing), disabled (routed)"
+			if strings.Contains(l, "allow (incoming)") {
+				defaultInPolicy = "accept"
+				issues = append(issues, "UFW default incoming policy is ALLOW — every port is open unless explicitly denied. Set: sudo ufw default deny incoming")
+			} else if strings.Contains(l, "deny (incoming)") || strings.Contains(l, "reject (incoming)") {
+				defaultInPolicy = "drop"
+			}
+		}
+		// Lines like "22/tcp ALLOW IN ..."
+		if strings.Contains(l, "allow in") || strings.Contains(l, "allow from") {
+			hasIncomingRule = true
+		}
+	}
+
+	if defaultInPolicy == "drop" && !hasIncomingRule {
+		issues = append(issues, "UFW denies all incoming but has NO allow rules — this will break legitimate access (SSH will lock you out after reconnect)")
+	}
+	fw.DefaultPolicy = defaultInPolicy
+	fw.Issues = issues
+	return fw
+}
+
+// analyzeNftables checks the ruleset for common misconfigurations.
+func analyzeNftables(output string) FirewallInfo {
+	fw := FirewallInfo{Active: true, Type: "nftables"}
+	var issues []string
+	lower := strings.ToLower(output)
+
+	// Check if INPUT chain has a default policy.
+	if strings.Contains(lower, "hook input") {
+		if strings.Contains(lower, "policy accept") {
+			fw.DefaultPolicy = "accept"
+			issues = append(issues, "nftables input chain has policy ACCEPT (default allow) — rules only block, not allowlist. Set policy drop for defence in depth.")
+		} else if strings.Contains(lower, "policy drop") {
+			fw.DefaultPolicy = "drop"
+		}
+	}
+
+	// Count rules — too few may indicate skeleton config.
+	ruleCount := strings.Count(lower, "\n\t\t") // rough heuristic
+	if ruleCount < 3 {
+		issues = append(issues, "nftables has very few rules (<3) — may not be enforcing meaningful restrictions")
+	}
+	fw.Issues = issues
+	return fw
+}
+
+// analyzeIptables inspects iptables output (with -v for policies).
+func analyzeIptables(output string) FirewallInfo {
+	fw := FirewallInfo{Active: false, Type: "iptables"}
+	var issues []string
+	ruleCount := 0
+	inputPolicy := "unknown"
+
+	for _, line := range strings.Split(output, "\n") {
+		l := strings.TrimSpace(line)
+		if l == "" {
+			continue
+		}
+		// "Chain INPUT (policy ACCEPT 100 packets, 10000 bytes)"
+		if strings.HasPrefix(l, "Chain INPUT") {
+			if strings.Contains(l, "policy ACCEPT") {
+				inputPolicy = "accept"
+			} else if strings.Contains(l, "policy DROP") {
+				inputPolicy = "drop"
+			} else if strings.Contains(l, "policy REJECT") {
+				inputPolicy = "reject"
+			}
+			continue
+		}
+		if strings.HasPrefix(l, "Chain ") || strings.HasPrefix(l, "target") || strings.HasPrefix(l, "pkts") {
+			continue
+		}
+		ruleCount++
+	}
+
+	fw.DefaultPolicy = inputPolicy
+
+	if ruleCount == 0 && inputPolicy != "drop" && inputPolicy != "reject" {
+		// No rules AND default is accept = not actually firewalling.
+		return FirewallInfo{Active: false, Type: "iptables",
+			Issues: []string{"iptables has no rules and INPUT policy is ACCEPT — not providing any protection"}}
+	}
+
+	fw.Active = true
+
+	if inputPolicy == "accept" && ruleCount < 5 {
+		issues = append(issues, "iptables INPUT policy is ACCEPT with very few rules — server is effectively unfirewalled. Set: iptables -P INPUT DROP after configuring allow rules.")
+	}
+
+	fw.Issues = issues
+	return fw
 }
 
 // --- Logged-in Users ---

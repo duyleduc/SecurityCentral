@@ -307,6 +307,7 @@ export interface SecurityPosture {
   sshConfig: { rootLogin: string; passwordAuth: string; port: number; permitEmptyPwd: string };
   firewallActive: boolean;
   firewallType: string;
+  firewallDetail?: { defaultPolicy?: string; issues?: string[] } | null;
   loggedInUsers: Array<{ user: string; from: string; since: string }>;
   sshFailures: number;
   shellUsers: string[];

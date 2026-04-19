@@ -276,7 +276,8 @@ model SecurityPosture {
   listeningPorts Json     @map("listening_ports") @db.JsonB     // [{port,proto,process,bind}]
   sshConfig      Json     @map("ssh_config") @db.JsonB          // {rootLogin,passwordAuth,port,permitEmptyPwd}
   firewallActive Boolean  @map("firewall_active")
-  firewallType   String   @map("firewall_type") @db.VarChar(20)
+  firewallType   String   @map("firewall_type") @db.VarChar(50)
+  firewallDetail Json?    @map("firewall_detail") @db.JsonB  // { defaultPolicy, issues[] }
   loggedInUsers  Json     @map("logged_in_users") @db.JsonB     // [{user,from,since}]
   sshFailures    Int      @map("ssh_failures") @default(0)
   shellUsers     Json     @map("shell_users") @db.JsonB         // ["root","ubuntu"]

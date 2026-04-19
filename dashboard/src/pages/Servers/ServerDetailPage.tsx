@@ -1526,13 +1526,31 @@ function SecurityPostureTab({ posture }: { posture: SecurityPosture | null }) {
     <Stack spacing={1.5}>
       {/* Quick status chips */}
       <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
-        <Tooltip title={fwOk
-          ? `${posture.firewallType} firewall is active and blocking unauthorized traffic.`
-          : 'CRITICAL: No firewall detected. Server is directly exposed to the internet. Enable ufw, nftables, or iptables immediately.'} arrow>
-          <Chip size="small" icon={fwOk ? <CheckCircleIcon /> : <CancelIcon />}
-            label={fwOk ? `Firewall (${posture.firewallType})` : 'No firewall'}
-            color={fwOk ? 'success' : 'error'} variant="outlined" />
-        </Tooltip>
+        {(() => {
+          const fwIssues = posture.firewallDetail?.issues ?? [];
+          const hasIssues = fwIssues.length > 0;
+          const color = !fwOk ? 'error' : hasIssues ? 'warning' : 'success';
+          const label = !fwOk
+            ? 'No firewall'
+            : hasIssues
+              ? `Firewall (${posture.firewallType}) — misconfigured`
+              : `Firewall (${posture.firewallType})`;
+          const icon = !fwOk
+            ? <CancelIcon />
+            : hasIssues
+              ? <WarningIcon />
+              : <CheckCircleIcon />;
+          const tooltipContent = !fwOk
+            ? 'CRITICAL: No firewall detected. Server is directly exposed to the internet. Enable ufw, nftables, or iptables immediately.'
+            : hasIssues
+              ? `${posture.firewallType} is active but has ${fwIssues.length} configuration issue${fwIssues.length > 1 ? 's' : ''}:\n\n${fwIssues.map((i) => '• ' + i).join('\n')}`
+              : `${posture.firewallType} firewall is active and blocking unauthorized traffic.${posture.firewallDetail?.defaultPolicy ? `\n\nDefault input policy: ${posture.firewallDetail.defaultPolicy}` : ''}`;
+          return (
+            <Tooltip title={<span style={{ whiteSpace: 'pre-line' }}>{tooltipContent}</span>} arrow>
+              <Chip size="small" icon={icon} label={label} color={color} variant="outlined" />
+            </Tooltip>
+          );
+        })()}
         <Tooltip title={sshOk
           ? 'SSH is hardened: root login disabled and password authentication disabled (key-based auth only).'
           : 'CRITICAL: SSH allows root login or password authentication. Attackers can brute force. Edit /etc/ssh/sshd_config: set PermitRootLogin no and PasswordAuthentication no.'} arrow>
@@ -1578,13 +1596,27 @@ function SecurityPostureTab({ posture }: { posture: SecurityPosture | null }) {
       {showPorts && (
         <Card sx={{ bgcolor: 'rgba(15,23,42,0.5)' }}>
           <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Orange = bound to 0.0.0.0 or :: (reachable from internet if firewall allows).
+              Grey = bound to 127.0.0.1 (localhost only, safe).
+              For Docker containers, the bind address depends on how you started them (<code>-p 443:443</code> is public, <code>-p 127.0.0.1:443:443</code> is local).
+            </Typography>
             <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-              {posture.listeningPorts.map((p, i) => (
-                <Chip key={i} size="small" variant="outlined"
-                  label={`${p.port}/${p.proto} ${p.process || ''}`}
-                  color={p.bind === '0.0.0.0' || p.bind === '::' || p.bind === '' ? 'warning' : 'default'}
-                  sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-              ))}
+              {posture.listeningPorts.map((p, i) => {
+                const isPublic = p.bind === '0.0.0.0' || p.bind === '::' || p.bind === '';
+                const bindLabel = p.bind || '0.0.0.0';
+                const tooltip = isPublic
+                  ? `PUBLIC: ${p.process || 'unknown'} listening on ${bindLabel}:${p.port}/${p.proto}. Reachable from the internet unless blocked by firewall.`
+                  : `LOCAL: ${p.process || 'unknown'} listening on ${bindLabel}:${p.port}/${p.proto}. Only accessible from the same machine.`;
+                return (
+                  <Tooltip key={i} title={tooltip} arrow>
+                    <Chip size="small" variant="outlined"
+                      label={`${bindLabel}:${p.port}/${p.proto} ${p.process || ''}`}
+                      color={isPublic ? 'warning' : 'default'}
+                      sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
+                  </Tooltip>
+                );
+              })}
             </Stack>
           </CardContent>
         </Card>

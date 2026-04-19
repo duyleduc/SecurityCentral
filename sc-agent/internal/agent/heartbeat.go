@@ -128,8 +128,10 @@ func (a *Agent) sendSecurityPosture() {
 			PermitEmptyPwd: sec.SSHConfig.PermitEmptyPwd,
 		},
 		Firewall: platform.FWInfo{
-			Active: sec.Firewall.Active,
-			Type:   sec.Firewall.Type,
+			Active:        sec.Firewall.Active,
+			Type:          sec.Firewall.Type,
+			DefaultPolicy: sec.Firewall.DefaultPolicy,
+			Issues:        sec.Firewall.Issues,
 		},
 		OpenFDs: platform.FDEntry{
 			Allocated: sec.OpenFDs.Allocated,

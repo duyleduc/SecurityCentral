@@ -356,7 +356,7 @@ interface SecurityPostureInput {
   readonly collectedAt: string;
   readonly listeningPorts: ReadonlyArray<{ port: number; proto: string; process: string; bind: string }>;
   readonly sshConfig: { rootLogin: string; passwordAuth: string; port: number; permitEmptyPwd: string };
-  readonly firewall: { active: boolean; type: string };
+  readonly firewall: { active: boolean; type: string; defaultPolicy?: string; issues?: ReadonlyArray<string> };
   readonly loggedInUsers: ReadonlyArray<{ user: string; from: string; since: string }>;
   readonly sshFailures: number;
   readonly shellUsers: readonly string[];
@@ -390,6 +390,9 @@ export async function storeSecurityPosture(input: SecurityPostureInput) {
       sshConfig: JSON.parse(JSON.stringify(input.sshConfig)),
       firewallActive: input.firewall.active,
       firewallType: input.firewall.type,
+      firewallDetail: (input.firewall.defaultPolicy || (input.firewall.issues && input.firewall.issues.length > 0))
+        ? JSON.parse(JSON.stringify({ defaultPolicy: input.firewall.defaultPolicy, issues: input.firewall.issues ?? [] }))
+        : undefined,
       loggedInUsers: JSON.parse(JSON.stringify(input.loggedInUsers)),
       sshFailures: input.sshFailures,
       shellUsers: JSON.parse(JSON.stringify(input.shellUsers)),

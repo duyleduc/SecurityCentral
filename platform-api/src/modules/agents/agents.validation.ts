@@ -160,6 +160,8 @@ export const SecurityPostureSchema = z.object({
   firewall: z.object({
     active: z.boolean(),
     type: z.string(),
+    defaultPolicy: z.string().optional(),
+    issues: nullableArray(z.string()).optional(),
   }),
   loggedInUsers: nullableArray(z.object({
     user: z.string(),
