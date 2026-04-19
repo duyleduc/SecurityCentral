@@ -1520,7 +1520,13 @@ function SecurityPostureTab({ posture }: { posture: SecurityPosture | null }) {
   const auditFail = auditResults.filter((r) => r.status === 'fail');
   const auditWarn = auditResults.filter((r) => r.status === 'warn');
   const auditPass = auditResults.filter((r) => r.status === 'pass');
-  const publicPorts = posture.listeningPorts.filter((p) => p.bind === '0.0.0.0' || p.bind === '::' || p.bind === '');
+  // Ports truly exposed to the internet (bound publicly AND firewall allows or has no restrictions).
+  const internetPorts = posture.listeningPorts.filter((p) => p.exposure === 'internet');
+  const restrictedPorts = posture.listeningPorts.filter((p) => p.exposure === 'restricted');
+  // Fallback for older agents that don't report exposure: use bind as before.
+  const publicPorts = posture.listeningPorts.some((p) => p.exposure)
+    ? internetPorts
+    : posture.listeningPorts.filter((p) => p.bind === '0.0.0.0' || p.bind === '::' || p.bind === '');
 
   return (
     <Stack spacing={1.5}>
@@ -1571,9 +1577,15 @@ function SecurityPostureTab({ posture }: { posture: SecurityPosture | null }) {
               color={posture.sshFailures > 10 ? 'error' : 'warning'} variant="outlined" />
           </Tooltip>
         )}
-        <Chip size="small" label={`${publicPorts.length} public ports`}
-          color={publicPorts.length > 5 ? 'warning' : 'default'} variant="outlined"
-          onClick={() => setShowPorts(!showPorts)} sx={{ cursor: 'pointer' }} />
+        <Tooltip title={
+          restrictedPorts.length > 0
+            ? `${publicPorts.length} port${publicPorts.length === 1 ? '' : 's'} reachable from the internet. ${restrictedPorts.length} more allow only specific source IPs (safe).`
+            : `${publicPorts.length} port${publicPorts.length === 1 ? '' : 's'} reachable from the internet.`
+        } arrow>
+          <Chip size="small" label={`${publicPorts.length} exposed ports${restrictedPorts.length > 0 ? ` (+${restrictedPorts.length} restricted)` : ''}`}
+            color={publicPorts.length > 5 ? 'warning' : 'default'} variant="outlined"
+            onClick={() => setShowPorts(!showPorts)} sx={{ cursor: 'pointer' }} />
+        </Tooltip>
         <Chip size="small" label={`${posture.shellUsers.length} shell users (${posture.shellUsers.join(', ')})`} variant="outlined" />
         {posture.loggedInUsers.length > 0 && (
           <Chip size="small" label={`${posture.loggedInUsers.length} active session${posture.loggedInUsers.length > 1 ? 's' : ''}`} variant="outlined" />
@@ -1597,22 +1609,42 @@ function SecurityPostureTab({ posture }: { posture: SecurityPosture | null }) {
         <Card sx={{ bgcolor: 'rgba(15,23,42,0.5)' }}>
           <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Orange = bound to 0.0.0.0 or :: (reachable from internet if firewall allows).
-              Grey = bound to 127.0.0.1 (localhost only, safe).
-              For Docker containers, the bind address depends on how you started them (<code>-p 443:443</code> is public, <code>-p 127.0.0.1:443:443</code> is local).
+              <strong>Red</strong> = exposed to the internet (bound publicly, firewall allows anywhere).
+              <strong> Green</strong> = restricted (firewall allows only specific IPs).
+              <strong> Blue</strong> = blocked (firewall drops traffic despite public bind).
+              <strong> Grey</strong> = localhost only.
             </Typography>
             <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
               {posture.listeningPorts.map((p, i) => {
-                const isPublic = p.bind === '0.0.0.0' || p.bind === '::' || p.bind === '';
                 const bindLabel = p.bind || '0.0.0.0';
-                const tooltip = isPublic
-                  ? `PUBLIC: ${p.process || 'unknown'} listening on ${bindLabel}:${p.port}/${p.proto}. Reachable from the internet unless blocked by firewall.`
-                  : `LOCAL: ${p.process || 'unknown'} listening on ${bindLabel}:${p.port}/${p.proto}. Only accessible from the same machine.`;
+                const exposure = p.exposure ?? (p.bind === '0.0.0.0' || p.bind === '::' || p.bind === '' ? 'internet' : 'localhost');
+                let color: 'error' | 'success' | 'info' | 'default' = 'default';
+                let tooltip = '';
+                switch (exposure) {
+                  case 'internet':
+                    color = 'error';
+                    tooltip = `EXPOSED: ${p.process || 'unknown'} on ${bindLabel}:${p.port}/${p.proto} is reachable from the internet. No firewall restriction.`;
+                    break;
+                  case 'restricted':
+                    color = 'success';
+                    tooltip = `RESTRICTED: ${p.process || 'unknown'} on ${bindLabel}:${p.port}/${p.proto} is bound publicly but firewall allows only: ${(p.allowedFrom ?? []).join(', ')}`;
+                    break;
+                  case 'blocked':
+                    color = 'info';
+                    tooltip = `BLOCKED: ${p.process || 'unknown'} on ${bindLabel}:${p.port}/${p.proto} is bound publicly but firewall default policy blocks all inbound traffic to it.`;
+                    break;
+                  case 'localhost':
+                    color = 'default';
+                    tooltip = `LOCAL: ${p.process || 'unknown'} on ${bindLabel}:${p.port}/${p.proto} is only accessible from the same machine.`;
+                    break;
+                  default:
+                    tooltip = `${p.process || 'unknown'} on ${bindLabel}:${p.port}/${p.proto}. Exposure unknown (agent may be old or firewall unreadable).`;
+                }
                 return (
                   <Tooltip key={i} title={tooltip} arrow>
                     <Chip size="small" variant="outlined"
                       label={`${bindLabel}:${p.port}/${p.proto} ${p.process || ''}`}
-                      color={isPublic ? 'warning' : 'default'}
+                      color={color}
                       sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
                   </Tooltip>
                 );

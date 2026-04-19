@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -26,10 +27,17 @@ type SecurityData struct {
 }
 
 type PortInfo struct {
-	Port    uint32
-	Proto   string
-	Process string
-	Bind    string // "0.0.0.0" = externally bound
+	Port      uint32
+	Proto     string
+	Process   string
+	Bind      string   // "0.0.0.0" = externally bound
+	// Firewall exposure analysis — set after cross-referencing with firewall rules.
+	// "internet" = reachable from anywhere
+	// "restricted" = allowed only from specific IPs/subnets (list in AllowedFrom)
+	// "blocked" = firewall drops all traffic to this port
+	// "unknown" = couldn't determine (no firewall or unreadable rules)
+	Exposure    string
+	AllowedFrom []string // source IPs/CIDRs allowed to reach this port
 }
 
 type SSHConfigInfo struct {
@@ -90,6 +98,9 @@ func (c *securityCollector) Collect() (*Snapshot, error) {
 		PendingReboot:  checkPendingReboot(),
 		OpenFDs:        collectFDInfo(),
 	}
+
+	// Annotate each listening port with its firewall exposure.
+	d.ListeningPorts = annotatePortExposure(d.ListeningPorts, d.Firewall)
 
 	// SSH failures (delta since last).
 	curFail := countSSHFailures()
@@ -472,4 +483,143 @@ func collectFDInfo() FDInfo {
 	alloc, _ := strconv.Atoi(fields[0])
 	max, _ := strconv.Atoi(fields[2])
 	return FDInfo{Allocated: alloc, Max: max}
+}
+
+// --- Port exposure analysis ---
+
+// portRule represents a firewall rule allowing traffic to a specific port.
+type portRule struct {
+	port    uint32
+	proto   string // "tcp" or "udp"
+	sources []string
+}
+
+// annotatePortExposure cross-references listening ports with firewall rules
+// to classify each port as internet-reachable, restricted, blocked, or unknown.
+func annotatePortExposure(ports []PortInfo, fw FirewallInfo) []PortInfo {
+	// Only annotate ports bound publicly. Localhost-bound ports are safe.
+	isPublic := func(bind string) bool {
+		return bind == "0.0.0.0" || bind == "::" || bind == ""
+	}
+
+	// If no firewall, public ports are "internet" exposed.
+	if !fw.Active {
+		for i := range ports {
+			if isPublic(ports[i].Bind) {
+				ports[i].Exposure = "internet"
+			} else {
+				ports[i].Exposure = "localhost"
+			}
+		}
+		return ports
+	}
+
+	// Parse firewall rules to find per-port allow rules.
+	allowRules := parseAllowRules(fw.Type)
+
+	for i := range ports {
+		if !isPublic(ports[i].Bind) {
+			ports[i].Exposure = "localhost"
+			continue
+		}
+
+		// Look for rules matching this port.
+		var sources []string
+		worldOpen := false
+		for _, r := range allowRules {
+			if r.port != ports[i].Port && r.port != 0 {
+				continue
+			}
+			if r.proto != "" && r.proto != ports[i].Proto {
+				continue
+			}
+			for _, s := range r.sources {
+				sources = append(sources, s)
+				if s == "0.0.0.0/0" || s == "::/0" || s == "anywhere" {
+					worldOpen = true
+				}
+			}
+		}
+
+		switch {
+		case worldOpen:
+			ports[i].Exposure = "internet"
+			ports[i].AllowedFrom = sources
+		case len(sources) > 0:
+			ports[i].Exposure = "restricted"
+			ports[i].AllowedFrom = sources
+		default:
+			// No explicit allow rule. Depends on default policy.
+			// If default is drop/reject, port is effectively blocked.
+			if fw.DefaultPolicy == "drop" || fw.DefaultPolicy == "reject" {
+				ports[i].Exposure = "blocked"
+			} else {
+				ports[i].Exposure = "internet" // accept policy + no rule = open
+			}
+		}
+	}
+
+	return ports
+}
+
+// parseAllowRules extracts per-port allow rules from the active firewall.
+func parseAllowRules(fwType string) []portRule {
+	// Prefer iptables-save output which is easier to parse than iptables -L.
+	if out, err := exec.Command("iptables-save").Output(); err == nil {
+		return parseIptablesSave(string(out))
+	}
+	// Fallback: iptables -L
+	if out, err := exec.Command("iptables", "-L", "INPUT", "-n").Output(); err == nil {
+		return parseIptablesL(string(out))
+	}
+	return nil
+}
+
+// parseIptablesSave extracts -A INPUT ... -p tcp --dport N -j ACCEPT lines.
+var iptSaveRegex = regexp.MustCompile(`-A INPUT\b.*?-p (tcp|udp).*?--dport (\d+)(?:.*?-s ([\d./]+))?.*?-j (ACCEPT|DROP|REJECT)`)
+
+func parseIptablesSave(output string) []portRule {
+	var rules []portRule
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.Contains(line, "-A INPUT") || !strings.Contains(line, "ACCEPT") {
+			continue
+		}
+		m := iptSaveRegex.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		port, _ := strconv.Atoi(m[2])
+		source := m[3]
+		if source == "" {
+			source = "0.0.0.0/0"
+		}
+		rules = append(rules, portRule{
+			port:    uint32(port),
+			proto:   m[1],
+			sources: []string{source},
+		})
+	}
+	return rules
+}
+
+// parseIptablesL parses `iptables -L INPUT -n` format as fallback.
+// Example line: "ACCEPT     tcp  --  10.0.0.0/8           0.0.0.0/0            tcp dpt:3306"
+var iptLRegex = regexp.MustCompile(`^ACCEPT\s+(tcp|udp)\s+\S+\s+(\S+)\s+\S+\s+(?:tcp|udp)\s+dpt:(\d+)`)
+
+func parseIptablesL(output string) []portRule {
+	var rules []portRule
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		m := iptLRegex.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		port, _ := strconv.Atoi(m[3])
+		rules = append(rules, portRule{
+			port:    uint32(port),
+			proto:   m[1],
+			sources: []string{m[2]},
+		})
+	}
+	return rules
 }

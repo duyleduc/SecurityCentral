@@ -142,6 +142,7 @@ func (a *Agent) sendSecurityPosture() {
 	for _, p := range sec.ListeningPorts {
 		req.ListeningPorts = append(req.ListeningPorts, platform.PortEntry{
 			Port: p.Port, Proto: p.Proto, Process: p.Process, Bind: p.Bind,
+			Exposure: p.Exposure, AllowedFrom: p.AllowedFrom,
 		})
 	}
 	for _, s := range sec.LoggedInUsers {

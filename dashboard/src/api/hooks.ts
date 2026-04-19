@@ -303,7 +303,7 @@ export interface SecurityPosture {
   id: string;
   serverId: string;
   collectedAt: string;
-  listeningPorts: Array<{ port: number; proto: string; process: string; bind: string }>;
+  listeningPorts: Array<{ port: number; proto: string; process: string; bind: string; exposure?: string; allowedFrom?: string[] }>;
   sshConfig: { rootLogin: string; passwordAuth: string; port: number; permitEmptyPwd: string };
   firewallActive: boolean;
   firewallType: string;

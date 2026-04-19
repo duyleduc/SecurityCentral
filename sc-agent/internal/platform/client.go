@@ -154,10 +154,12 @@ type AuditResultEntry struct {
 }
 
 type PortEntry struct {
-	Port    uint32 `json:"port"`
-	Proto   string `json:"proto"`
-	Process string `json:"process"`
-	Bind    string `json:"bind"`
+	Port        uint32   `json:"port"`
+	Proto       string   `json:"proto"`
+	Process     string   `json:"process"`
+	Bind        string   `json:"bind"`
+	Exposure    string   `json:"exposure,omitempty"`    // internet | restricted | blocked | localhost | unknown
+	AllowedFrom []string `json:"allowedFrom,omitempty"` // source CIDRs when restricted
 }
 
 type SSHConfig struct {

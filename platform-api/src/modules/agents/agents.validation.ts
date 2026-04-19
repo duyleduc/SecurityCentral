@@ -150,6 +150,8 @@ export const SecurityPostureSchema = z.object({
     proto: z.string(),
     process: z.string(),
     bind: z.string(),
+    exposure: z.string().optional(),
+    allowedFrom: nullableArray(z.string()).optional(),
   })).default([]),
   sshConfig: z.object({
     rootLogin: z.string(),
