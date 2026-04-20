@@ -14,7 +14,8 @@ import { ProjectDetailPage } from './pages/Projects/ProjectDetailPage';
 import { DomainsPage } from './pages/Monitoring/DomainsPage';
 import { DomainDetailPage } from './pages/Monitoring/DomainDetailPage';
 import { ServersPage } from './pages/Servers/ServersPage';
-import { ServerDetailPage } from './pages/Servers/ServerDetailPage';
+import { ServerMonitoringPage } from './pages/Servers/ServerMonitoringPage';
+import { ServerSecurityPage } from './pages/Servers/ServerSecurityPage';
 import { ServerReportPage } from './pages/Servers/ServerReportPage';
 import { FindingsPage } from './pages/Findings/FindingsPage';
 import { FindingDetailPage } from './pages/Findings/FindingDetailPage';
@@ -57,7 +58,9 @@ export default function App() {
                 <Route path="/domains" element={<DomainsPage />} />
                 <Route path="/domains/:id" element={<DomainDetailPage />} />
                 <Route path="/servers" element={<ServersPage />} />
-                <Route path="/servers/:id" element={<ServerDetailPage />} />
+                <Route path="/servers/:id" element={<Navigate to="monitoring" replace />} />
+                <Route path="/servers/:id/monitoring" element={<ServerMonitoringPage />} />
+                <Route path="/servers/:id/security" element={<ServerSecurityPage />} />
                 <Route path="/servers/:id/report" element={<ServerReportPage />} />
                 <Route path="/repositories" element={<RepositoriesPage />} />
                 <Route path="/repositories/:id" element={<RepositoryDetailPage />} />

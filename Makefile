@@ -26,16 +26,21 @@ dev: ensure-db build-monitor
 	@echo "API: http://localhost:3000  Dashboard: http://localhost:5173  Monitor: running"
 
 dev-stop:
-	-@lsof -ti:3000 | xargs kill -9 2>/dev/null || true
-	-@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
-	-@pkill -9 sc-monitor 2>/dev/null || true
+	@echo "Stopping dev servers..."
+	-@pkill -9 -f "platform-api.*tsx" 2>/dev/null; true
+	-@pkill -9 -f "dashboard.*vite" 2>/dev/null; true
+	-@pkill -9 -f "bin/sc-monitor" 2>/dev/null; true
+	-@lsof -ti:3000 2>/dev/null | xargs kill -9 2>/dev/null; true
+	-@lsof -ti:5173 2>/dev/null | xargs kill -9 2>/dev/null; true
 	@sleep 1
 	@echo "Dev servers stopped."
 
 dev-restart:
-	-@lsof -ti:3000 | xargs kill -9 2>/dev/null || true
-	-@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
-	-@pkill -9 sc-monitor 2>/dev/null || true
+	-@pkill -9 -f "platform-api.*tsx" 2>/dev/null; true
+	-@pkill -9 -f "dashboard.*vite" 2>/dev/null; true
+	-@pkill -9 -f "bin/sc-monitor" 2>/dev/null; true
+	-@lsof -ti:3000 2>/dev/null | xargs kill -9 2>/dev/null; true
+	-@lsof -ti:5173 2>/dev/null | xargs kill -9 2>/dev/null; true
 	@sleep 1
 	@cd sc-monitor && go build -o bin/sc-monitor ./cmd/sc-monitor
 	@docker compose exec postgres pg_isready -U securitycentral -d securitycentral 2>/dev/null || $(MAKE) start
