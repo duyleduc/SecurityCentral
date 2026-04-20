@@ -17,6 +17,7 @@ import {
   TableRow,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   useTheme,
   alpha,
 } from '@mui/material';
@@ -33,6 +34,7 @@ import {
 } from 'recharts';
 import { useServer, useServerMetrics, type ServerMetric } from '../../api/hooks';
 import { ServerHeader } from './ServerHeader';
+import { classifyOs } from './osEol';
 
 const TIME_RANGES = [
   { label: '1h', hours: 1 },
@@ -64,9 +66,14 @@ function fmtBytesShort(v: number): string {
   return `${v}`;
 }
 
-function fmtUptime(lastHeartbeat: string | null, createdAt: string): string {
-  if (!lastHeartbeat) return '-';
-  const ms = new Date(lastHeartbeat).getTime() - new Date(createdAt).getTime();
+/**
+ * Server-side uptime (not agent uptime): time elapsed since the host booted.
+ * Falls back to agent-reporting window if boot time is unavailable.
+ */
+function fmtServerUptime(bootTime: string | null, lastHeartbeat: string | null, createdAt: string): string {
+  const reference = lastHeartbeat ? new Date(lastHeartbeat).getTime() : Date.now();
+  const origin = bootTime ? new Date(bootTime).getTime() : new Date(createdAt).getTime();
+  const ms = reference - origin;
   if (ms < 0) return '-';
   const days = Math.floor(ms / 86400000);
   const hours = Math.floor((ms % 86400000) / 3600000);
@@ -228,12 +235,51 @@ interface MetricPanelProps {
   onCrosshair?: (ts: number | null) => void;
 }
 
+interface SeriesStats {
+  key: string;
+  label: string;
+  color: string;
+  current: number;
+  min: number;
+  max: number;
+  avg: number;
+}
+
+function computeStats(
+  data: Array<Record<string, unknown>>,
+  series: Array<{ key: string; color: string; label?: string }>,
+): SeriesStats[] {
+  return series.map((s) => {
+    let min = Infinity, max = -Infinity, sum = 0, count = 0, current = 0;
+    for (const row of data) {
+      const raw = row[s.key];
+      if (typeof raw !== 'number' || !Number.isFinite(raw)) continue;
+      if (raw < min) min = raw;
+      if (raw > max) max = raw;
+      sum += raw;
+      count++;
+      current = raw;
+    }
+    return {
+      key: s.key,
+      label: s.label ?? s.key,
+      color: s.color,
+      current: count > 0 ? current : 0,
+      min: Number.isFinite(min) ? min : 0,
+      max: Number.isFinite(max) ? max : 0,
+      avg: count > 0 ? sum / count : 0,
+    };
+  });
+}
+
 function MetricPanel({
   title, data, series, hours, unit = '%', yDomain, formatter, yTickFmt,
   threshold, height = 200, currentValue, currentColor, crosshairTs, onCrosshair,
 }: MetricPanelProps) {
   const theme = useTheme();
   const empty = data.length === 0;
+  const stats = useMemo(() => computeStats(data, series), [data, series]);
+  const fmtVal = formatter ?? ((v: number) => `${v.toFixed(1)}${unit}`);
 
   return (
     <Card sx={{
@@ -344,8 +390,47 @@ function MetricPanel({
             </ResponsiveContainer>
           </Box>
         )}
+
+        {!empty && stats.length > 0 && (
+          <Box sx={{ mt: 1, borderTop: '1px solid', borderColor: 'divider', pt: 0.75 }}>
+            <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+              {stats.map((s) => (
+                <Stack key={s.key} direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}>
+                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: s.color, flexShrink: 0 }} />
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', minWidth: 40 }}>
+                    {s.label}
+                  </Typography>
+                  <Stack direction="row" spacing={0.75} sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}>
+                    <StatChip label="min" value={fmtVal(s.min)} />
+                    <StatChip label="max" value={fmtVal(s.max)} />
+                    <StatChip label="avg" value={fmtVal(s.avg)} />
+                    <StatChip label="cur" value={fmtVal(s.current)} highlight />
+                  </Stack>
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+function StatChip({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <Stack direction="row" spacing={0.25} alignItems="baseline">
+      <Typography component="span" sx={{ color: 'text.disabled', fontSize: '0.65rem' }}>
+        {label}
+      </Typography>
+      <Typography component="span" sx={{
+        fontFamily: 'monospace',
+        fontSize: '0.7rem',
+        fontWeight: highlight ? 700 : 500,
+        color: highlight ? 'text.primary' : 'text.secondary',
+      }}>
+        {value}
+      </Typography>
+    </Stack>
   );
 }
 
@@ -381,37 +466,71 @@ export function ServerMonitoringPage() {
   const ramColor = (latest?.memory ?? 0) > 85 ? 'error.main' : (latest?.memory ?? 0) > 60 ? 'warning.main' : 'success.main';
   const diskColor = (latest?.disk ?? 0) > 90 ? 'error.main' : (latest?.disk ?? 0) > 75 ? 'warning.main' : 'success.main';
 
+  const osInfo = useMemo(() => classifyOs(server?.osFamily, server?.osVersion), [server?.osFamily, server?.osVersion]);
+  const uptimeTooltip = server?.bootTime
+    ? `Server booted at ${new Date(server.bootTime).toLocaleString()}.`
+    : 'Boot time not yet reported by the agent — showing time since agent first heartbeat.';
+
   if (isLoading) return <CircularProgress />;
   if (!server) return <Typography>Server not found</Typography>;
+
+  const infoCards: Array<{
+    label: string;
+    value: string;
+    tooltip?: string;
+    valueColor?: string;
+  }> = [
+    {
+      label: 'OS',
+      value: `${server.osFamily ?? '?'} ${server.osVersion ?? ''}`.trim(),
+      tooltip: osInfo.message || undefined,
+      valueColor:
+        osInfo.status === 'eol' ? 'error.main'
+          : osInfo.status === 'eol_soon' ? 'warning.main'
+          : osInfo.status === 'upgrade_available' ? 'warning.main'
+          : undefined,
+    },
+    { label: 'Kernel', value: server.kernel ?? '-', tooltip: server.kernel ?? undefined },
+    { label: 'IP', value: server.ipAddresses?.join(', ') ?? '-' },
+    { label: 'CPU', value: `${server.cpuCores ?? '?'} cores` },
+    { label: 'RAM', value: fmtRam(server.totalRamMb) },
+    { label: 'Disk', value: server.totalDiskGb != null ? `${server.totalDiskGb} GB` : '-' },
+    {
+      label: 'Uptime',
+      value: fmtServerUptime(server.bootTime, server.lastHeartbeat, server.createdAt),
+      tooltip: uptimeTooltip,
+    },
+    {
+      label: 'Heartbeat',
+      value: server.lastHeartbeat ? new Date(server.lastHeartbeat).toLocaleTimeString() : 'Never',
+      tooltip: server.lastHeartbeat ? new Date(server.lastHeartbeat).toLocaleString() : undefined,
+    },
+  ];
 
   return (
     <Box>
       <ServerHeader server={server} activeTab="monitoring" />
 
       <Grid container spacing={1} sx={{ mb: 2 }}>
-        {[
-          { label: 'OS', value: `${server.osFamily ?? '?'} ${server.osVersion ?? ''}`.trim() },
-          { label: 'Kernel', value: server.kernel ?? '-' },
-          { label: 'IP', value: server.ipAddresses?.join(', ') ?? '-' },
-          { label: 'CPU', value: `${server.cpuCores ?? '?'} cores` },
-          { label: 'RAM', value: fmtRam(server.totalRamMb) },
-          { label: 'Disk', value: server.totalDiskGb != null ? `${server.totalDiskGb} GB` : '-' },
-          { label: 'Uptime', value: fmtUptime(server.lastHeartbeat, server.createdAt) },
-          { label: 'Heartbeat', value: server.lastHeartbeat ? new Date(server.lastHeartbeat).toLocaleTimeString() : 'Never' },
-        ].map(({ label, value }) => (
-          <Grid key={label} size={{ xs: 6, sm: 3, md: 1.5 }}>
+        {infoCards.map(({ label, value, tooltip, valueColor }) => {
+          const card = (
             <Card sx={{ bgcolor: 'rgba(15,23,42,0.6)', border: '1px solid', borderColor: 'divider', height: '100%' }}>
               <CardContent sx={{ py: 1, px: 1.5, '&:last-child': { pb: 1 } }}>
                 <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   {label}
                 </Typography>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 600, mt: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 600, mt: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: valueColor ?? 'text.primary' }}>
                   {value}
                 </Typography>
               </CardContent>
             </Card>
-          </Grid>
-        ))}
+          );
+          return (
+            <Grid key={label} size={{ xs: 6, sm: 3, md: 1.5 }}>
+              {tooltip ? <Tooltip title={tooltip} arrow placement="top">{card}</Tooltip> : card}
+            </Grid>
+          );
+        })}
       </Grid>
 
       <Grid container spacing={1.5} mb={2} columns={10}>

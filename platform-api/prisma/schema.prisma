@@ -149,6 +149,7 @@ model Server {
   securityScore Int?      @map("security_score")  // 0–100, computed server-side
   tags          Json      @default("[]") @db.JsonB
   lastHeartbeat DateTime? @map("last_heartbeat") @db.Timestamp(3)
+  bootTime      DateTime? @map("boot_time") @db.Timestamp(3)
   apiKeyHash    String?   @map("api_key_hash") @db.VarChar(64)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(3)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(3)

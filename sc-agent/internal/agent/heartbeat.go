@@ -300,6 +300,7 @@ func (a *Agent) sendLoop(ctx context.Context) {
 		TotalRAMMB:   sysInfo.TotalRAMMB,
 		TotalDiskGB:  sysInfo.TotalDiskGB,
 		IPAddresses:  sysInfo.IPAddresses,
+		BootTime:     sysInfo.BootTime,
 	}
 
 	for {

@@ -267,6 +267,8 @@ type SystemData struct {
 	TotalRAMMB   int64    `json:"totalRamMb,omitempty"`
 	TotalDiskGB  int64    `json:"totalDiskGb,omitempty"`
 	IPAddresses  []string `json:"ipAddresses,omitempty"`
+	// BootTime is the unix timestamp (seconds) when the host booted.
+	BootTime uint64 `json:"bootTime,omitempty"`
 }
 
 type HeartbeatResponse struct {

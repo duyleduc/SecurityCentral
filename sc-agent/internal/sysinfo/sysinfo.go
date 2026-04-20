@@ -29,6 +29,9 @@ type SystemInfo struct {
 	TotalRAMMB  int64    `json:"totalRamMb"`
 	TotalDiskGB int64    `json:"totalDiskGb"`
 	IPAddresses []string `json:"ipAddresses"`
+	// BootTime is the unix timestamp (seconds) when the host booted.
+	// Used by the dashboard to compute true server uptime.
+	BootTime uint64 `json:"bootTime,omitempty"`
 }
 
 func GetSystemInfo() SystemInfo {
@@ -38,11 +41,13 @@ func GetSystemInfo() SystemInfo {
 	platform := runtime.GOOS
 	version := ""
 	kernel := ""
+	var bootTime uint64
 	if hi != nil {
 		hostname = hi.Hostname
 		platform = hi.Platform
 		version = hi.PlatformVersion
 		kernel = hi.KernelVersion
+		bootTime = hi.BootTime
 	}
 
 	// Fallback kernel from /proc
@@ -86,6 +91,7 @@ func GetSystemInfo() SystemInfo {
 		TotalRAMMB:  totalRAMMB,
 		TotalDiskGB: totalDiskGB,
 		IPAddresses: localIPs(),
+		BootTime:    bootTime,
 	}
 }
 

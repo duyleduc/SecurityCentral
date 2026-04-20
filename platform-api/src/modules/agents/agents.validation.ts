@@ -104,6 +104,7 @@ const SystemInfoSchema = z.object({
   totalRamMb: z.number().int().optional(),
   totalDiskGb: z.number().int().optional(),
   ipAddresses: z.array(z.string()).optional(),
+  bootTime: z.number().int().optional(),
 });
 
 export const AgentHeartbeatSchema = z.object({

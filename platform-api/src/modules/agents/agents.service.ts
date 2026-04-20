@@ -158,6 +158,7 @@ interface HeartbeatInput {
     totalRamMb?: number;
     totalDiskGb?: number;
     ipAddresses?: string[];
+    bootTime?: number;
   };
 }
 
@@ -234,6 +235,7 @@ export async function processHeartbeat(input: HeartbeatInput) {
         ...(input.system?.totalRamMb ? { totalRamMb: input.system.totalRamMb } : {}),
         ...(input.system?.totalDiskGb ? { totalDiskGb: input.system.totalDiskGb } : {}),
         ...(input.system?.ipAddresses ? { ipAddresses: JSON.parse(JSON.stringify(input.system.ipAddresses)) } : {}),
+        ...(input.system?.bootTime ? { bootTime: new Date(input.system.bootTime * 1000) } : {}),
       },
     }),
   ]);

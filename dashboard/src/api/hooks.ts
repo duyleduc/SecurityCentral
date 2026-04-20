@@ -254,6 +254,7 @@ export interface Server {
   status: string;
   securityScore: number | null;
   lastHeartbeat: string | null;
+  bootTime: string | null;
   createdAt: string;
   _count?: { metrics: number; findings: number };
   metrics?: ServerMetric[];
