@@ -881,10 +881,109 @@ export function useUpdateOrganization() {
   });
 }
 
+export interface Member {
+  id: string;
+  name: string;
+  email: string;
+  role: 'member' | 'admin' | 'owner';
+  createdAt: string;
+}
+
 export function useMembers() {
   return useQuery({
     queryKey: ['organization', 'members'],
-    queryFn: () => apiClient<any[]>('/api/v1/organization/members'),
+    queryFn: () => apiClient<Member[]>('/api/v1/organization/members'),
+  });
+}
+
+export interface Invitation {
+  id: string;
+  email: string;
+  name: string;
+  role: 'member' | 'admin';
+  expiresAt: string;
+  createdAt?: string;
+  /** Raw token — only present on the create response. */
+  token?: string;
+  /** Full URL to the accept page, only present on the create response. */
+  acceptUrl?: string;
+  /** True if the invitation email was delivered. Only present on the create response. */
+  emailSent?: boolean;
+}
+
+export function useInvitations() {
+  return useQuery({
+    queryKey: ['organization', 'invitations'],
+    queryFn: () => apiClient<Invitation[]>('/api/v1/organization/invitations'),
+  });
+}
+
+export function useCreateInvitation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; email: string; role: 'member' | 'admin'; expiresInHours?: number }) =>
+      apiClient<Invitation>('/api/v1/organization/invitations', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['organization', 'invitations'] }),
+  });
+}
+
+export function useRevokeInvitation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<{ deleted: boolean }>(`/api/v1/organization/invitations/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['organization', 'invitations'] }),
+  });
+}
+
+export interface InvitationDetails {
+  email: string;
+  name: string;
+  role: 'member' | 'admin';
+  org: { id: string; name: string };
+  expiresAt: string;
+}
+
+export function useInvitationDetails(token: string) {
+  return useQuery({
+    queryKey: ['invitation', token],
+    queryFn: () => apiClient<InvitationDetails>(`/api/v1/invitations/${token}`),
+    enabled: !!token,
+    retry: false,
+  });
+}
+
+export function useAcceptInvitation() {
+  return useMutation({
+    mutationFn: ({ token, password }: { token: string; password: string }) =>
+      apiClient<{ accessToken: string; user: { id: string; email: string; role: string; orgId: string } }>(
+        `/api/v1/invitations/${token}/accept`,
+        { method: 'POST', body: JSON.stringify({ password }) },
+      ),
+  });
+}
+
+export function useUpdateMemberRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, role }: { id: string; role: 'member' | 'admin' }) =>
+      apiClient<Member>(`/api/v1/organization/members/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['organization', 'members'] }),
+  });
+}
+
+export function useRemoveMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<{ deleted: boolean }>(`/api/v1/organization/members/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['organization', 'members'] }),
   });
 }
 

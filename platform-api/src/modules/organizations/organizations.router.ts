@@ -2,8 +2,13 @@ import { Router } from 'express';
 
 import { requireAuth } from '../../middleware/auth.js';
 import { requirePermission } from '../../middleware/rbac.js';
-import { successEnvelope } from '../../middleware/errors.js';
+import { successEnvelope, AppError } from '../../middleware/errors.js';
+import { validate } from '../../middleware/validate.js';
 import * as orgService from './organizations.service.js';
+import {
+  UpdateMemberRoleSchema,
+  MemberIdParamsSchema,
+} from './organizations.validation.js';
 
 export const organizationsRouter = Router();
 
@@ -40,21 +45,37 @@ organizationsRouter.get('/members', requirePermission('manage_org'), async (req,
 });
 
 // PATCH /api/v1/organization/members/:id
-organizationsRouter.patch('/members/:id', requirePermission('manage_users'), async (req, res, next) => {
-  try {
-    const member = await orgService.updateMemberRole(req.auth!.orgId, req.params.id, req.body.role);
-    res.json(successEnvelope(member));
-  } catch (err) {
-    next(err);
-  }
-});
+organizationsRouter.patch(
+  '/members/:id',
+  requirePermission('manage_users'),
+  validate({ params: MemberIdParamsSchema, body: UpdateMemberRoleSchema }),
+  async (req, res, next) => {
+    try {
+      if (req.params.id === req.auth!.userId) {
+        return next(new AppError('VALIDATION_ERROR', 'You cannot change your own role'));
+      }
+      const member = await orgService.updateMemberRole(req.auth!.orgId, req.params.id, req.body.role);
+      res.json(successEnvelope(member));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // DELETE /api/v1/organization/members/:id
-organizationsRouter.delete('/members/:id', requirePermission('manage_users'), async (req, res, next) => {
-  try {
-    await orgService.removeMember(req.auth!.orgId, req.params.id);
-    res.json(successEnvelope({ deleted: true }));
-  } catch (err) {
-    next(err);
-  }
-});
+organizationsRouter.delete(
+  '/members/:id',
+  requirePermission('manage_users'),
+  validate({ params: MemberIdParamsSchema }),
+  async (req, res, next) => {
+    try {
+      if (req.params.id === req.auth!.userId) {
+        return next(new AppError('VALIDATION_ERROR', 'You cannot remove yourself'));
+      }
+      await orgService.removeMember(req.auth!.orgId, req.params.id);
+      res.json(successEnvelope({ deleted: true }));
+    } catch (err) {
+      next(err);
+    }
+  },
+);

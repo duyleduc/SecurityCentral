@@ -49,15 +49,22 @@ export async function listMembers(orgId: string) {
   });
 }
 
-export async function updateMemberRole(orgId: string, userId: string, role: string) {
+export async function updateMemberRole(orgId: string, userId: string, role: 'member' | 'admin') {
   const user = await prisma.user.findFirst({ where: { id: userId, orgId } });
   if (!user) {
     throw new AppError('RESOURCE_NOT_FOUND', 'User not found');
   }
-  if (user.role === 'owner' && role !== 'owner') {
-    const ownerCount = await prisma.user.count({ where: { orgId, role: 'owner' } });
-    if (ownerCount <= 1) {
-      throw new AppError('VALIDATION_ERROR', 'Cannot remove the last owner');
+  // Owners keep their role (treated as admin) — promotion via this endpoint is not allowed.
+  if (user.role === 'owner') {
+    throw new AppError('VALIDATION_ERROR', 'The organization owner cannot be demoted');
+  }
+  // Guardrail: org must always retain at least one admin-tier user.
+  if (role !== 'admin') {
+    const adminCount = await prisma.user.count({
+      where: { orgId, role: { in: ['owner', 'admin'] } },
+    });
+    if (adminCount <= 1 && (user.role === 'admin' || user.role === 'owner')) {
+      throw new AppError('VALIDATION_ERROR', 'Cannot demote the last admin');
     }
   }
   return prisma.user.update({

@@ -24,6 +24,7 @@ import { RepositoryDetailPage } from './pages/Repositories/RepositoryDetailPage'
 import { SettingsPage } from './pages/Settings/SettingsPage';
 import { RepoSelectionPage } from './pages/Settings/RepoSelectionPage';
 import { OnboardingPage } from './pages/Onboarding/OnboardingPage';
+import { AcceptInvitePage } from './pages/AcceptInvite/AcceptInvitePage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,6 +45,7 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/invite/:token" element={<AcceptInvitePage />} />
 
               <Route
                 element={

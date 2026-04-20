@@ -2,8 +2,10 @@ import type { Request, Response, NextFunction } from 'express';
 
 import { AppError } from './errors.js';
 
+// Two effective roles: `admin` (full management) and `member` (view-only).
+// `owner` is kept for backwards compatibility and is treated as admin,
+// but with an extra guarantee: the last owner cannot be removed/demoted.
 const ROLE_HIERARCHY: Record<string, number> = {
-  viewer: 0,
   member: 1,
   admin: 2,
   owner: 3,
@@ -12,15 +14,15 @@ const ROLE_HIERARCHY: Record<string, number> = {
 export const PERMISSIONS = {
   'manage_org': ['owner', 'admin'],
   'manage_users': ['owner', 'admin'],
-  'create_api_keys': ['owner', 'admin', 'member'],
-  'view_findings': ['owner', 'admin', 'member', 'viewer'],
-  'update_findings': ['owner', 'admin', 'member'],
-  'trigger_scans': ['owner', 'admin', 'member'],
-  'view_dashboard': ['owner', 'admin', 'member', 'viewer'],
-  'manage_projects': ['owner', 'admin', 'member'],
-  'manage_endpoints': ['owner', 'admin', 'member'],
+  'create_api_keys': ['owner', 'admin'],
+  'view_findings': ['owner', 'admin', 'member'],
+  'update_findings': ['owner', 'admin'],
+  'trigger_scans': ['owner', 'admin'],
+  'view_dashboard': ['owner', 'admin', 'member'],
+  'manage_projects': ['owner', 'admin'],
+  'manage_endpoints': ['owner', 'admin'],
   'manage_integrations': ['owner', 'admin'],
-  'manage_repositories': ['owner', 'admin', 'member'],
+  'manage_repositories': ['owner', 'admin'],
 } as const;
 
 export type Permission = keyof typeof PERMISSIONS;

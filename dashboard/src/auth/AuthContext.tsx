@@ -22,6 +22,7 @@ interface AuthState {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (orgName: string, name: string, email: string, password: string) => Promise<void>;
+  acceptInvitation: (token: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -97,6 +98,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try { connectSocket(); } catch {}
   }, []);
 
+  const acceptInvitation = useCallback(async (token: string, password: string) => {
+    const res = await fetch(`${API_BASE}/api/v1/invitations/${token}/accept`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+      credentials: 'include',
+    });
+    const body = await res.json();
+    if (!res.ok) {
+      throw new Error(body.errors?.[0]?.message ?? 'Could not accept invitation');
+    }
+    setAccessToken(body.data.accessToken);
+    setUser(body.data.user);
+    localStorage.setItem('sc_user', JSON.stringify({ user: body.data.user, org: null }));
+    try { connectSocket(); } catch {}
+  }, []);
+
   const logout = useCallback(() => {
     disconnectSocket();
     setAccessToken(null);
@@ -106,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, org, isAuthenticated: !!getAccessToken(), isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, org, isAuthenticated: !!getAccessToken(), isLoading, login, register, acceptInvitation, logout }}>
       {children}
     </AuthContext.Provider>
   );
