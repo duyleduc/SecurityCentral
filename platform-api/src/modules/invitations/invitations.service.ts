@@ -144,6 +144,70 @@ export async function revokeInvitation(orgId: string, id: string): Promise<void>
   await prisma.invitation.delete({ where: { id } });
 }
 
+/**
+ * Issue a new token + reset the expiry, then re-send the email.
+ * Any previous link for this invitation becomes invalid.
+ */
+export async function resendInvitation(orgId: string, id: string, currentUserId: string): Promise<CreateInvitationResult> {
+  const invite = await prisma.invitation.findFirst({
+    where: { id, orgId },
+    include: { org: { select: { name: true } } },
+  });
+  if (!invite) {
+    throw new AppError('RESOURCE_NOT_FOUND', 'Invitation not found');
+  }
+  if (invite.acceptedAt) {
+    throw new AppError('VALIDATION_ERROR', 'This invitation has already been accepted');
+  }
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = new Date(Date.now() + DEFAULT_EXPIRY_HOURS * 60 * 60 * 1000);
+
+  const updated = await prisma.invitation.update({
+    where: { id: invite.id },
+    data: { tokenHash, expiresAt },
+  });
+
+  const acceptUrl = buildAcceptUrl(rawToken);
+
+  let emailSent = false;
+  if (isMailEnabled()) {
+    const inviter = await prisma.user.findUnique({
+      where: { id: currentUserId },
+      select: { name: true },
+    });
+    try {
+      await sendInvitationEmail({
+        to: updated.email,
+        inviteeName: updated.name,
+        orgName: invite.org.name,
+        inviterName: inviter?.name ?? 'A teammate',
+        role: updated.role as Role,
+        acceptUrl,
+        expiresAt: updated.expiresAt,
+      });
+      emailSent = true;
+    } catch (err) {
+      logger.error('[invitations] resend email delivery failed', {
+        to: updated.email,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return {
+    id: updated.id,
+    email: updated.email,
+    name: updated.name,
+    role: updated.role as Role,
+    expiresAt: updated.expiresAt,
+    token: rawToken,
+    acceptUrl,
+    emailSent,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Public: view invite + accept
 // ---------------------------------------------------------------------------

@@ -8,10 +8,11 @@ import {
 import AddIcon from '@mui/icons-material/PersonAdd';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import SendIcon from '@mui/icons-material/Send';
 import {
   useOrganization, useUpdateOrganization, useMembers,
   useUpdateMemberRole, useRemoveMember,
-  useInvitations, useCreateInvitation, useRevokeInvitation,
+  useInvitations, useCreateInvitation, useRevokeInvitation, useResendInvitation,
   type Member, type Invitation,
 } from '../../api/hooks';
 import { useAuth } from '../../auth/AuthContext';
@@ -227,32 +228,118 @@ function MemberRow({ member, isAdmin, selfId }: { member: Member; isAdmin: boole
 
 function PendingInviteRow({ invite }: { invite: Invitation }) {
   const revoke = useRevokeInvitation();
+  const resend = useResendInvitation();
+  const [resendResult, setResendResult] = useState<Invitation | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const isExpired = new Date(invite.expiresAt).getTime() < Date.now();
+
+  const handleResend = () => {
+    resend.mutate(invite.id, {
+      onSuccess: (data) => setResendResult(data),
+    });
+  };
+
+  const handleCopy = () => {
+    if (!resendResult?.acceptUrl) return;
+    navigator.clipboard.writeText(resendResult.acceptUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
-    <TableRow>
-      <TableCell>{invite.name}</TableCell>
-      <TableCell>{invite.email}</TableCell>
-      <TableCell>
-        <Chip
-          label={invite.role}
-          size="small"
-          sx={{ bgcolor: ROLE_COLORS[invite.role] ?? '#9ca3af', color: '#fff', fontWeight: 600, fontSize: '0.7rem' }}
-        />
-      </TableCell>
-      <TableCell>{new Date(invite.expiresAt).toLocaleString()}</TableCell>
-      <TableCell align="right">
-        <Tooltip title="Revoke invitation">
-          <IconButton
+    <>
+      <TableRow>
+        <TableCell>{invite.name}</TableCell>
+        <TableCell>{invite.email}</TableCell>
+        <TableCell>
+          <Chip
+            label={invite.role}
             size="small"
-            disabled={revoke.isPending}
-            onClick={() => revoke.mutate(invite.id)}
-            sx={{ color: 'text.disabled', '&:hover': { color: 'error.main' } }}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </TableCell>
-    </TableRow>
+            sx={{ bgcolor: ROLE_COLORS[invite.role] ?? '#9ca3af', color: '#fff', fontWeight: 600, fontSize: '0.7rem' }}
+          />
+        </TableCell>
+        <TableCell>
+          <Stack direction="row" spacing={0.75} alignItems="center">
+            <Chip
+              label={isExpired ? 'Expired' : 'Active'}
+              size="small"
+              color={isExpired ? 'default' : 'success'}
+              variant="outlined"
+              sx={{ fontSize: '0.65rem', height: 20 }}
+            />
+            <Typography variant="caption" color="text.secondary">
+              {isExpired ? 'expired ' : 'expires '}
+              {new Date(invite.expiresAt).toLocaleString()}
+            </Typography>
+          </Stack>
+        </TableCell>
+        <TableCell align="right">
+          <Stack direction="row" spacing={0.25} justifyContent="flex-end">
+            <Tooltip title={isExpired ? 'Send a new invitation link' : 'Resend invitation (new link)'}>
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={resend.isPending}
+                  onClick={handleResend}
+                  sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}
+                >
+                  <SendIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Revoke invitation">
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={revoke.isPending}
+                  onClick={() => revoke.mutate(invite.id)}
+                  sx={{ color: 'text.disabled', '&:hover': { color: 'error.main' } }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Stack>
+        </TableCell>
+      </TableRow>
+
+      <Dialog open={resendResult !== null} onClose={() => setResendResult(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Invitation Resent</DialogTitle>
+        <DialogContent>
+          {resendResult && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              {resendResult.emailSent ? (
+                <Alert severity="success">
+                  New email sent to <strong>{resendResult.email}</strong>. The previous link is now invalid.
+                </Alert>
+              ) : (
+                <Alert severity="warning">
+                  Email delivery failed or is not configured. Share this link with <strong>{resendResult.email}</strong> manually.
+                </Alert>
+              )}
+              <Box sx={{ position: 'relative' }}>
+                <TextField
+                  fullWidth
+                  value={resendResult.acceptUrl ?? ''}
+                  slotProps={{ input: { readOnly: true, sx: { fontFamily: 'monospace', fontSize: 13 } } }}
+                />
+                <IconButton size="small" onClick={handleCopy} sx={{ position: 'absolute', top: 8, right: 8 }} title="Copy">
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </Box>
+              {copied && <Typography variant="caption" color="success.main">Copied to clipboard</Typography>}
+              <Typography variant="caption" color="text.secondary">
+                New expiry: {new Date(resendResult.expiresAt).toLocaleString()}
+              </Typography>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setResendResult(null)}>Done</Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 }
 

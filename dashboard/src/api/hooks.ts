@@ -939,6 +939,15 @@ export function useRevokeInvitation() {
   });
 }
 
+export function useResendInvitation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient<Invitation>(`/api/v1/organization/invitations/${id}/resend`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['organization', 'invitations'] }),
+  });
+}
+
 export interface InvitationDetails {
   email: string;
   name: string;

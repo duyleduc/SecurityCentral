@@ -67,6 +67,20 @@ organizationInvitationsRouter.delete(
   },
 );
 
+organizationInvitationsRouter.post(
+  '/:id/resend',
+  requirePermission('manage_users'),
+  validate({ params: InvitationIdParamsSchema }),
+  async (req, res, next) => {
+    try {
+      const result = await service.resendInvitation(req.auth!.orgId, req.params.id, req.auth!.userId);
+      res.json(successEnvelope(result));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // ---------------------------------------------------------------------------
 // Public-facing: invitee fetches details and accepts (no auth)
 // ---------------------------------------------------------------------------
