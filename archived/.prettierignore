@@ -1,8 +1,0 @@
-node_modules
-dist
-build
-coverage
-.next
-go/
-*.min.js
-prisma/migrations
