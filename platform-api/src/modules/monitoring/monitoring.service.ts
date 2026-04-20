@@ -17,11 +17,15 @@ interface CreateEndpointInput {
   readonly tags?: ReadonlyArray<{ key: string; value: string }>;
 }
 
-export async function list(orgId: string, filters?: { status?: string; tags?: string }) {
+export async function list(orgId: string, filters?: { status?: string; tags?: string; projectId?: string }) {
   const where: Record<string, unknown> = { orgId };
 
   if (filters?.status) {
     where.status = filters.status;
+  }
+
+  if (filters?.projectId) {
+    where.projectId = filters.projectId;
   }
 
   const endpoints = await prisma.monitoredEndpoint.findMany({

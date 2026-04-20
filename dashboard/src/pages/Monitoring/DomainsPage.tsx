@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Card, CardContent, Button, Chip, Stack, Alert, TextField,
+  Box, Typography, Card, CardContent, CardActionArea, Grid, Button, Chip, Stack, Alert, TextField,
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
   Paper, Skeleton, Tabs, Tab, Select, MenuItem, IconButton, Tooltip, FormControl, InputLabel,
   Dialog, DialogTitle, DialogContent, DialogActions,
@@ -40,9 +40,11 @@ export function DomainsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [tagQuery, setTagQuery] = useState('');
   const [tagInput, setTagInput] = useState('');
+  const [projectFilter, setProjectFilter] = useState('');
   const filters = {
     status: statusFilter || undefined,
     tags: tagQuery || undefined,
+    projectId: projectFilter || undefined,
   };
   const { data: endpoints, isLoading } = useEndpoints(filters);
   const { data: projects } = useProjects();
@@ -56,17 +58,30 @@ export function DomainsPage() {
   // Subscribe to real-time heartbeat updates
   useRealtimeHeartbeat();
 
-  const healthy = endpoints?.filter((e) => e.status === 'healthy').length ?? 0;
-  const total = endpoints?.length ?? 0;
-  const hasFilters = !!statusFilter || !!tagQuery;
+  // Unfiltered counts for the summary cards — tag + project filters still apply,
+  // so the status distribution reflects the current scope.
+  const { data: allEndpointsForCounts } = useEndpoints({
+    tags: tagQuery || undefined,
+    projectId: projectFilter || undefined,
+  });
+  const healthy = allEndpointsForCounts?.filter((e) => e.status === 'healthy').length ?? 0;
+  const degraded = allEndpointsForCounts?.filter((e) => e.status === 'degraded').length ?? 0;
+  const down = allEndpointsForCounts?.filter((e) => e.status === 'down').length ?? 0;
+  const pending = allEndpointsForCounts?.filter((e) => e.status === 'pending').length ?? 0;
+  const total = allEndpointsForCounts?.length ?? 0;
+  const hasFilters = !!statusFilter || !!tagQuery || !!projectFilter;
+
+  const toggleStatus = (status: string) => {
+    setStatusFilter((prev) => (prev === status ? '' : status));
+  };
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2.5 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
         <Box>
-          <Typography variant="h5">Domain Monitoring</Typography>
+          <Typography variant="h4">Domain Monitoring</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {total > 0 ? `${healthy}/${total} healthy${hasFilters ? ' (filtered)' : ''}` : 'Monitor TLS certificates and endpoint reachability'}
+            Monitor TLS certificates and endpoint reachability
           </Typography>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setShowAdd(!showAdd)}>
@@ -74,21 +89,50 @@ export function DomainsPage() {
         </Button>
       </Stack>
 
+      {/* Summary cards — click to filter, click again to clear */}
+      <Grid container spacing={3} mb={3}>
+        {[
+          { label: 'Healthy', value: healthy, color: 'success.main', status: 'healthy' },
+          { label: 'Degraded', value: degraded, color: 'warning.main', status: 'degraded' },
+          { label: 'Down', value: down, color: 'error.main', status: 'down' },
+          { label: 'Pending', value: pending, color: 'text.secondary', status: 'pending' },
+        ].map((s) => {
+          const active = statusFilter === s.status;
+          return (
+            <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
+              <Card sx={{
+                border: '2px solid',
+                borderColor: active ? s.color : 'transparent',
+                transition: 'border-color 0.15s',
+              }}>
+                <CardActionArea onClick={() => toggleStatus(s.status)}>
+                  <CardContent>
+                    <Typography variant="h3" color={s.color}>{s.value}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {s.label}{active && ' · filtering'}
+                    </Typography>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            </Grid>
+          );
+        })}
+      </Grid>
+
       {/* Filters */}
-      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
         <FilterListIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-        <FormControl size="small" sx={{ minWidth: 120 }}>
-          <InputLabel>Status</InputLabel>
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <InputLabel>Project</InputLabel>
           <Select
-            value={statusFilter}
-            label="Status"
-            onChange={(e) => setStatusFilter(e.target.value)}
+            value={projectFilter}
+            label="Project"
+            onChange={(e) => setProjectFilter(e.target.value)}
           >
-            <MenuItem value="">All</MenuItem>
-            <MenuItem value="healthy">Healthy</MenuItem>
-            <MenuItem value="degraded">Degraded</MenuItem>
-            <MenuItem value="down">Down</MenuItem>
-            <MenuItem value="pending">Pending</MenuItem>
+            <MenuItem value="">All projects</MenuItem>
+            {projects?.map((p) => (
+              <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+            ))}
           </Select>
         </FormControl>
         <TextField
@@ -116,7 +160,7 @@ export function DomainsPage() {
           </Button>
         )}
         {hasFilters && (
-          <Chip label="Clear filters" size="small" variant="outlined" onDelete={() => { setStatusFilter(''); setTagQuery(''); setTagInput(''); }} />
+          <Chip label="Clear filters" size="small" variant="outlined" onDelete={() => { setStatusFilter(''); setTagQuery(''); setTagInput(''); setProjectFilter(''); }} />
         )}
       </Stack>
 
@@ -152,7 +196,7 @@ export function DomainsPage() {
               {endpoints.map((ep) => {
                 const cfg = STATUS_CONFIG[ep.status] ?? STATUS_CONFIG.pending;
                 const lastHb = ep.heartbeats?.[0];
-                const ssl = (ep as any).latestSsl;
+                const ssl = ep.latestSsl;
 
                 return (
                   <TableRow
@@ -171,14 +215,31 @@ export function DomainsPage() {
                             <Typography variant="caption" color="text.secondary">:{ep.port}</Typography>
                           )}
                         </Box>
-                        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap onClick={(e) => e.stopPropagation()}>
                           {ep.project && (
-                            <Chip label={ep.project.name} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
+                            <Chip
+                              label={ep.project.name}
+                              size="small"
+                              variant="outlined"
+                              clickable
+                              onClick={() => setProjectFilter(ep.project!.id)}
+                              sx={{ fontSize: '0.7rem' }}
+                            />
                           )}
-                          {((ep as any).tags as Array<{ key: string; value: string }> | undefined)?.map((t) => (
-                            <Chip key={t.key} label={t.value ? `${t.key}:${t.value}` : t.key} size="small"
-                              sx={{ fontSize: '0.65rem', height: 20, bgcolor: 'action.selected' }} />
-                          ))}
+                          {ep.tags?.map((t) => {
+                            const filterExpr = t.value ? `${t.key}=${t.value}` : t.key;
+                            const chipLabel = t.value ? `${t.key}:${t.value}` : t.key;
+                            return (
+                              <Chip
+                                key={t.key}
+                                label={chipLabel}
+                                size="small"
+                                clickable
+                                onClick={() => { setTagInput(filterExpr); setTagQuery(filterExpr); }}
+                                sx={{ fontSize: '0.65rem', height: 20, bgcolor: 'action.selected', cursor: 'pointer' }}
+                              />
+                            );
+                          })}
                         </Stack>
                       </Stack>
                     </TableCell>
@@ -205,7 +266,7 @@ export function DomainsPage() {
                       {lastHb?.responseMs != null ? `${lastHb.responseMs}ms` : '--'}
                     </TableCell>
                     <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                      {(ep as any).uptimeInterval ?? 15}s
+                      {ep.uptimeInterval ?? 15}s
                     </TableCell>
                     <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                       <Stack direction="row" spacing={0.5} justifyContent="flex-end">

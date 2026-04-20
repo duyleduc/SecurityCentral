@@ -70,13 +70,29 @@ export function DomainDetailPage() {
       <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
         <IconButton onClick={() => navigate('/domains')}><ArrowBackIcon /></IconButton>
         <Box sx={{ flex: 1 }}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
             <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: statusInfo.color, flexShrink: 0 }} />
             <Typography variant="h5" fontWeight={600}>
               {ep.host}{ep.port !== 443 ? `:${ep.port}` : ''}
             </Typography>
             <Chip label={statusInfo.text} size="small" sx={{ bgcolor: statusInfo.color, color: '#fff', fontWeight: 600 }} />
+            {ep.project && (
+              <Chip label={ep.project.name} size="small" variant="outlined" />
+            )}
           </Stack>
+          {ep.tags?.length > 0 && (
+            <Stack direction="row" spacing={0.5} sx={{ mt: 0.75 }} flexWrap="wrap" useFlexGap>
+              {(ep.tags as Array<{ key: string; value: string }>).map((t) => (
+                <Chip
+                  key={t.key}
+                  label={t.value ? `${t.key}:${t.value}` : t.key}
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontFamily: 'monospace', fontSize: '0.7rem', borderColor: 'primary.dark' }}
+                />
+              ))}
+            </Stack>
+          )}
         </Box>
         <Button variant="outlined" size="small" startIcon={<SettingsIcon />} onClick={openSettings}>Settings</Button>
       </Stack>

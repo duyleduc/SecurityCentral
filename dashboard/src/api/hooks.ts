@@ -22,9 +22,20 @@ export interface MonitoredEndpoint {
   protocol: string;
   status: string;
   checkInterval: string;
+  uptimeInterval?: number;
+  uptimeTimeout?: number;
   lastCheckAt: string | null;
+  projectId?: string | null;
   project?: { id: string; name: string } | null;
+  tags: Array<{ key: string; value: string }>;
   heartbeats?: EndpointHeartbeat[];
+  latestSsl?: {
+    sslValid: boolean | null;
+    sslGrade?: string | null;
+    sslGradeColor?: string | null;
+    sslDaysLeft: number | null;
+    sslExpiry: string | null;
+  } | null;
 }
 
 export interface EndpointHeartbeat {
@@ -134,13 +145,14 @@ export function useDeleteProject() {
 // Monitoring Endpoints
 // ---------------------------------------------------------------------------
 
-export function useEndpoints(filters?: { status?: string; tags?: string }) {
+export function useEndpoints(filters?: { status?: string; tags?: string; projectId?: string }) {
   const params = new URLSearchParams();
   if (filters?.status) params.set('status', filters.status);
   if (filters?.tags) params.set('tags', filters.tags);
+  if (filters?.projectId) params.set('projectId', filters.projectId);
   const qs = params.toString();
   return useQuery({
-    queryKey: ['endpoints', filters?.status ?? '', filters?.tags ?? ''],
+    queryKey: ['endpoints', filters?.status ?? '', filters?.tags ?? '', filters?.projectId ?? ''],
     queryFn: () => apiClient<MonitoredEndpoint[]>(`/api/v1/monitoring/endpoints${qs ? `?${qs}` : ''}`),
   });
 }

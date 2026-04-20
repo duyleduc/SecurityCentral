@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -20,14 +20,34 @@ import {
   IconButton,
   Stack,
   MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import StorageIcon from '@mui/icons-material/Storage';
 import FolderIcon from '@mui/icons-material/Folder';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import UpgradeIcon from '@mui/icons-material/SystemUpdateAlt';
-import { useServers, useProjects, useCreateInstallToken, useAgentLatestVersion, type InstallToken } from '../../api/hooks';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import ClearIcon from '@mui/icons-material/Clear';
+import SearchIcon from '@mui/icons-material/Search';
+import { useServers, useProjects, useCreateInstallToken, useAgentLatestVersion, type InstallToken, type Server } from '../../api/hooks';
 import { TagsInput, type Tag } from '../../components/TagsInput';
+
+/**
+ * Match a server's tags against a comma-separated query.
+ * Each term is either "key" (match key presence) or "key=value" (match exact value).
+ * A server matches if ALL terms match at least one tag.
+ */
+function matchesTagQuery(server: Server, query: string): boolean {
+  if (!query.trim()) return true;
+  const terms = query.split(',').map((t) => t.trim()).filter(Boolean);
+  return terms.every((term) => {
+    const [k, v] = term.includes('=') ? term.split('=').map((s) => s.trim()) : [term.trim(), undefined];
+    return server.tags.some((t) => t.key === k && (v === undefined || t.value === v));
+  });
+}
 
 function StatusColor(status: string): 'success' | 'warning' | 'error' | 'default' {
   switch (status) {
@@ -56,6 +76,10 @@ export function ServersPage() {
   const [token, setToken] = useState<InstallToken | null>(null);
   const [copied, setCopied] = useState(false);
   const [expiresIn, setExpiresIn] = useState('');
+  const [tagQuery, setTagQuery] = useState('');
+  const [tagInput, setTagInput] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [projectFilter, setProjectFilter] = useState('');
 
   const apiUrl = (import.meta.env.VITE_API_URL as string) || 'http://localhost:3000';
 
@@ -113,10 +137,38 @@ export function ServersPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const online = servers?.filter((s) => s.status === 'online').length ?? 0;
-  const warning = servers?.filter((s) => s.status === 'warning').length ?? 0;
-  const critical = servers?.filter((s) => s.status === 'critical').length ?? 0;
-  const offline = servers?.filter((s) => s.status === 'offline' || s.status === 'dead').length ?? 0;
+  // Tag + project filtered but status-unfiltered, so cards show accurate distribution.
+  const tagFilteredServers = useMemo(
+    () => (servers ?? []).filter((s) => {
+      if (!matchesTagQuery(s, tagQuery)) return false;
+      if (projectFilter && s.projectId !== projectFilter) return false;
+      return true;
+    }),
+    [servers, tagQuery, projectFilter],
+  );
+
+  const filteredServers = useMemo(
+    () => tagFilteredServers.filter((s) => {
+      if (!statusFilter) return true;
+      if (statusFilter === 'offline') return s.status === 'offline' || s.status === 'dead';
+      return s.status === statusFilter;
+    }),
+    [tagFilteredServers, statusFilter],
+  );
+
+  const online = tagFilteredServers.filter((s) => s.status === 'online').length;
+  const warning = tagFilteredServers.filter((s) => s.status === 'warning').length;
+  const critical = tagFilteredServers.filter((s) => s.status === 'critical').length;
+  const offline = tagFilteredServers.filter((s) => s.status === 'offline' || s.status === 'dead').length;
+
+  const applyTagFilter = (expr: string) => {
+    setTagInput(expr);
+    setTagQuery(expr);
+  };
+
+  const toggleStatus = (status: string) => {
+    setStatusFilter((prev) => (prev === status ? '' : status));
+  };
 
   return (
     <Box>
@@ -127,30 +179,89 @@ export function ServersPage() {
         </Button>
       </Box>
 
-      {/* Summary cards */}
+      {/* Summary cards — click to filter, click again to clear */}
       <Grid container spacing={3} mb={4}>
         {[
-          { label: 'Online', value: online, color: 'success.main' },
-          { label: 'Warning', value: warning, color: 'warning.main' },
-          { label: 'Critical', value: critical, color: 'error.main' },
-          { label: 'Offline', value: offline, color: 'error.main' },
-        ].map((s) => (
-          <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
-            <Card>
-              <CardContent>
-                <Typography variant="h3" color={s.color}>{s.value}</Typography>
-                <Typography variant="body2" color="text.secondary">{s.label}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
+          { label: 'Online', value: online, color: 'success.main', status: 'online' },
+          { label: 'Warning', value: warning, color: 'warning.main', status: 'warning' },
+          { label: 'Critical', value: critical, color: 'error.main', status: 'critical' },
+          { label: 'Offline', value: offline, color: 'error.main', status: 'offline' },
+        ].map((s) => {
+          const active = statusFilter === s.status;
+          return (
+            <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
+              <Card sx={{
+                border: '2px solid',
+                borderColor: active ? s.color : 'transparent',
+                transition: 'border-color 0.15s',
+              }}>
+                <CardActionArea onClick={() => toggleStatus(s.status)}>
+                  <CardContent>
+                    <Typography variant="h3" color={s.color}>{s.value}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {s.label}{active && ' · filtering'}
+                    </Typography>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            </Grid>
+          );
+        })}
       </Grid>
+
+      {/* Filters */}
+      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+        <FilterListIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <InputLabel>Project</InputLabel>
+          <Select
+            value={projectFilter}
+            label="Project"
+            onChange={(e) => setProjectFilter(e.target.value)}
+          >
+            <MenuItem value="">All projects</MenuItem>
+            {projects?.map((p) => (
+              <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <TextField
+          size="small"
+          placeholder="Filter by tags: env=prod, tier=web"
+          value={tagInput}
+          onChange={(e) => setTagInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') setTagQuery(tagInput); }}
+          slotProps={{
+            input: {
+              endAdornment: tagInput ? (
+                <IconButton size="small" onClick={() => { setTagInput(''); setTagQuery(''); }}>
+                  <ClearIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              ) : (
+                <SearchIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+              ),
+            },
+          }}
+          sx={{ width: 320 }}
+        />
+        {tagInput && tagInput !== tagQuery && (
+          <Button size="small" variant="outlined" onClick={() => setTagQuery(tagInput)}>Apply</Button>
+        )}
+        {(tagQuery || projectFilter || statusFilter) && (
+          <Chip
+            label={`${filteredServers.length} of ${servers?.length ?? 0} match`}
+            size="small"
+            variant="outlined"
+            onDelete={() => { applyTagFilter(''); setProjectFilter(''); setStatusFilter(''); }}
+          />
+        )}
+      </Stack>
 
       {isLoading && <Typography>Loading...</Typography>}
 
       {/* Server cards */}
       <Grid container spacing={3}>
-        {servers?.map((srv) => (
+        {filteredServers.map((srv) => (
           <Grid key={srv.id} size={{ xs: 12, sm: 6, md: 4 }}>
             <Card>
               <CardActionArea onClick={() => navigate(`/servers/${srv.id}`)}>
@@ -163,12 +274,29 @@ export function ServersPage() {
                     <Chip icon={<StorageIcon sx={{ fontSize: 14 }} />} label={srv.hostname} size="small" variant="outlined" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
                     <Chip label={srv.status} size="small" color={StatusColor(srv.status)} />
                     {srv.project && (
-                      <Chip icon={<FolderIcon sx={{ fontSize: 14 }} />} label={srv.project.name} size="small" variant="outlined" />
+                      <Chip
+                        icon={<FolderIcon sx={{ fontSize: 14 }} />}
+                        label={srv.project.name}
+                        size="small"
+                        variant="outlined"
+                        clickable
+                        onClick={(e) => { e.stopPropagation(); setProjectFilter(srv.project!.id); }}
+                      />
                     )}
-                    {srv.tags.map((t) => (
-                      <Chip key={t.key} label={t.value ? `${t.key}: ${t.value}` : t.key} size="small"
-                        variant="outlined" sx={{ fontSize: '0.7rem', borderColor: 'primary.dark' }} />
-                    ))}
+                    {srv.tags.map((t) => {
+                      const filterExpr = t.value ? `${t.key}=${t.value}` : t.key;
+                      return (
+                        <Chip
+                          key={t.key}
+                          label={t.value ? `${t.key}: ${t.value}` : t.key}
+                          size="small"
+                          variant="outlined"
+                          clickable
+                          onClick={(e) => { e.stopPropagation(); applyTagFilter(filterExpr); }}
+                          sx={{ fontSize: '0.7rem', borderColor: 'primary.dark', cursor: 'pointer' }}
+                        />
+                      );
+                    })}
                     {srv.agentVersion && latestAgent?.version && srv.agentVersion !== latestAgent.version && srv.agentVersion !== 'dev' && (
                       <Chip icon={<UpgradeIcon sx={{ fontSize: 14 }} />} label="update" size="small" color="info" variant="outlined" />
                     )}
