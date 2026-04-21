@@ -13,6 +13,12 @@ export const ConnectGitHubSchema = z.object({
   appId: z.string().min(1).optional(),
 });
 
+export const ConnectGitHubPatSchema = z.object({
+  accessToken: z.string().min(1),
+  baseUrl: z.string().url().optional(),
+  verifySsl: z.boolean().default(true),
+});
+
 export const ConnectGitLabSchema = z.object({
   accessToken: z.string().min(1),
   baseUrl: z.string().url().optional(),

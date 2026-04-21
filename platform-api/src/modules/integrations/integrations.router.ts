@@ -14,6 +14,7 @@ import {
   IntegrationIdParamsSchema,
   ProviderParamsSchema,
   ConnectGitHubSchema,
+  ConnectGitHubPatSchema,
   ConnectGitLabSchema,
   SyncReposSchema,
   RepoListQuerySchema,
@@ -47,7 +48,7 @@ integrationsRouter.delete(
   },
 );
 
-// POST /api/v1/integrations/github
+// POST /api/v1/integrations/github — GitHub App installation (advanced)
 integrationsRouter.post(
   '/github',
   requirePermission('manage_integrations'),
@@ -60,6 +61,32 @@ integrationsRouter.post(
         appId: req.body.appId,
       });
       res.status(201).json(successEnvelope(integration));
+    } catch (err) { next(err); }
+  },
+);
+
+// POST /api/v1/integrations/github/pat — Personal Access Token (recommended for SMEs)
+integrationsRouter.post(
+  '/github/pat',
+  requirePermission('manage_integrations'),
+  validate({ body: ConnectGitHubPatSchema }),
+  async (req, res, next) => {
+    try {
+      const verified = await github.verifyPersonalToken(req.body.accessToken, req.body.baseUrl);
+      if (!verified.valid) {
+        throw new AppError('AUTH_INVALID_CREDENTIALS', verified.message ?? 'Invalid GitHub token');
+      }
+      const integration = await integrationsService.connectGitHubPat({
+        orgId: req.auth!.orgId,
+        accessToken: req.body.accessToken,
+        baseUrl: req.body.baseUrl,
+        verifySsl: req.body.verifySsl,
+      });
+      res.status(201).json(successEnvelope({
+        ...integration,
+        login: verified.login,
+        scopes: verified.scopes,
+      }));
     } catch (err) { next(err); }
   },
 );
@@ -90,7 +117,7 @@ integrationsRouter.post(
   },
 );
 
-// GET /api/v1/integrations/github/repos
+// GET /api/v1/integrations/github/repos — dispatches based on stored config
 integrationsRouter.get(
   '/github/repos',
   requirePermission('manage_integrations'),
@@ -101,20 +128,41 @@ integrationsRouter.get(
       if (!integration) {
         throw new AppError('RESOURCE_NOT_FOUND', 'GitHub integration not found');
       }
-      const config = integration.config as { installationId: string; appId: string };
-      const { token } = await github.getInstallationToken(
-        config.installationId,
-        config.appId ?? env.GITHUB_APP_ID,
-        env.GITHUB_APP_PRIVATE_KEY,
-        integration.baseUrl ?? undefined,
-      );
-      const result = await github.listInstallationRepos(
-        token,
-        Number(req.query.page ?? 1),
-        Number(req.query.perPage ?? 30),
-        integration.baseUrl ?? undefined,
-      );
-      res.json(successEnvelope(result));
+      const config = integration.config as { accessToken?: string; installationId?: string; appId?: string };
+      const page = Number(req.query.page ?? 1);
+      const perPage = Number(req.query.perPage ?? 30);
+      const search = req.query.search as string | undefined;
+
+      // Personal Access Token path (simpler, recommended for SMEs)
+      if (config.accessToken) {
+        const result = await github.listUserRepos(
+          config.accessToken,
+          page,
+          perPage,
+          search,
+          integration.baseUrl ?? undefined,
+        );
+        return res.json(successEnvelope(result));
+      }
+
+      // GitHub App installation path
+      if (config.installationId) {
+        const { token } = await github.getInstallationToken(
+          config.installationId,
+          config.appId ?? env.GITHUB_APP_ID,
+          env.GITHUB_APP_PRIVATE_KEY,
+          integration.baseUrl ?? undefined,
+        );
+        const result = await github.listInstallationRepos(
+          token,
+          page,
+          perPage,
+          integration.baseUrl ?? undefined,
+        );
+        return res.json(successEnvelope(result));
+      }
+
+      throw new AppError('VALIDATION_ERROR', 'GitHub integration has no usable credentials');
     } catch (err) { next(err); }
   },
 );

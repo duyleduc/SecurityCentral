@@ -77,6 +77,42 @@ export async function connectGitHub(input: ConnectGitHubInput) {
 }
 
 // ---------------------------------------------------------------------------
+// GitHub Personal Access Token (simpler than GitHub App — no registration needed)
+// ---------------------------------------------------------------------------
+
+interface ConnectGitHubPatInput {
+  readonly orgId: string;
+  readonly accessToken: string;
+  readonly baseUrl?: string;
+  readonly verifySsl?: boolean;
+}
+
+export async function connectGitHubPat(input: ConnectGitHubPatInput) {
+  const webhookSecret = randomBytes(32).toString('hex');
+
+  return prisma.integration.upsert({
+    where: { orgId_provider: { orgId: input.orgId, provider: 'github' } },
+    create: {
+      orgId: input.orgId,
+      provider: 'github',
+      config: { accessToken: input.accessToken },
+      baseUrl: input.baseUrl ?? null,
+      verifySsl: input.verifySsl ?? true,
+      webhookSecret,
+      status: 'active',
+    },
+    update: {
+      config: { accessToken: input.accessToken },
+      baseUrl: input.baseUrl ?? null,
+      verifySsl: input.verifySsl ?? true,
+      webhookSecret,
+      status: 'active',
+      enabled: true,
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // GitLab PAT
 // ---------------------------------------------------------------------------
 

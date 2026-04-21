@@ -582,6 +582,18 @@ export function useIntegrations() {
   });
 }
 
+export function useConnectGitHubPAT() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { accessToken: string; baseUrl?: string; verifySsl?: boolean }) =>
+      apiClient<Integration & { login?: string; scopes?: string[] }>(
+        '/api/v1/integrations/github/pat',
+        { method: 'POST', body: JSON.stringify(data) },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['integrations'] }),
+  });
+}
+
 export function useConnectGitHub() {
   const qc = useQueryClient();
   return useMutation({

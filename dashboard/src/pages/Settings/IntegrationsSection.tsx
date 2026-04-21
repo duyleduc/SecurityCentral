@@ -13,6 +13,7 @@ import CodeIcon from '@mui/icons-material/Code';
 import {
   useIntegrations,
   useConnectGitHub,
+  useConnectGitHubPAT,
   useConnectGitLab,
   useDeleteIntegration,
   type Integration,
@@ -116,43 +117,125 @@ export function IntegrationsSection() {
 }
 
 function GitHubModal({ onClose }: { onClose: () => void }) {
-  const connectGitHub = useConnectGitHub();
+  const connectPAT = useConnectGitHubPAT();
+  const connectApp = useConnectGitHub();
+
+  const [mode, setMode] = useState<'pat' | 'app'>('pat');
+
+  // PAT fields
+  const [token, setToken] = useState('');
+  const [isEnterprise, setIsEnterprise] = useState(false);
+  const [baseUrl, setBaseUrl] = useState('');
+  const [verifySsl, setVerifySsl] = useState(true);
+
+  // App fields (advanced)
   const [installationId, setInstallationId] = useState('');
   const [appId, setAppId] = useState('');
 
   const handleConnect = async () => {
-    await connectGitHub.mutateAsync({ installationId, appId: appId || undefined });
+    if (mode === 'pat') {
+      await connectPAT.mutateAsync({
+        accessToken: token,
+        ...(isEnterprise && baseUrl ? { baseUrl } : {}),
+        ...(isEnterprise ? { verifySsl } : {}),
+      });
+    } else {
+      await connectApp.mutateAsync({ installationId, appId: appId || undefined });
+    }
     onClose();
   };
+
+  const pending = mode === 'pat' ? connectPAT.isPending : connectApp.isPending;
+  const error = mode === 'pat' ? connectPAT.error : connectApp.error;
+  const canSubmit = mode === 'pat'
+    ? token.trim().length > 0 && (!isEnterprise || baseUrl.trim().length > 0)
+    : installationId.trim().length > 0;
 
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Connect GitHub</DialogTitle>
       <DialogContent>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Install the SecurityCentral GitHub App, then enter the installation details below.
-        </Typography>
-        <TextField
-          fullWidth label="Installation ID" value={installationId}
-          onChange={(e) => setInstallationId(e.target.value)}
-          placeholder="12345678" size="small" sx={{ mb: 2 }}
-        />
-        <TextField
-          fullWidth label="App ID (optional)" value={appId}
-          onChange={(e) => setAppId(e.target.value)}
-          placeholder="67890" size="small"
-        />
-        {connectGitHub.isError && (
-          <Alert severity="error" sx={{ mt: 2 }}>{(connectGitHub.error as Error).message}</Alert>
+        <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+          <Chip
+            label="Personal access token"
+            color={mode === 'pat' ? 'primary' : 'default'}
+            variant={mode === 'pat' ? 'filled' : 'outlined'}
+            onClick={() => setMode('pat')}
+            clickable
+          />
+          <Chip
+            label="GitHub App (advanced)"
+            color={mode === 'app' ? 'primary' : 'default'}
+            variant={mode === 'app' ? 'filled' : 'outlined'}
+            onClick={() => setMode('app')}
+            clickable
+          />
+        </Stack>
+
+        {mode === 'pat' ? (
+          <>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Create a token at{' '}
+              <a href="https://github.com/settings/tokens/new?scopes=repo&description=SecurityCentral" target="_blank" rel="noreferrer" style={{ color: 'inherit' }}>
+                github.com/settings/tokens
+              </a>
+              {' '}with the <code>repo</code> scope (or a fine-grained token with repository read access).
+            </Typography>
+            <TextField
+              fullWidth type="password" label="Personal access token" value={token}
+              onChange={(e) => setToken(e.target.value)} placeholder="ghp_… or github_pat_…"
+              size="small" sx={{ mb: 2 }}
+            />
+            <FormControlLabel
+              control={<Switch checked={isEnterprise} onChange={(e) => setIsEnterprise(e.target.checked)} />}
+              label="GitHub Enterprise Server (self-hosted)"
+              sx={{ mb: 1 }}
+            />
+            {isEnterprise && (
+              <>
+                <TextField
+                  fullWidth label="Instance URL" value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  placeholder="https://github.your-company.com" size="small" sx={{ mb: 2 }}
+                />
+                <FormControlLabel
+                  control={<Switch checked={verifySsl} onChange={(e) => setVerifySsl(e.target.checked)} />}
+                  label="Verify SSL certificate" sx={{ mb: 1 }}
+                />
+                {!verifySsl && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    SSL verification is disabled. Only use this for trusted internal instances with self-signed certificates.
+                  </Alert>
+                )}
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Install the SecurityCentral GitHub App on your organization, then enter the installation details below.
+            </Typography>
+            <TextField
+              fullWidth label="Installation ID" value={installationId}
+              onChange={(e) => setInstallationId(e.target.value)}
+              placeholder="12345678" size="small" sx={{ mb: 2 }}
+            />
+            <TextField
+              fullWidth label="App ID (optional)" value={appId}
+              onChange={(e) => setAppId(e.target.value)}
+              placeholder="67890" size="small"
+            />
+          </>
+        )}
+
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }}>{(error as Error).message}</Alert>
         )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button
-          variant="contained" onClick={handleConnect}
-          disabled={!installationId || connectGitHub.isPending}
-        >
-          {connectGitHub.isPending ? 'Connecting...' : 'Connect'}
+        <Button variant="contained" onClick={handleConnect} disabled={!canSubmit || pending}>
+          {pending ? 'Verifying…' : 'Connect'}
         </Button>
       </DialogActions>
     </Dialog>
