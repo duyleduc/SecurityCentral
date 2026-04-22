@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Projects — Option C</title>
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand"><div class="nav-logo">SC</div><div class="sidebar-brand-text">SecurityCentral</div></div>
+      <nav class="sidebar-nav">
+        <a class="sidebar-item" href="c-dashboard.html"><span class="icon">📊</span>Dashboard</a>
+        <div class="sidebar-item active"><span class="icon">📁</span>Projects</div>
+        <a class="sidebar-item" href="c-domains-list.html"><span class="icon">🌐</span>Domains</a>
+        <a class="sidebar-item" href="c-servers-list.html"><span class="icon">🖥</span>Servers</a>
+        <a class="sidebar-item" href="c-repos-list.html"><span class="icon">🐙</span>Repositories</a>
+        <a class="sidebar-item" href="c-findings.html"><span class="icon">🐛</span>Findings<span class="count">12</span></a>
+        <a class="sidebar-item" href="c-settings.html"><span class="icon">⚙</span>Settings</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="nav-avatar" style="width: 28px; height: 28px; font-size: 11px;">D</div>
+        <div class="sidebar-footer-email">duy.le@arneo.io</div>
+      </div>
+    </aside>
+
+    <main class="shell-main">
+      <div class="appbar">
+        <div class="appbar-page-title">Projects</div>
+        <div class="project-switcher" style="margin-left: 14px;">
+          <span class="dot"></span><span>All projects</span><span class="caret">▼</span>
+        </div>
+        <div class="search" style="margin-left: 16px;">
+          <span>🔍</span><input placeholder="Search…"><span class="kbd">⌘K</span>
+        </div>
+        <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+          <div class="nav-icon">🔔<span class="badge">4</span></div>
+          <div class="nav-avatar">D</div>
+        </div>
+      </div>
+
+      <div class="shell-content">
+        <div class="url-bar">
+          <span>🔗</span><span>app.securitycentral.io/projects</span>
+          <span class="muted">· scope: all projects</span>
+        </div>
+
+        <div class="row" style="justify-content: space-between; margin-bottom: 16px;">
+          <h1 style="margin: 0;">Projects</h1>
+          <button class="btn">+ New Project</button>
+        </div>
+
+        <div class="grid-3">
+          <a class="list-card" href="c-project-detail.html" style="display: block; color: inherit;">
+            <div class="list-card-header">
+              <div class="grade a">A</div>
+              <div style="flex: 1;">
+                <div class="list-card-title">production</div>
+                <div class="list-card-meta">14 servers · 9 domains · 8 repos</div>
+              </div>
+            </div>
+            <div class="row" style="gap: 6px; margin-top: 8px;">
+              <span class="chip success dot">12 healthy</span>
+              <span class="chip warning dot">2 at-risk</span>
+              <span class="chip error dot">1 critical</span>
+            </div>
+          </a>
+
+          <a class="list-card" href="c-project-detail.html" style="display: block; color: inherit;">
+            <div class="list-card-header">
+              <div class="grade b">B</div>
+              <div style="flex: 1;">
+                <div class="list-card-title">staging</div>
+                <div class="list-card-meta">6 servers · 3 domains · 4 repos</div>
+              </div>
+            </div>
+            <div class="row" style="gap: 6px; margin-top: 8px;">
+              <span class="chip success dot">5 healthy</span>
+              <span class="chip warning dot">3 at-risk</span>
+              <span class="chip outline">1 down</span>
+            </div>
+          </a>
+
+          <a class="list-card" href="c-project-detail.html" style="display: block; color: inherit;">
+            <div class="list-card-header">
+              <div class="grade c">C</div>
+              <div style="flex: 1;">
+                <div class="list-card-title">customer-foo</div>
+                <div class="list-card-meta">3 servers · 2 domains · 1 repo</div>
+              </div>
+            </div>
+            <div class="row" style="gap: 6px; margin-top: 8px;">
+              <span class="chip success dot">2 healthy</span>
+              <span class="chip warning dot">2 at-risk</span>
+              <span class="chip error dot">1 critical</span>
+            </div>
+          </a>
+
+          <a class="list-card" href="c-project-detail.html" style="display: block; color: inherit;">
+            <div class="list-card-header">
+              <div class="grade b">B</div>
+              <div style="flex: 1;">
+                <div class="list-card-title">dev</div>
+                <div class="list-card-meta">2 servers · 1 domain</div>
+              </div>
+            </div>
+            <div class="row" style="gap: 6px; margin-top: 8px;">
+              <span class="chip success dot">3 healthy</span>
+            </div>
+          </a>
+        </div>
+
+        <a class="back" href="c-index.html" style="margin-top: 24px; display: inline-block;">← Back to Option C index</a>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

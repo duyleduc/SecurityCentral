@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Settings — Option C</title>
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand"><div class="nav-logo">SC</div><div class="sidebar-brand-text">SecurityCentral</div></div>
+      <nav class="sidebar-nav">
+        <a class="sidebar-item" href="c-dashboard.html"><span class="icon">📊</span>Dashboard</a>
+        <a class="sidebar-item" href="c-projects.html"><span class="icon">📁</span>Projects</a>
+        <a class="sidebar-item" href="c-domains-list.html"><span class="icon">🌐</span>Domains</a>
+        <a class="sidebar-item" href="c-servers-list.html"><span class="icon">🖥</span>Servers</a>
+        <a class="sidebar-item" href="c-repos-list.html"><span class="icon">🐙</span>Repositories</a>
+        <a class="sidebar-item" href="c-findings.html"><span class="icon">🐛</span>Findings<span class="count">12</span></a>
+        <div class="sidebar-item active"><span class="icon">⚙</span>Settings</div>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="nav-avatar" style="width: 28px; height: 28px; font-size: 11px;">D</div>
+        <div class="sidebar-footer-email">duy.le@arneo.io</div>
+      </div>
+    </aside>
+
+    <main class="shell-main">
+      <div class="appbar">
+        <div class="appbar-page-title">Settings</div>
+        <div class="project-switcher" style="margin-left: 14px;">
+          <span class="dot"></span><span>production</span><span class="caret">▼</span>
+        </div>
+        <div class="search" style="margin-left: 16px;">
+          <span>🔍</span><input placeholder="Search…"><span class="kbd">⌘K</span>
+        </div>
+        <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+          <div class="nav-icon">🔔<span class="badge">4</span></div>
+          <div class="nav-avatar">D</div>
+        </div>
+      </div>
+
+      <div class="shell-content">
+        <div class="url-bar">
+          <span>🔗</span><span>app.securitycentral.io/settings</span>
+          <span class="muted">· global (not project-scoped)</span>
+        </div>
+
+        <h1 style="margin-bottom: 16px;">Settings</h1>
+
+        <div class="tabs">
+          <div class="tab active">Organization</div>
+          <div class="tab">Integrations</div>
+          <div class="tab">API Keys</div>
+          <div class="tab">Notifications</div>
+        </div>
+
+        <div class="card" style="margin-bottom: 16px;">
+          <h3>Organization</h3>
+          <div class="row" style="gap: 12px; align-items: flex-end; margin-top: 10px;">
+            <div>
+              <div class="muted" style="font-size: 11px; text-transform: uppercase;">Name</div>
+              <input class="filter-input" value="Arneo" style="min-width: 300px;">
+            </div>
+            <button class="btn">Save</button>
+          </div>
+          <div class="row" style="gap: 24px; margin-top: 16px;">
+            <span class="muted" style="font-size: 12px;">Plan: <strong style="color: var(--text);">free</strong></span>
+            <span class="muted" style="font-size: 12px;">Slug: <strong class="mono" style="color: var(--text);">arneo-a3f4c2</strong></span>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 16px;">
+          <div class="row" style="justify-content: space-between; margin-bottom: 14px;">
+            <h3 style="margin: 0;">Team Members</h3>
+            <button class="btn">+ Invite Member</button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Duy Le <span class="muted">(you)</span></td>
+                <td>duy.le@arneo.io</td>
+                <td><span class="chip" style="background: rgba(124, 58, 237, 0.2); color: #c4b5fd;">owner</span></td>
+                <td class="muted">Jan 12, 2026</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td>Sarah Chen</td>
+                <td>sarah@arneo.io</td>
+                <td><span class="chip primary">admin</span></td>
+                <td class="muted">Feb 3, 2026</td>
+                <td><button class="btn ghost sm">🗑</button></td>
+              </tr>
+              <tr>
+                <td>Alex Park</td>
+                <td>alex@arneo.io</td>
+                <td><span class="chip success">member</span></td>
+                <td class="muted">Mar 14, 2026</td>
+                <td><button class="btn ghost sm">🗑</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3>Pending Invitations</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th><th>Email</th><th>Role</th><th>Work state</th><th>Expires</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Mike Johnson</td>
+                <td>mike@arneo.io</td>
+                <td><span class="chip success">member</span></td>
+                <td><span class="chip warning dot">in-progress</span></td>
+                <td class="muted">in 5 days</td>
+                <td><button class="btn ghost sm">↻ Resend</button></td>
+              </tr>
+              <tr>
+                <td>Priya Sharma</td>
+                <td>priya@arneo.io</td>
+                <td><span class="chip success">member</span></td>
+                <td><span class="chip error dot">expired</span></td>
+                <td class="muted">yesterday</td>
+                <td><button class="btn sm">Reinvite</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <a class="back" href="c-index.html" style="margin-top: 24px; display: inline-block;">← Back to Option C index</a>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

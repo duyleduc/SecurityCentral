@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Option C — Project Switcher + Status Normalization</title>
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-logo">SC</div>
+    <div class="nav-title">SecurityCentral</div>
+    <div class="project-switcher"><span class="dot"></span><span>production</span><span class="caret">▼</span></div>
+    <div class="nav-items">
+      <span class="nav-item active">Dashboard</span>
+      <span class="nav-item">Projects</span>
+      <span class="nav-item">Domains</span>
+      <span class="nav-item">Servers</span>
+      <span class="nav-item">Repositories</span>
+      <span class="nav-item">Findings</span>
+      <span class="nav-item">Settings</span>
+    </div>
+    <div class="nav-right">
+      <div class="nav-icon">🔔<span class="badge">4</span></div>
+      <div class="nav-avatar">D</div>
+    </div>
+  </nav>
+
+  <div class="page">
+    <a class="back" href="index.html">← Back to mockups</a>
+    <h1>Project switcher + status normalization</h1>
+    <p class="muted" style="margin-bottom: 24px;">
+      Two small changes that propagate across the entire app with no new pages.
+    </p>
+
+    <!-- Part 1: Project switcher -->
+    <h2 style="margin-top: 8px;">1. Global project switcher</h2>
+    <p class="muted" style="font-size: 13px; margin-bottom: 16px;">
+      Scope pill in the top bar — persists across every list and detail page. Per-page "Project" dropdowns get removed.
+    </p>
+
+    <div class="compare">
+      <div>
+        <div class="column-label before">Before</div>
+        <div class="mockup">
+          <div class="mockup-chrome">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          </div>
+          <div style="background: var(--bg-elev); padding: 10px 16px; border-bottom: 1px solid var(--card-border); display: flex; gap: 16px; align-items: center; font-size: 13px;">
+            <span class="nav-logo" style="width: 24px; height: 24px; font-size: 11px;">SC</span>
+            <span class="muted">Dashboard · Projects · Domains · Servers · Repos · ...</span>
+            <span style="margin-left: auto;" class="nav-avatar" data-small>D</span>
+          </div>
+          <div class="mockup-body">
+            <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px;">/servers</div>
+            <div class="row" style="gap: 8px;">
+              <span class="chip outline">📁 Project ▼</span>
+              <span class="chip outline">Tag: env=prod ×</span>
+              <span class="chip outline">Apply</span>
+            </div>
+            <div class="spacer-sm"></div>
+            <div class="muted" style="font-size: 12px;">
+              ↓ User goes to /domains...
+            </div>
+            <div class="spacer-sm"></div>
+            <div style="font-size: 13px; font-weight: 600;">/domains</div>
+            <div class="row" style="gap: 8px; margin-top: 6px;">
+              <span class="chip outline">📁 Project ▼</span>
+              <span class="chip outline muted">(scope is lost — user must re-select)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="column-label after">After</div>
+        <div class="mockup">
+          <div class="mockup-chrome">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          </div>
+          <div style="background: var(--bg-elev); padding: 10px 16px; border-bottom: 1px solid var(--card-border); display: flex; gap: 16px; align-items: center; font-size: 13px;">
+            <span class="nav-logo" style="width: 24px; height: 24px; font-size: 11px;">SC</span>
+            <span class="project-switcher"><span class="dot"></span><span>production</span><span class="caret">▼</span></span>
+            <span class="muted">Dashboard · Projects · Domains · Servers · Repos · ...</span>
+            <span style="margin-left: auto;" class="nav-avatar" data-small>D</span>
+          </div>
+          <div class="mockup-body">
+            <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px;">/servers?project=prod</div>
+            <div class="row" style="gap: 8px;">
+              <span class="chip outline">Tag: env=web ×</span>
+              <span class="chip outline">Status: at-risk ×</span>
+            </div>
+            <div class="spacer-sm"></div>
+            <div class="muted" style="font-size: 12px;">
+              ↓ User navigates to /domains — scope is kept
+            </div>
+            <div class="spacer-sm"></div>
+            <div style="font-size: 13px; font-weight: 600;">/domains?project=prod</div>
+            <div class="row" style="gap: 8px; margin-top: 6px;">
+              <span class="chip primary" style="font-size: 11px;">Scope preserved: production</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spacer-md"></div>
+
+    <div class="card">
+      <h3>Behavior</h3>
+      <ul style="padding-left: 18px; color: var(--text-secondary); font-size: 13px; line-height: 1.7;">
+        <li>Clicking the project chip opens a dropdown: <em>production</em>, <em>staging</em>, <em>customer-foo</em>, <em>All projects</em>, <em>+ New project</em>.</li>
+        <li>Selection is stored in the URL (<span class="mono">?project=prod</span>) → shareable, deep-linkable, survives page reload.</li>
+        <li>Every list page (Servers / Domains / Repos / Findings) implicitly filters by this scope; no per-page project dropdown needed.</li>
+        <li>"All projects" is the default for admins; individual projects are opt-in scopes.</li>
+      </ul>
+    </div>
+
+    <div class="spacer-lg"></div>
+
+    <!-- Part 2: Status normalization -->
+    <h2>2. Status & color normalization</h2>
+    <p class="muted" style="font-size: 13px; margin-bottom: 16px;">
+      Three parallel vocabularies today collapse into three <em>dimensions</em> with consistent language.
+    </p>
+
+    <div class="compare">
+      <div>
+        <div class="column-label before">Before — vocabularies clash</div>
+        <div class="card" style="padding: 16px;">
+          <div style="margin-bottom: 12px;">
+            <div class="muted" style="font-size: 11px; margin-bottom: 6px;">Servers</div>
+            <div class="row" style="gap: 6px;">
+              <span class="chip success dot">online</span>
+              <span class="chip warning dot">warning</span>
+              <span class="chip error dot">critical</span>
+              <span class="chip outline">offline</span>
+              <span class="chip outline">dead</span>
+            </div>
+          </div>
+          <div style="margin-bottom: 12px;">
+            <div class="muted" style="font-size: 11px; margin-bottom: 6px;">Domains</div>
+            <div class="row" style="gap: 6px;">
+              <span class="chip success dot">healthy</span>
+              <span class="chip warning dot">degraded</span>
+              <span class="chip error dot">down</span>
+              <span class="chip outline">pending</span>
+            </div>
+          </div>
+          <div>
+            <div class="muted" style="font-size: 11px; margin-bottom: 6px;">Findings</div>
+            <div class="row" style="gap: 6px;">
+              <span class="chip error dot">open</span>
+              <span class="chip warning dot">in_progress</span>
+              <span class="chip success dot">resolved</span>
+              <span class="chip outline">ignored</span>
+            </div>
+          </div>
+          <div class="muted" style="font-size: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--card-border);">
+            A red chip could mean: "the server is in critical state", "the domain is unreachable", or "there's an open critical finding". User has to context-switch to know.
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="column-label after">After — 3 orthogonal dimensions</div>
+        <div class="card" style="padding: 16px;">
+          <div style="margin-bottom: 14px;">
+            <div class="muted" style="font-size: 11px; margin-bottom: 6px;">
+              Health · applies to every asset
+            </div>
+            <div class="row" style="gap: 6px;">
+              <span class="chip success dot">healthy</span>
+              <span class="chip warning dot">at-risk</span>
+              <span class="chip error dot">critical</span>
+              <span class="chip outline">unknown</span>
+            </div>
+          </div>
+          <div style="margin-bottom: 14px;">
+            <div class="muted" style="font-size: 11px; margin-bottom: 6px;">
+              Operational state · is the asset reachable?
+            </div>
+            <div class="row" style="gap: 6px;">
+              <span class="chip success">● up</span>
+              <span class="chip outline">○ down</span>
+            </div>
+          </div>
+          <div>
+            <div class="muted" style="font-size: 11px; margin-bottom: 6px;">
+              Work state · findings, invitations (task lifecycle)
+            </div>
+            <div class="row" style="gap: 6px;">
+              <span class="chip outline">○ new</span>
+              <span class="chip warning dot">in-progress</span>
+              <span class="chip success dot">resolved</span>
+              <span class="chip outline">✕ dismissed</span>
+            </div>
+          </div>
+          <div class="muted" style="font-size: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--card-border);">
+            Same words, same colors, same meaning — regardless of whether you're looking at a server, domain, repo, or finding.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spacer-lg"></div>
+
+    <!-- Mapping table -->
+    <div class="card">
+      <h3>Migration mapping</h3>
+      <p class="muted" style="font-size: 13px; margin-bottom: 12px;">
+        How existing labels map to the new vocabulary. Storage stays the same — only the display layer changes.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Current label</th>
+            <th>Asset type</th>
+            <th>→</th>
+            <th>New label</th>
+            <th>Dimension</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="chip success dot">online</span></td><td>Server</td>
+            <td class="muted">→</td>
+            <td><span class="chip success dot">healthy</span> + <span class="chip success">● up</span></td>
+            <td class="muted">Health + Op</td>
+          </tr>
+          <tr>
+            <td><span class="chip warning dot">warning</span></td><td>Server</td>
+            <td class="muted">→</td>
+            <td><span class="chip warning dot">at-risk</span> + <span class="chip success">● up</span></td>
+            <td class="muted">Health + Op</td>
+          </tr>
+          <tr>
+            <td><span class="chip error dot">critical</span></td><td>Server</td>
+            <td class="muted">→</td>
+            <td><span class="chip error dot">critical</span> + <span class="chip success">● up</span></td>
+            <td class="muted">Health + Op</td>
+          </tr>
+          <tr>
+            <td><span class="chip outline">offline</span> / <span class="chip outline">dead</span></td><td>Server</td>
+            <td class="muted">→</td>
+            <td><span class="chip outline">unknown</span> + <span class="chip outline">○ down</span></td>
+            <td class="muted">Health + Op</td>
+          </tr>
+          <tr>
+            <td><span class="chip success dot">healthy</span></td><td>Domain</td>
+            <td class="muted">→</td>
+            <td><span class="chip success dot">healthy</span> + <span class="chip success">● up</span></td>
+            <td class="muted">Health + Op</td>
+          </tr>
+          <tr>
+            <td><span class="chip warning dot">degraded</span></td><td>Domain</td>
+            <td class="muted">→</td>
+            <td><span class="chip warning dot">at-risk</span> + <span class="chip success">● up</span></td>
+            <td class="muted">Health + Op</td>
+          </tr>
+          <tr>
+            <td><span class="chip error dot">down</span></td><td>Domain</td>
+            <td class="muted">→</td>
+            <td><span class="chip error dot">critical</span> + <span class="chip outline">○ down</span></td>
+            <td class="muted">Health + Op</td>
+          </tr>
+          <tr>
+            <td><span class="chip error dot">open</span></td><td>Finding</td>
+            <td class="muted">→</td>
+            <td><span class="chip outline">○ new</span></td>
+            <td class="muted">Work</td>
+          </tr>
+          <tr>
+            <td><span class="chip warning dot">in_progress</span></td><td>Finding</td>
+            <td class="muted">→</td>
+            <td><span class="chip warning dot">in-progress</span></td>
+            <td class="muted">Work</td>
+          </tr>
+          <tr>
+            <td><span class="chip outline">ignored</span></td><td>Finding</td>
+            <td class="muted">→</td>
+            <td><span class="chip outline">✕ dismissed</span> (with reason)</td>
+            <td class="muted">Work</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="spacer-md"></div>
+
+    <div class="card">
+      <h3 style="color: #a5b4fc;">💡 Why this is the cheapest win</h3>
+      <ul style="padding-left: 18px; color: var(--text-secondary); font-size: 13px; line-height: 1.7;">
+        <li><strong>One shared design-system token</strong> for health/op/work state → every chip in the app uses the same palette and wording.</li>
+        <li><strong>No data migration needed</strong> — the mapping lives in a frontend display helper. Backend labels can stay unchanged or be renamed incrementally.</li>
+        <li><strong>Project switcher</strong> is one top-nav change + one URL-state hook + 3 list-page cleanups. ~1 day.</li>
+        <li><strong>Makes Options A and B feel right</strong> — those redesigns lose impact if the terminology underneath is still inconsistent.</li>
+        <li><strong>Backward compatible</strong> — existing filter URLs keep working; the switcher is additive.</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

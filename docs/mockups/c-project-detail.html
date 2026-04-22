@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Project Detail — Option C</title>
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    .setting-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 0; border-bottom: 1px solid var(--card-border);
+      gap: 20px;
+    }
+    .setting-row:last-child { border-bottom: none; }
+    .setting-label { flex: 1; min-width: 0; }
+    .setting-label-title { font-size: 13px; font-weight: 500; }
+    .setting-label-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; line-height: 1.5; }
+    .setting-control { flex-shrink: 0; }
+    .toggle {
+      width: 36px; height: 20px; border-radius: 10px;
+      background: rgba(99, 102, 241, 0.4);
+      position: relative; cursor: pointer;
+    }
+    .toggle::after {
+      content: ''; position: absolute; top: 2px; right: 2px;
+      width: 16px; height: 16px; border-radius: 50%; background: #fff;
+    }
+    .toggle.off { background: rgba(148, 163, 184, 0.2); }
+    .toggle.off::after { right: auto; left: 2px; }
+    .danger-zone {
+      border-color: rgba(239, 68, 68, 0.25);
+      background: rgba(239, 68, 68, 0.03);
+    }
+    /* Prominent description textarea */
+    .description-card {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .description-meta {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 11px; color: var(--text-secondary);
+    }
+    .description-textarea {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 14px 16px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.65;
+      min-height: 160px;
+      resize: vertical;
+    }
+    .description-textarea:focus {
+      outline: none;
+      border-color: rgba(99, 102, 241, 0.5);
+      background: rgba(15, 23, 42, 0.6);
+    }
+    .md-toolbar {
+      display: flex; gap: 4px;
+      padding: 6px 8px;
+      background: rgba(15, 23, 42, 0.3);
+      border: 1px solid var(--card-border);
+      border-bottom: none;
+      border-radius: 6px 6px 0 0;
+    }
+    .md-toolbar + .description-textarea {
+      border-top-left-radius: 0;
+      border-top-right-radius: 0;
+    }
+    .md-btn {
+      background: transparent; border: none; color: var(--text-secondary);
+      padding: 4px 8px; border-radius: 4px; cursor: pointer;
+      font-size: 12px; font-family: inherit;
+    }
+    .md-btn:hover { background: rgba(148, 163, 184, 0.12); color: var(--text); }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand"><div class="nav-logo">SC</div><div class="sidebar-brand-text">SecurityCentral</div></div>
+      <nav class="sidebar-nav">
+        <a class="sidebar-item" href="c-dashboard.html"><span class="icon">📊</span>Dashboard</a>
+        <div class="sidebar-item active"><span class="icon">📁</span>Projects</div>
+        <a class="sidebar-item" href="c-domains-list.html"><span class="icon">🌐</span>Domains</a>
+        <a class="sidebar-item" href="c-servers-list.html"><span class="icon">🖥</span>Servers</a>
+        <a class="sidebar-item" href="c-repos-list.html"><span class="icon">🐙</span>Repositories</a>
+        <a class="sidebar-item" href="c-findings.html"><span class="icon">🐛</span>Findings<span class="count">12</span></a>
+        <a class="sidebar-item" href="c-settings.html"><span class="icon">⚙</span>Settings</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="nav-avatar" style="width: 28px; height: 28px; font-size: 11px;">D</div>
+        <div class="sidebar-footer-email">duy.le@arneo.io</div>
+      </div>
+    </aside>
+
+    <main class="shell-main">
+      <div class="appbar">
+        <span class="appbar-crumb"><a href="c-projects.html">Projects</a> /</span>
+        <div class="appbar-page-title">production</div>
+        <div class="project-switcher" style="margin-left: 14px;">
+          <span class="dot"></span><span>production</span><span class="caret">▼</span>
+        </div>
+        <div class="search" style="margin-left: 16px;">
+          <span>🔍</span><input placeholder="Search…"><span class="kbd">⌘K</span>
+        </div>
+        <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+          <div class="nav-icon">🔔<span class="badge">4</span></div>
+          <div class="nav-avatar">D</div>
+        </div>
+      </div>
+
+      <div class="shell-content">
+        <div class="url-bar">
+          <span>🔗</span><span>app.securitycentral.io/projects/prod-abc-123</span>
+          <span class="url-scope">?project=prod</span>
+        </div>
+
+        <!-- Header -->
+        <div class="row" style="align-items: center; gap: 16px; margin-bottom: 16px;">
+          <div style="width: 56px; height: 56px; border-radius: 12px; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; font-size: 26px;">📁</div>
+          <div style="flex: 1;">
+            <div class="row" style="gap: 10px; align-items: center;">
+              <span style="font-size: 26px; font-weight: 600;">production</span>
+              <span class="chip outline">project</span>
+              <span class="chip outline">created Jan 12, 2026</span>
+            </div>
+            <div class="muted" style="margin-top: 6px; font-size: 13px;">
+              Owned by <strong>@platform</strong> · edited by <strong>@sarah</strong> 3 days ago
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary strip -->
+        <div class="card" style="padding: 14px 20px; margin-bottom: 20px;">
+          <div class="row" style="align-items: center; gap: 32px;">
+            <div>
+              <div class="muted" style="font-size: 11px; text-transform: uppercase;">At a glance</div>
+            </div>
+            <div><strong>14</strong> <span class="muted">servers</span></div>
+            <div><strong>9</strong> <span class="muted">domains</span></div>
+            <div><strong>8</strong> <span class="muted">repos</span></div>
+            <a href="c-dashboard.html" style="margin-left: auto;" class="btn outline sm">
+              Open scoped dashboard →
+            </a>
+          </div>
+        </div>
+
+        <div class="muted" style="font-size: 12px; margin-bottom: 12px;">
+          This page configures <em>how</em> the project behaves. For live data, scores, and findings, open the scoped dashboard.
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <div class="tab active">Settings</div>
+          <div class="tab">Alert rules</div>
+          <div class="tab">Defaults &amp; policies</div>
+          <div class="tab">Integrations</div>
+        </div>
+
+        <!-- PROMINENT DESCRIPTION FIELD -->
+        <div class="card description-card" style="margin-bottom: 16px;">
+          <div class="row" style="justify-content: space-between; align-items: baseline;">
+            <h3 style="margin: 0;">Description</h3>
+            <div class="description-meta">
+              <span>Markdown supported</span>
+              <span>·</span>
+              <span>624 / 4000 characters</span>
+              <span>·</span>
+              <span style="color: var(--success);">✓ saved 3 days ago</span>
+            </div>
+          </div>
+          <p class="muted" style="font-size: 12px; margin-bottom: 4px;">
+            Document what this project is, who owns it, how to get access, on-call rotation, links to runbooks,
+            compliance context — whatever your team needs to remember 6 months from now.
+          </p>
+
+          <div class="md-toolbar">
+            <button class="md-btn"><strong>B</strong></button>
+            <button class="md-btn"><em>I</em></button>
+            <button class="md-btn">H1</button>
+            <button class="md-btn">H2</button>
+            <button class="md-btn">·</button>
+            <button class="md-btn">🔗 link</button>
+            <button class="md-btn">{ } code</button>
+            <button class="md-btn">— divider</button>
+            <button class="md-btn" style="margin-left: auto;">👁 Preview</button>
+          </div>
+          <textarea class="description-textarea" spellcheck="false">## Production environment
+
+Customer-facing EU-West-1 region. Handles all paid-tier traffic (approx. 2.5M req/day).
+
+**Owners:** @platform team (primary), @sre team (secondary escalation)
+**On-call:** PagerDuty schedule `prod-primary` · rotation Mon–Sun 00:00 UTC
+**Compliance:** ISO 27001 scope · SOC 2 Type II in progress
+
+### Runbooks
+- [Incident response](https://runbooks/prod/incident)
+- [Database failover procedure](https://runbooks/prod/db-failover)
+- [Rollback playbook](https://runbooks/prod/rollback)
+
+### Access
+Request access via #platform-access. All changes to this project go through
+a PR review in `infra/prod` — no direct console edits.
+
+### Known gotchas
+- `prod-db-02` runs a legacy Postgres 14 — migration to 16 planned Q3
+- External attack-surface scans disabled on `internal.foo.com` (internal-only)
+</textarea>
+
+          <div class="row" style="margin-top: 6px;">
+            <button class="btn sm">Save</button>
+            <button class="btn outline sm">Discard changes</button>
+            <span class="muted" style="margin-left: auto; font-size: 11px;">⌘S to save</span>
+          </div>
+        </div>
+
+        <!-- GENERAL -->
+        <div class="card" style="margin-bottom: 16px;">
+          <h3>General</h3>
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-label-title">Name</div>
+              <div class="setting-label-desc">Shown in the project switcher and every asset list.</div>
+            </div>
+            <div class="setting-control">
+              <input class="filter-input" value="production" style="min-width: 240px;">
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-label-title">Color &amp; icon</div>
+              <div class="setting-label-desc">Shown next to the project name everywhere.</div>
+            </div>
+            <div class="setting-control">
+              <div class="row" style="gap: 6px;">
+                <span style="width: 24px; height: 24px; border-radius: 6px; background: #6366f1; border: 2px solid #fff;"></span>
+                <span style="width: 24px; height: 24px; border-radius: 6px; background: #22c55e;"></span>
+                <span style="width: 24px; height: 24px; border-radius: 6px; background: #f59e0b;"></span>
+                <span style="width: 24px; height: 24px; border-radius: 6px; background: #ef4444;"></span>
+                <span style="width: 24px; height: 24px; border-radius: 6px; background: #06b6d4;"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- INHERITED TAGS -->
+        <div class="card" style="margin-bottom: 16px;">
+          <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
+            <h3 style="margin: 0;">Inherited tags</h3>
+            <button class="btn outline sm">+ Add tag</button>
+          </div>
+          <p class="muted" style="font-size: 12px; margin-bottom: 12px;">
+            These tags are automatically applied to every new server, domain, and repository added to this project.
+            Assets keep their own tags on top.
+          </p>
+          <div class="row" style="gap: 6px; flex-wrap: wrap;">
+            <span class="chip outline mono">env=prod ×</span>
+            <span class="chip outline mono">region=eu-west-1 ×</span>
+            <span class="chip outline mono">compliance=iso27001 ×</span>
+            <span class="chip outline mono">owner=platform ×</span>
+          </div>
+        </div>
+
+        <!-- ALERT RULES -->
+        <div class="card" style="margin-bottom: 16px;">
+          <h3>Alert rules <span class="chip outline" style="margin-left: 6px;">project-scoped</span></h3>
+          <p class="muted" style="font-size: 12px; margin-bottom: 12px;">
+            Override the org-wide notification preferences for assets in <strong>production</strong>.
+            Rules here take precedence.
+          </p>
+
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-label-title">
+                🔥 Critical findings on any asset
+                <span class="chip error" style="margin-left: 6px;">always</span>
+              </div>
+              <div class="setting-label-desc">
+                Fires when a new critical finding is opened.
+                Delivery: email to <strong>@platform</strong>, Slack <code>#prod-alerts</code>.
+              </div>
+            </div>
+            <div class="setting-control"><div class="toggle"></div></div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-label-title">
+                🔒 SSL cert expiring
+                <span class="chip warning" style="margin-left: 6px;">30d / 14d / 7d / 1d</span>
+              </div>
+              <div class="setting-label-desc">
+                Four escalating reminders before expiry. Delivery: email to <strong>@platform</strong>.
+              </div>
+            </div>
+            <div class="setting-control"><div class="toggle"></div></div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-label-title">
+                ⚠ Server critical health
+                <span class="chip outline" style="margin-left: 6px;">15min debounce</span>
+              </div>
+              <div class="setting-label-desc">
+                CPU &gt;85% or RAM &gt;90% sustained. Delivery: email + PagerDuty.
+              </div>
+            </div>
+            <div class="setting-control"><div class="toggle"></div></div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-label-title">🌐 Domain down</div>
+              <div class="setting-label-desc">
+                Currently disabled for this project — using org default (off).
+              </div>
+            </div>
+            <div class="setting-control"><div class="toggle off"></div></div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-label-title">🌙 Quiet hours</div>
+              <div class="setting-label-desc">
+                22:00 – 07:00 Europe/Paris · weekends off · critical still fires through.
+              </div>
+            </div>
+            <div class="setting-control">
+              <button class="btn outline sm">Edit schedule</button>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top: 12px;">
+            <button class="btn outline sm">+ Add custom rule</button>
+            <a href="#" style="margin-left: auto; font-size: 12px;">View org-wide defaults →</a>
+          </div>
+        </div>
+
+        <!-- DEFAULTS -->
+        <div class="card" style="margin-bottom: 16px;">
+          <h3>Defaults applied to new assets</h3>
+          <p class="muted" style="font-size: 12px; margin-bottom: 12px;">
+            Automatically applied the moment a new server, domain, or repo is added to <strong>production</strong>.
+          </p>
+
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-label-title">Domain check interval</div>
+              <div class="setting-label-desc">Default uptime polling cadence.</div>
+            </div>
+            <div class="setting-control"><span class="chip outline">15s</span></div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-label-title">Required tags on assets</div>
+              <div class="setting-label-desc">Asset creation is blocked unless these tag keys are set.</div>
+            </div>
+            <div class="setting-control">
+              <div class="row" style="gap: 4px;">
+                <span class="chip outline mono">tier</span>
+                <span class="chip outline mono">owner</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-label-title">Repo scan frequency</div>
+              <div class="setting-label-desc">Full scan on push to default branch; delta on feature branches.</div>
+            </div>
+            <div class="setting-control">
+              <span class="chip outline">on push</span>
+              <span class="chip outline" style="margin-left: 4px;">+ daily rescan</span>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-label-title">Auto-dismiss "info" findings older than</div>
+              <div class="setting-label-desc">Low-noise housekeeping for things nobody will ever act on.</div>
+            </div>
+            <div class="setting-control"><span class="chip outline">90 days</span></div>
+          </div>
+        </div>
+
+        <!-- DANGER ZONE -->
+        <div class="card danger-zone">
+          <h3 style="color: #fca5a5;">Danger zone</h3>
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-label-title">Archive project</div>
+              <div class="setting-label-desc">
+                Hides it from navigation and stops all alerting. Assets continue to report but findings are frozen.
+                Reversible.
+              </div>
+            </div>
+            <div class="setting-control"><button class="btn outline sm">Archive</button></div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-label">
+              <div class="setting-label-title" style="color: #fca5a5;">Delete project</div>
+              <div class="setting-label-desc">
+                Permanently deletes the project and <strong>unassigns</strong> all its assets
+                (assets themselves are kept). This cannot be undone.
+              </div>
+            </div>
+            <div class="setting-control">
+              <button class="btn" style="background: var(--error);">Delete project…</button>
+            </div>
+          </div>
+        </div>
+
+        <a class="back" href="c-index.html" style="margin-top: 24px; display: inline-block;">← Back to Option C index</a>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

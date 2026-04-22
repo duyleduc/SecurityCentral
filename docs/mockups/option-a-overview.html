@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Option A — Overview Redesign</title>
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-logo">SC</div>
+    <div class="nav-title">SecurityCentral</div>
+    <div class="project-switcher" title="Project scope">
+      <span class="dot"></span>
+      <span>production</span>
+      <span class="caret">▼</span>
+    </div>
+    <div class="nav-items">
+      <span class="nav-item active">Overview</span>
+      <span class="nav-item">Assets ▾</span>
+      <span class="nav-item">Work</span>
+      <span class="nav-item">Activity</span>
+      <span class="nav-item">Settings ▾</span>
+    </div>
+    <div class="nav-right">
+      <div class="nav-icon" title="Notifications">🔔<span class="badge">4</span></div>
+      <div class="nav-avatar">D</div>
+    </div>
+  </nav>
+
+  <div class="page">
+    <a class="back" href="index.html">← Back to mockups</a>
+
+    <div style="display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px;">
+      <h1 style="margin: 0;">Good morning, Duy.</h1>
+      <span class="muted" style="font-size: 14px;">Monday, April 21 · Here's what needs you today.</span>
+    </div>
+    <p class="muted" style="margin-bottom: 20px; font-size: 13px;">
+      Scope: <strong style="color: #a5b4fc;">production</strong> · 14 servers · 9 domains · 8 repos
+    </p>
+
+    <!-- Critical now -->
+    <div class="card accent-critical" style="margin-bottom: 16px;">
+      <div class="card-header">
+        <div class="card-title">🔥 Critical now <span class="chip error" style="margin-left: 8px;">3</span></div>
+        <span class="muted" style="font-size: 12px;">Auto-refreshes every 15s</span>
+      </div>
+
+      <div class="alert-row">
+        <div class="alert-icon critical">⚠</div>
+        <div class="alert-body">
+          <div class="alert-title">prod-web-01 · CPU at 94% since 08:42</div>
+          <div class="alert-sub">Load average 4.2 / 4 cores · RAM 87% · top process: <span class="mono">node worker</span></div>
+        </div>
+        <div class="row">
+          <button class="btn sm outline">Silence 1h</button>
+          <button class="btn sm">Investigate</button>
+        </div>
+      </div>
+
+      <div class="alert-row">
+        <div class="alert-icon ssl">🔒</div>
+        <div class="alert-body">
+          <div class="alert-title">api.foo.com · SSL expires in 3 days</div>
+          <div class="alert-sub">Let's Encrypt certificate · issued 86 days ago · renewal service last checked 14h ago</div>
+        </div>
+        <div class="row">
+          <button class="btn sm outline">View details</button>
+          <button class="btn sm">Renew now</button>
+        </div>
+      </div>
+
+      <div class="alert-row">
+        <div class="alert-icon bug">🐛</div>
+        <div class="alert-body">
+          <div class="alert-title">auth-service · CVE-2024-XXXX <span class="chip error" style="margin-left: 6px;">KEV</span></div>
+          <div class="alert-sub">lodash 4.17.19 → fixed in 4.17.21 · EPSS 82% · Known exploited in the wild</div>
+        </div>
+        <div class="row">
+          <button class="btn sm outline">How to fix</button>
+          <button class="btn sm">Open PR</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- New + In-flight -->
+    <div class="grid-2" style="margin-bottom: 16px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🆕 New since yesterday</div>
+          <span class="chip primary">7</span>
+        </div>
+        <ul style="list-style: none; padding: 0; font-size: 13px;">
+          <li style="padding: 8px 0; border-bottom: 1px solid var(--card-border); display: flex; justify-content: space-between;">
+            <span><span class="chip error dot" style="margin-right: 6px;">new</span>4 new findings on <strong>auth-service</strong></span>
+            <span class="muted">2h ago</span>
+          </li>
+          <li style="padding: 8px 0; border-bottom: 1px solid var(--card-border); display: flex; justify-content: space-between;">
+            <span><span class="chip success dot" style="margin-right: 6px;">ok</span>prod-db-01 &amp; prod-web-02 came back online</span>
+            <span class="muted">5h ago</span>
+          </li>
+          <li style="padding: 8px 0; border-bottom: 1px solid var(--card-border); display: flex; justify-content: space-between;">
+            <span><span class="chip success dot" style="margin-right: 6px;">ok</span>Cert renewed for <span class="mono">api.v2.foo.com</span></span>
+            <span class="muted">8h ago</span>
+          </li>
+          <li style="padding: 8px 0; border-bottom: 1px solid var(--card-border); display: flex; justify-content: space-between;">
+            <span><span class="chip warning dot" style="margin-right: 6px;">new</span>Brute-force spike detected on <strong>prod-ssh-02</strong></span>
+            <span class="muted">11h ago</span>
+          </li>
+          <li style="padding: 8px 0; display: flex; justify-content: space-between;">
+            <span><span class="chip info dot" style="margin-right: 6px;">event</span>2 repos reconnected via GitHub PAT</span>
+            <span class="muted">1d ago</span>
+          </li>
+        </ul>
+        <div style="margin-top: 12px; text-align: right;">
+          <a href="#">See full activity →</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🗂 In-flight</div>
+          <span class="chip warning">2</span>
+        </div>
+        <div style="padding: 10px 0; border-bottom: 1px solid var(--card-border);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="chip warning dot">in_progress</span>
+            <strong>CVE-2024-1234</strong> <span class="mono muted">lodash</span>
+          </div>
+          <div class="muted" style="font-size: 12px; margin-top: 4px;">Assigned to <strong>you</strong> · started yesterday · <a href="#">2 comments</a></div>
+        </div>
+        <div style="padding: 10px 0;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="chip warning dot">in_progress</span>
+            <strong>Firewall hardening</strong>
+          </div>
+          <div class="muted" style="font-size: 12px; margin-top: 4px;">Assigned to <strong>@sarah</strong> · 3 servers pending · last update 3h ago</div>
+        </div>
+        <div style="margin-top: 12px; text-align: right;">
+          <a href="#">See all work items →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- At a glance strip -->
+    <div class="card" style="padding: 16px 20px;">
+      <div class="card-header" style="margin-bottom: 10px;">
+        <div class="card-title">At a glance</div>
+        <span class="muted" style="font-size: 12px;">Last 24h</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; align-items: center;">
+        <div>
+          <div class="muted" style="font-size: 11px; text-transform: uppercase;">Org score</div>
+          <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+            <span style="font-size: 28px; font-weight: 700;">73</span>
+            <span class="chip warning">C</span>
+            <span style="font-size: 12px; color: #fca5a5;">↓ 2</span>
+          </div>
+        </div>
+        <div>
+          <div class="muted" style="font-size: 11px; text-transform: uppercase;">Servers</div>
+          <div style="margin-top: 4px; font-size: 14px;">
+            <span style="color: var(--success); font-weight: 600;">12</span>/14 healthy
+            <div class="sparkline" style="margin-top: 6px;"></div>
+          </div>
+        </div>
+        <div>
+          <div class="muted" style="font-size: 11px; text-transform: uppercase;">Domains</div>
+          <div style="margin-top: 4px; font-size: 14px;">
+            <span style="color: var(--success); font-weight: 600;">8</span>/9 healthy · <span class="mono">8× A</span>
+          </div>
+        </div>
+        <div>
+          <div class="muted" style="font-size: 11px; text-transform: uppercase;">Repos</div>
+          <div style="margin-top: 4px; font-size: 14px;">
+            <span style="color: var(--warning); font-weight: 600;">5</span>/8 need attention
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spacer-md"></div>
+
+    <div class="card">
+      <h3 style="color: #a5b4fc;">💡 Why this design</h3>
+      <ul style="padding-left: 18px; color: var(--text-secondary); font-size: 13px; line-height: 1.7;">
+        <li><strong>Critical now</strong> is the first thing you see, with inline actions — no navigation needed to start triage.</li>
+        <li><strong>New since yesterday</strong> answers "what happened while I was away?" Currently nothing surfaces that.</li>
+        <li><strong>In-flight</strong> surfaces work items you or your team started — acts as a personal inbox.</li>
+        <li><strong>At-a-glance</strong> strip replaces the old "three big number cards" — same info, 1/4 the vertical space.</li>
+        <li>Project scope chip in the nav (from Option C) scopes everything on this page.</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Finding Detail — Option C</title>
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand"><div class="nav-logo">SC</div><div class="sidebar-brand-text">SecurityCentral</div></div>
+      <nav class="sidebar-nav">
+        <a class="sidebar-item" href="c-dashboard.html"><span class="icon">📊</span>Dashboard</a>
+        <a class="sidebar-item" href="c-projects.html"><span class="icon">📁</span>Projects</a>
+        <a class="sidebar-item" href="c-domains-list.html"><span class="icon">🌐</span>Domains</a>
+        <a class="sidebar-item" href="c-servers-list.html"><span class="icon">🖥</span>Servers</a>
+        <a class="sidebar-item" href="c-repos-list.html"><span class="icon">🐙</span>Repositories</a>
+        <div class="sidebar-item active"><span class="icon">🐛</span>Findings<span class="count">12</span></div>
+        <a class="sidebar-item" href="c-settings.html"><span class="icon">⚙</span>Settings</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="nav-avatar" style="width: 28px; height: 28px; font-size: 11px;">D</div>
+        <div class="sidebar-footer-email">duy.le@arneo.io</div>
+      </div>
+    </aside>
+
+    <main class="shell-main">
+      <div class="appbar">
+        <span class="appbar-crumb"><a href="c-findings.html">Findings</a> /</span>
+        <div class="appbar-page-title mono">CVE-2024-1234</div>
+        <div class="project-switcher" style="margin-left: 14px;">
+          <span class="dot"></span><span>production</span><span class="caret">▼</span>
+        </div>
+        <div class="search" style="margin-left: 16px;">
+          <span>🔍</span><input placeholder="Search…"><span class="kbd">⌘K</span>
+        </div>
+        <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+          <div class="nav-icon">🔔<span class="badge">4</span></div>
+          <div class="nav-avatar">D</div>
+        </div>
+      </div>
+
+      <div class="shell-content">
+        <div class="url-bar">
+          <span>🔗</span><span>app.securitycentral.io/findings/abc-xyz</span>
+          <span class="url-scope">?project=prod</span>
+        </div>
+
+        <!-- Finding header -->
+        <div class="card" style="margin-bottom: 16px;">
+          <div class="row" style="gap: 10px; margin-bottom: 12px;">
+            <span class="chip error">critical</span>
+            <span class="chip outline">○ new</span>
+            <span class="chip error" style="font-weight: 700;">KEV</span>
+            <span class="chip outline">EPSS 82%</span>
+            <span class="chip outline">CVSS 9.8</span>
+          </div>
+          <h1 class="mono" style="margin-bottom: 6px;">CVE-2024-1234</h1>
+          <div style="font-size: 16px; margin-bottom: 6px;">Remote code execution via prototype pollution in <strong>lodash</strong></div>
+          <div class="muted" style="font-size: 13px;">
+            Detected on <strong><a href="c-repo-detail.html">auth-service</a></strong> · first seen 2h ago · source: <span class="mono">code_dependencies</span>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="col" style="flex: 2;">
+            <div class="card">
+              <h3>Description</h3>
+              <p style="color: var(--text-secondary); font-size: 13px; line-height: 1.6;">
+                A type confusion issue in lodash's <code>_.set()</code> allows an attacker to assign to <code>Object.prototype</code>, enabling arbitrary code execution when the polluted prototype is later accessed. Affects versions before 4.17.21.
+              </p>
+            </div>
+
+            <div class="card">
+              <h3>💡 Remediation</h3>
+              <div style="background: #0f172a; border: 1px solid var(--card-border); border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; margin-top: 8px;">
+                # Upgrade lodash to patched version<br>
+                npm install lodash@4.17.21<br>
+                npm audit fix
+              </div>
+              <button class="btn" style="margin-top: 12px;">Open automated PR</button>
+            </div>
+
+            <div class="card">
+              <h3>Evidence</h3>
+              <div style="font-family: monospace; font-size: 12px; color: var(--text-secondary);">
+                package.json → <strong style="color: var(--text);">"lodash": "4.17.19"</strong><br>
+                package-lock.json → resolved at version 4.17.19<br>
+                First introduced: 18 months ago · <span class="muted">by @alice</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="col">
+            <div class="card">
+              <h3>Actions</h3>
+              <div class="col" style="gap: 8px;">
+                <button class="btn">Mark in-progress</button>
+                <button class="btn outline">Mark resolved</button>
+                <button class="btn outline">✕ Dismiss…</button>
+              </div>
+              <div class="muted" style="font-size: 11px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--card-border);">
+                Dismissing requires a reason:<br>not-a-risk · accepted · won't fix
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Timeline</h3>
+              <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.7;">
+                <div>● 2h ago · Detected during scan</div>
+                <div>● 1h ago · <span class="mono">@duy</span> viewed</div>
+                <div class="muted">… waiting for action</div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>References</h3>
+              <ul style="padding-left: 16px; font-size: 12px; line-height: 1.8;">
+                <li><a href="#">nvd.nist.gov/vuln/…</a></li>
+                <li><a href="#">CISA KEV entry</a></li>
+                <li><a href="#">GitHub advisory</a></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <a class="back" href="c-index.html" style="margin-top: 24px; display: inline-block;">← Back to Option C index</a>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

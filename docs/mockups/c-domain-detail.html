@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Domain Detail — Option C</title>
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand"><div class="nav-logo">SC</div><div class="sidebar-brand-text">SecurityCentral</div></div>
+      <nav class="sidebar-nav">
+        <a class="sidebar-item" href="c-dashboard.html"><span class="icon">📊</span>Dashboard</a>
+        <a class="sidebar-item" href="c-projects.html"><span class="icon">📁</span>Projects</a>
+        <div class="sidebar-item active"><span class="icon">🌐</span>Domains</div>
+        <a class="sidebar-item" href="c-servers-list.html"><span class="icon">🖥</span>Servers</a>
+        <a class="sidebar-item" href="c-repos-list.html"><span class="icon">🐙</span>Repositories</a>
+        <a class="sidebar-item" href="c-findings.html"><span class="icon">🐛</span>Findings<span class="count">12</span></a>
+        <a class="sidebar-item" href="c-settings.html"><span class="icon">⚙</span>Settings</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="nav-avatar" style="width: 28px; height: 28px; font-size: 11px;">D</div>
+        <div class="sidebar-footer-email">duy.le@arneo.io</div>
+      </div>
+    </aside>
+
+    <main class="shell-main">
+      <div class="appbar">
+        <span class="appbar-crumb"><a href="c-domains-list.html">Domains</a> /</span>
+        <div class="appbar-page-title">api.foo.com</div>
+        <div class="project-switcher" style="margin-left: 14px;">
+          <span class="dot"></span><span>production</span><span class="caret">▼</span>
+        </div>
+        <div class="search" style="margin-left: 16px;">
+          <span>🔍</span><input placeholder="Search…"><span class="kbd">⌘K</span>
+        </div>
+        <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+          <div class="nav-icon">🔔<span class="badge">4</span></div>
+          <div class="nav-avatar">D</div>
+        </div>
+      </div>
+
+      <div class="shell-content">
+        <div class="url-bar">
+          <span>🔗</span><span>app.securitycentral.io/domains/xyz-123</span>
+          <span class="url-scope">?project=prod</span>
+        </div>
+
+        <!-- Header -->
+        <div class="row" style="align-items: center; gap: 16px; margin-bottom: 20px;">
+          <div class="grade grade-lg a">A</div>
+          <div style="flex: 1;">
+            <div class="row" style="gap: 10px; align-items: center;">
+              <span style="font-size: 26px; font-weight: 600;">api.foo.com</span>
+              <span class="chip success dot">healthy</span>
+              <span class="chip success">● up</span>
+              <span class="chip outline">🌐 :443</span>
+              <span class="chip outline">📁 production</span>
+            </div>
+            <div class="row" style="gap: 4px; margin-top: 8px;">
+              <span class="chip outline mono">env=prod</span>
+              <span class="chip outline mono">owner=api</span>
+            </div>
+          </div>
+          <div class="row">
+            <button class="btn outline sm">Check now</button>
+            <button class="btn outline sm">Scan SSL</button>
+            <button class="btn outline sm">Settings</button>
+          </div>
+        </div>
+
+        <!-- Top summary -->
+        <div class="grid-3" style="margin-bottom: 20px;">
+          <div class="card" style="padding: 16px; text-align: center;">
+            <div class="muted" style="font-size: 11px; text-transform: uppercase;">Uptime 24h</div>
+            <div style="font-size: 32px; font-weight: 700; color: var(--success); margin: 4px 0;">99.98%</div>
+            <div class="muted" style="font-size: 11px;">1 blip at 04:12 · recovered in 8s</div>
+          </div>
+          <div class="card" style="padding: 16px; text-align: center;">
+            <div class="muted" style="font-size: 11px; text-transform: uppercase;">SSL Grade</div>
+            <div style="font-size: 32px; font-weight: 700; color: var(--success); margin: 4px 0;">A</div>
+            <div class="muted" style="font-size: 11px;">expires in 87 days · Let's Encrypt</div>
+          </div>
+          <div class="card" style="padding: 16px; text-align: center;">
+            <div class="muted" style="font-size: 11px; text-transform: uppercase;">Avg Response</div>
+            <div style="font-size: 32px; font-weight: 700; margin: 4px 0;">240ms</div>
+            <div class="muted" style="font-size: 11px;">p95: 320ms · last 24h</div>
+          </div>
+        </div>
+
+        <!-- Uptime chart -->
+        <div class="card" style="margin-bottom: 16px;">
+          <h3>Uptime · last 24h</h3>
+          <div class="sparkline" style="height: 100px; margin-top: 12px;"></div>
+          <div class="muted" style="font-size: 11px; margin-top: 8px;">
+            ● Response time · min 180ms · max 440ms · avg 240ms
+          </div>
+        </div>
+
+        <!-- SSL + DNS cards -->
+        <div class="grid-2">
+          <div class="card">
+            <h3>🔒 TLS / Certificate</h3>
+            <table style="margin-top: 4px;">
+              <tbody>
+                <tr><td class="muted">Issuer</td><td>Let's Encrypt E6</td></tr>
+                <tr><td class="muted">Subject</td><td class="mono">CN=api.foo.com</td></tr>
+                <tr><td class="muted">Expires</td><td>2026-07-17 (87 days)</td></tr>
+                <tr><td class="muted">TLS version</td><td>TLS 1.3</td></tr>
+                <tr><td class="muted">Cipher</td><td class="mono">TLS_AES_256_GCM_SHA384</td></tr>
+                <tr><td class="muted">Chain</td><td><span class="chip success dot">valid</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <h3>📨 DNS records</h3>
+            <div class="row" style="gap: 6px; margin: 10px 0;">
+              <span class="chip success dot">SPF</span>
+              <span class="chip success dot">DKIM</span>
+              <span class="chip success dot">DMARC</span>
+            </div>
+            <table style="margin-top: 4px;">
+              <tbody>
+                <tr><td class="muted">SPF</td><td class="mono" style="font-size: 11px;">v=spf1 include:_spf.google.com ~all</td></tr>
+                <tr><td class="muted">DKIM</td><td><span class="chip success">present · 2048-bit</span></td></tr>
+                <tr><td class="muted">DMARC</td><td class="mono" style="font-size: 11px;">v=DMARC1; p=reject;</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <a class="back" href="c-index.html" style="margin-top: 24px; display: inline-block;">← Back to Option C index</a>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

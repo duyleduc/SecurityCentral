@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Domains — Option C</title>
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand"><div class="nav-logo">SC</div><div class="sidebar-brand-text">SecurityCentral</div></div>
+      <nav class="sidebar-nav">
+        <a class="sidebar-item" href="c-dashboard.html"><span class="icon">📊</span>Dashboard</a>
+        <a class="sidebar-item" href="c-projects.html"><span class="icon">📁</span>Projects</a>
+        <div class="sidebar-item active"><span class="icon">🌐</span>Domains</div>
+        <a class="sidebar-item" href="c-servers-list.html"><span class="icon">🖥</span>Servers</a>
+        <a class="sidebar-item" href="c-repos-list.html"><span class="icon">🐙</span>Repositories</a>
+        <a class="sidebar-item" href="c-findings.html"><span class="icon">🐛</span>Findings<span class="count">12</span></a>
+        <a class="sidebar-item" href="c-settings.html"><span class="icon">⚙</span>Settings</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="nav-avatar" style="width: 28px; height: 28px; font-size: 11px;">D</div>
+        <div class="sidebar-footer-email">duy.le@arneo.io</div>
+      </div>
+    </aside>
+
+    <main class="shell-main">
+      <div class="appbar">
+        <div class="appbar-page-title">Domain Monitoring</div>
+        <div class="project-switcher" style="margin-left: 14px;">
+          <span class="dot"></span><span>production</span><span class="caret">▼</span>
+        </div>
+        <div class="search" style="margin-left: 16px;">
+          <span>🔍</span><input placeholder="Search domains…"><span class="kbd">⌘K</span>
+        </div>
+        <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+          <div class="nav-icon">🔔<span class="badge">4</span></div>
+          <div class="nav-avatar">D</div>
+        </div>
+      </div>
+
+      <div class="shell-content">
+        <div class="url-bar">
+          <span>🔗</span><span>app.securitycentral.io/domains</span>
+          <span class="url-scope">?project=prod</span>
+        </div>
+
+        <div class="row" style="justify-content: space-between; margin-bottom: 16px;">
+          <div>
+            <h1 style="margin: 0;">Domains</h1>
+            <p class="muted" style="font-size: 13px; margin-top: 4px;">Monitor TLS certificates and endpoint reachability</p>
+          </div>
+          <button class="btn">+ Add Domains</button>
+        </div>
+
+        <div class="scope-banner">
+          <span>📁</span>
+          <strong>production</strong> · 9 domains in scope
+          <a href="#">View all projects</a>
+        </div>
+
+        <!-- Status cards with NORMALIZED vocab -->
+        <div class="grid-4" style="margin-bottom: 20px;">
+          <div class="stat-card active-success">
+            <div class="stat-num" style="color: var(--success);">8</div>
+            <div class="stat-label">● Healthy</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" style="color: var(--warning);">0</div>
+            <div class="stat-label">● At-risk</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" style="color: var(--error);">1</div>
+            <div class="stat-label">● Critical</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num muted">0</div>
+            <div class="stat-label">○ Unknown / Down</div>
+          </div>
+        </div>
+
+        <div class="filter-row">
+          <span style="font-size: 13px; color: var(--text-secondary);">⎘ Filter:</span>
+          <input class="filter-input" placeholder="Tag: env=prod">
+          <span class="chip outline" style="margin-left: 8px;">No "Project" dropdown — in top bar</span>
+        </div>
+
+        <div class="card" style="padding: 0;">
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>Endpoint</th>
+                <th>Health</th>
+                <th>Op state</th>
+                <th>SSL</th>
+                <th>Last checked</th>
+                <th>Response</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="grade a" style="width: 28px; height: 28px; font-size: 11px;">A</span></td>
+                <td><strong>api.foo.com</strong><div class="muted" style="font-size: 11px;">:443</div></td>
+                <td><span class="chip success dot">healthy</span></td>
+                <td><span class="chip success">● up</span></td>
+                <td><span class="chip success dot">expires 87d</span></td>
+                <td class="muted">30s ago</td>
+                <td class="mono">240ms</td>
+                <td><button class="btn ghost sm">↻</button></td>
+              </tr>
+              <tr>
+                <td><span class="grade a" style="width: 28px; height: 28px; font-size: 11px;">A</span></td>
+                <td><strong>www.foo.com</strong><div class="muted" style="font-size: 11px;">:443</div></td>
+                <td><span class="chip success dot">healthy</span></td>
+                <td><span class="chip success">● up</span></td>
+                <td><span class="chip success dot">expires 45d</span></td>
+                <td class="muted">12s ago</td>
+                <td class="mono">180ms</td>
+                <td><button class="btn ghost sm">↻</button></td>
+              </tr>
+              <tr>
+                <td><span class="grade d" style="width: 28px; height: 28px; font-size: 11px;">D</span></td>
+                <td><strong>internal.foo.com</strong><div class="muted" style="font-size: 11px;">:443</div></td>
+                <td><span class="chip error dot">critical</span></td>
+                <td><span class="chip success">● up</span></td>
+                <td><span class="chip error dot">expires 3d</span></td>
+                <td class="muted">8s ago</td>
+                <td class="mono">310ms</td>
+                <td><button class="btn ghost sm">↻</button></td>
+              </tr>
+              <tr>
+                <td><span class="grade b" style="width: 28px; height: 28px; font-size: 11px;">B</span></td>
+                <td><strong>api.v2.foo.com</strong><div class="muted" style="font-size: 11px;">:443</div></td>
+                <td><span class="chip success dot">healthy</span></td>
+                <td><span class="chip success">● up</span></td>
+                <td><span class="chip success dot">expires 89d</span></td>
+                <td class="muted">15s ago</td>
+                <td class="mono">210ms</td>
+                <td><button class="btn ghost sm">↻</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <a class="back" href="c-index.html" style="margin-top: 24px; display: inline-block;">← Back to Option C index</a>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

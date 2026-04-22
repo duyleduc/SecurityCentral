@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Option C — All Pages</title>
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body>
+  <div class="page">
+    <a class="back" href="index.html">← Back to all mockups</a>
+    <h1>Option C — Applied to every page</h1>
+    <p class="muted" style="margin-bottom: 24px; max-width: 720px;">
+      Every page of the app with Option C changes applied: global <strong>project switcher</strong> in the top bar,
+      normalized <strong>health / op / work</strong> status vocabulary, and no more per-page project dropdowns.
+      Click through to see what each page looks like.
+    </p>
+
+    <h2 style="margin-top: 8px; font-size: 15px;">Core pages</h2>
+    <div class="page-grid" style="margin-bottom: 24px;">
+      <a class="page-link" href="c-dashboard.html">
+        <div class="page-link-title">📊 Dashboard</div>
+        <div class="page-link-url">/</div>
+      </a>
+      <a class="page-link" href="c-projects.html">
+        <div class="page-link-title">📁 Projects (list)</div>
+        <div class="page-link-url">/projects</div>
+      </a>
+      <a class="page-link" href="c-project-detail.html">
+        <div class="page-link-title">📁 Project detail</div>
+        <div class="page-link-url">/projects/:id</div>
+      </a>
+      <a class="page-link" href="c-servers-list.html">
+        <div class="page-link-title">🖥 Servers (list)</div>
+        <div class="page-link-url">/servers</div>
+      </a>
+      <a class="page-link" href="c-server-detail.html">
+        <div class="page-link-title">🖥 Server detail</div>
+        <div class="page-link-url">/servers/:id/monitoring</div>
+      </a>
+      <a class="page-link" href="c-domains-list.html">
+        <div class="page-link-title">🌐 Domains (list)</div>
+        <div class="page-link-url">/domains</div>
+      </a>
+      <a class="page-link" href="c-domain-detail.html">
+        <div class="page-link-title">🌐 Domain detail</div>
+        <div class="page-link-url">/domains/:id</div>
+      </a>
+      <a class="page-link" href="c-repos-list.html">
+        <div class="page-link-title">🐙 Repositories (list)</div>
+        <div class="page-link-url">/repositories</div>
+      </a>
+      <a class="page-link" href="c-repo-detail.html">
+        <div class="page-link-title">🐙 Repository detail</div>
+        <div class="page-link-url">/repositories/:id</div>
+      </a>
+      <a class="page-link" href="c-findings.html">
+        <div class="page-link-title">🐛 Findings</div>
+        <div class="page-link-url">/findings</div>
+      </a>
+      <a class="page-link" href="c-finding-detail.html">
+        <div class="page-link-title">🐛 Finding detail</div>
+        <div class="page-link-url">/findings/:id</div>
+      </a>
+      <a class="page-link" href="c-settings.html">
+        <div class="page-link-title">⚙ Settings</div>
+        <div class="page-link-url">/settings</div>
+      </a>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+      <h2 style="font-size: 15px;">What changes on every page</h2>
+      <ol style="padding-left: 20px; color: var(--text-secondary); font-size: 13px; line-height: 1.8;">
+        <li>
+          <strong>Top bar project switcher pill</strong> — clicking opens a dropdown
+          (<em>production</em>, <em>staging</em>, <em>customer-foo</em>, <em>All projects</em>, <em>+ New project</em>).
+          Selection is persisted in the URL (<code>?project=prod</code>).
+        </li>
+        <li>
+          <strong>Per-page "Project" filter dropdowns removed</strong> — the scope is already set globally.
+          List pages keep Tag and Status filters but drop Project.
+        </li>
+        <li>
+          <strong>Scope banner</strong> under the page title reminds users what's filtered:
+          <em>"Showing production only · view all projects"</em>.
+        </li>
+        <li>
+          <strong>Normalized status chips:</strong>
+          <span class="chip success dot">healthy</span>
+          <span class="chip warning dot">at-risk</span>
+          <span class="chip error dot">critical</span>
+          <span class="chip outline">unknown</span>
+          — used on every asset (server / domain / repo).
+        </li>
+        <li>
+          <strong>Separate operational state:</strong>
+          <span class="chip success">● up</span>
+          <span class="chip outline">○ down</span>
+          — shown alongside health, not merged into it.
+        </li>
+        <li>
+          <strong>Work-state vocabulary for findings &amp; invitations:</strong>
+          <span class="chip outline">○ new</span>
+          <span class="chip warning dot">in-progress</span>
+          <span class="chip success dot">resolved</span>
+          <span class="chip outline">✕ dismissed</span>
+        </li>
+      </ol>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Repository Detail — Option C</title>
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand"><div class="nav-logo">SC</div><div class="sidebar-brand-text">SecurityCentral</div></div>
+      <nav class="sidebar-nav">
+        <a class="sidebar-item" href="c-dashboard.html"><span class="icon">📊</span>Dashboard</a>
+        <a class="sidebar-item" href="c-projects.html"><span class="icon">📁</span>Projects</a>
+        <a class="sidebar-item" href="c-domains-list.html"><span class="icon">🌐</span>Domains</a>
+        <a class="sidebar-item" href="c-servers-list.html"><span class="icon">🖥</span>Servers</a>
+        <div class="sidebar-item active"><span class="icon">🐙</span>Repositories</div>
+        <a class="sidebar-item" href="c-findings.html"><span class="icon">🐛</span>Findings<span class="count">12</span></a>
+        <a class="sidebar-item" href="c-settings.html"><span class="icon">⚙</span>Settings</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="nav-avatar" style="width: 28px; height: 28px; font-size: 11px;">D</div>
+        <div class="sidebar-footer-email">duy.le@arneo.io</div>
+      </div>
+    </aside>
+
+    <main class="shell-main">
+      <div class="appbar">
+        <span class="appbar-crumb"><a href="c-repos-list.html">Repositories</a> /</span>
+        <div class="appbar-page-title">auth-service</div>
+        <div class="project-switcher" style="margin-left: 14px;">
+          <span class="dot"></span><span>production</span><span class="caret">▼</span>
+        </div>
+        <div class="search" style="margin-left: 16px;">
+          <span>🔍</span><input placeholder="Search…"><span class="kbd">⌘K</span>
+        </div>
+        <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+          <div class="nav-icon">🔔<span class="badge">4</span></div>
+          <div class="nav-avatar">D</div>
+        </div>
+      </div>
+
+      <div class="shell-content">
+        <div class="url-bar">
+          <span>🔗</span><span>app.securitycentral.io/repositories/auth-service</span>
+          <span class="url-scope">?project=prod</span>
+        </div>
+
+        <!-- Header -->
+        <div class="row" style="align-items: center; gap: 16px; margin-bottom: 20px;">
+          <div class="grade grade-lg c">C</div>
+          <div style="flex: 1;">
+            <div class="row" style="gap: 10px; align-items: center;">
+              <span style="font-size: 26px; font-weight: 600;">auth-service</span>
+              <span class="chip warning dot">at-risk</span>
+              <span class="chip outline">🐙 github · org/auth-service</span>
+              <span class="chip outline">📁 production</span>
+            </div>
+            <div class="row" style="gap: 4px; margin-top: 8px;">
+              <span class="chip outline mono">lang=typescript</span>
+              <span class="chip outline mono">env=prod</span>
+              <span class="muted" style="font-size: 12px; margin-left: 8px;">main · last scan 6h ago</span>
+            </div>
+          </div>
+          <div class="row">
+            <button class="btn outline sm">Run scan now</button>
+            <button class="btn outline sm">Settings</button>
+          </div>
+        </div>
+
+        <!-- Summary cards -->
+        <div class="grid-4" style="margin-bottom: 20px;">
+          <div class="card" style="padding: 14px;">
+            <div class="muted" style="font-size: 11px; text-transform: uppercase;">Total findings</div>
+            <div style="font-size: 28px; font-weight: 700; color: var(--warning); margin-top: 4px;">12</div>
+            <div class="muted" style="font-size: 11px;">since last scan</div>
+          </div>
+          <div class="card" style="padding: 14px;">
+            <div class="muted" style="font-size: 11px; text-transform: uppercase;">Dep CVEs</div>
+            <div style="font-size: 28px; font-weight: 700; color: var(--error); margin-top: 4px;">3</div>
+            <div class="muted" style="font-size: 11px;">high severity · fix available</div>
+          </div>
+          <div class="card" style="padding: 14px;">
+            <div class="muted" style="font-size: 11px; text-transform: uppercase;">Secrets</div>
+            <div style="font-size: 28px; font-weight: 700; color: var(--error); margin-top: 4px;">1</div>
+            <div class="muted" style="font-size: 11px;">AWS access key</div>
+          </div>
+          <div class="card" style="padding: 14px;">
+            <div class="muted" style="font-size: 11px; text-transform: uppercase;">Unsafe patterns</div>
+            <div style="font-size: 28px; font-weight: 700; margin-top: 4px;">1</div>
+            <div class="muted" style="font-size: 11px;">eval() usage</div>
+          </div>
+        </div>
+
+        <!-- Findings -->
+        <div class="card">
+          <div class="row" style="justify-content: space-between; margin-bottom: 12px;">
+            <h3>Findings</h3>
+            <div class="row" style="gap: 6px;">
+              <span class="chip primary">12 total</span>
+              <span class="chip error">3 critical</span>
+              <span class="chip warning">5 medium</span>
+              <span class="chip info">4 low</span>
+              <span class="chip outline">Fix available: 8</span>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>CVE / Pattern</th>
+                <th>Package / Location</th>
+                <th>Severity</th>
+                <th>Work state</th>
+                <th>Fix</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono">CVE-2024-1234</td>
+                <td>lodash 4.17.19</td>
+                <td><span class="chip error">critical</span></td>
+                <td><span class="chip outline">○ new</span></td>
+                <td><span class="chip success">→ 4.17.21</span></td>
+              </tr>
+              <tr>
+                <td class="mono">Secret</td>
+                <td class="mono">config/staging.env:12</td>
+                <td><span class="chip error">critical</span></td>
+                <td><span class="chip warning dot">in-progress</span></td>
+                <td>Remove + rotate</td>
+              </tr>
+              <tr>
+                <td class="mono">CVE-2023-5678</td>
+                <td>axios 0.21.1</td>
+                <td><span class="chip warning">high</span></td>
+                <td><span class="chip outline">○ new</span></td>
+                <td><span class="chip success">→ 1.6.2</span></td>
+              </tr>
+              <tr>
+                <td class="mono">eval()</td>
+                <td class="mono">src/utils/template.ts:47</td>
+                <td><span class="chip warning">medium</span></td>
+                <td><span class="chip outline">○ new</span></td>
+                <td class="muted">Manual review</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <a class="back" href="c-index.html" style="margin-top: 24px; display: inline-block;">← Back to Option C index</a>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

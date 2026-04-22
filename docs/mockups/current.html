@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Current State — SecurityCentral</title>
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-logo">SC</div>
+    <div class="nav-title">SecurityCentral</div>
+    <div class="nav-items">
+      <span class="nav-item active">Dashboard</span>
+      <span class="nav-item">Projects</span>
+      <span class="nav-item">Domains</span>
+      <span class="nav-item">Servers</span>
+      <span class="nav-item">Repositories</span>
+      <span class="nav-item">Findings</span>
+      <span class="nav-item">Settings</span>
+    </div>
+    <div class="nav-right">
+      <div class="nav-avatar">D</div>
+    </div>
+  </nav>
+
+  <div class="page">
+    <a class="back" href="index.html">← Back to mockups</a>
+    <h1>Current state (reference)</h1>
+    <p class="muted" style="margin-bottom: 20px;">
+      What the dashboard looks like today. Shown here so you can compare against Options A / B / C.
+    </p>
+
+    <div class="card">
+      <h2 style="margin-bottom: 16px;">Dashboard</h2>
+
+      <div class="row" style="align-items: center; gap: 24px; margin-bottom: 20px;">
+        <div class="score-ring"><span class="score-num">73</span></div>
+        <div>
+          <div style="font-size: 24px; font-weight: 600;">Security score: 73 / C</div>
+          <div class="muted">Last updated a few seconds ago</div>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="card" style="padding: 16px;">
+          <div style="font-size: 32px; font-weight: 700; color: var(--success);">12</div>
+          <div class="muted" style="font-size: 13px;">Online servers</div>
+          <div style="font-size: 12px; color: #fca5a5; margin-top: 4px;">2 critical · 1 offline</div>
+        </div>
+        <div class="card" style="padding: 16px;">
+          <div style="font-size: 32px; font-weight: 700; color: var(--success);">8</div>
+          <div class="muted" style="font-size: 13px;">Healthy domains</div>
+          <div style="font-size: 12px; color: #fca5a5; margin-top: 4px;">1 down</div>
+        </div>
+        <div class="card" style="padding: 16px;">
+          <div style="font-size: 32px; font-weight: 700;">14</div>
+          <div class="muted" style="font-size: 13px;">Tracked repos</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">last scan 2h ago</div>
+        </div>
+      </div>
+
+      <div class="spacer-md"></div>
+
+      <h3>Top risks</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Asset</th>
+            <th>Risk</th>
+            <th>Severity</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>prod-web-01</td>
+            <td>CVE-2024-XXXX (remote code execution)</td>
+            <td><span class="chip error">critical</span></td>
+          </tr>
+          <tr>
+            <td>api.foo.com</td>
+            <td>SSL certificate expires in 12 days</td>
+            <td><span class="chip warning">high</span></td>
+          </tr>
+          <tr>
+            <td>auth-service</td>
+            <td>Dependency vulnerability: lodash CVE-2024-1234</td>
+            <td><span class="chip error">critical</span></td>
+          </tr>
+          <tr>
+            <td>prod-db-02</td>
+            <td>Firewall default policy is ACCEPT</td>
+            <td><span class="chip warning">high</span></td>
+          </tr>
+          <tr>
+            <td>staging-web-03</td>
+            <td>SSH password authentication enabled</td>
+            <td><span class="chip info">medium</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="spacer-md"></div>
+
+    <div class="card">
+      <h3 style="color: #fca5a5;">⚠ Observations</h3>
+      <ul style="padding-left: 18px; color: var(--text-secondary); font-size: 13px; line-height: 1.7;">
+        <li>Dashboard shows <em>what exists</em> (counts) — doesn't answer "what do I do today?"</li>
+        <li>Top risks is a flat list — no grouping by urgency, no assignment, no dismiss.</li>
+        <li>No project scope — if I want to see only <code>production</code>, I have to filter on every page.</li>
+        <li>No "new since last visit" feedback — I don't know what changed overnight.</li>
+        <li>Status vocabularies disagree: <span class="chip success">online</span> / <span class="chip success">healthy</span> / <span class="chip success">resolved</span> all mean "good" but users see three different words.</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

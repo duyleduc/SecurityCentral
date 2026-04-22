@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Servers — Option C</title>
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand"><div class="nav-logo">SC</div><div class="sidebar-brand-text">SecurityCentral</div></div>
+      <nav class="sidebar-nav">
+        <a class="sidebar-item" href="c-dashboard.html"><span class="icon">📊</span>Dashboard</a>
+        <a class="sidebar-item" href="c-projects.html"><span class="icon">📁</span>Projects</a>
+        <a class="sidebar-item" href="c-domains-list.html"><span class="icon">🌐</span>Domains</a>
+        <div class="sidebar-item active"><span class="icon">🖥</span>Servers</div>
+        <a class="sidebar-item" href="c-repos-list.html"><span class="icon">🐙</span>Repositories</a>
+        <a class="sidebar-item" href="c-findings.html"><span class="icon">🐛</span>Findings<span class="count">12</span></a>
+        <a class="sidebar-item" href="c-settings.html"><span class="icon">⚙</span>Settings</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="nav-avatar" style="width: 28px; height: 28px; font-size: 11px;">D</div>
+        <div class="sidebar-footer-email">duy.le@arneo.io</div>
+      </div>
+    </aside>
+
+    <main class="shell-main">
+      <div class="appbar">
+        <div class="appbar-page-title">Servers</div>
+        <div class="project-switcher" style="margin-left: 14px;">
+          <span class="dot"></span><span>production</span><span class="caret">▼</span>
+        </div>
+        <div class="search" style="margin-left: 16px;">
+          <span>🔍</span><input placeholder="Search servers…"><span class="kbd">⌘K</span>
+        </div>
+        <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+          <div class="nav-icon">🔔<span class="badge">4</span></div>
+          <div class="nav-avatar">D</div>
+        </div>
+      </div>
+
+      <div class="shell-content">
+        <div class="url-bar">
+          <span>🔗</span><span>app.securitycentral.io/servers</span>
+          <span class="url-scope">?project=prod</span>
+        </div>
+
+        <div class="row" style="justify-content: space-between; margin-bottom: 16px;">
+          <div>
+            <h1 style="margin: 0;">Servers</h1>
+            <div class="scope-banner" style="margin-top: 8px; margin-bottom: 0;">
+              <span>📁</span>
+              <strong>production</strong> · 14 servers in scope
+              <a href="#">View all projects</a>
+            </div>
+          </div>
+          <button class="btn">+ Add Server</button>
+        </div>
+
+        <!-- Status cards: click to filter -->
+        <div class="grid-4" style="margin-bottom: 20px;">
+          <div class="stat-card active-success">
+            <div class="stat-num" style="color: var(--success);">12</div>
+            <div class="stat-label">● Healthy</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" style="color: var(--warning);">2</div>
+            <div class="stat-label">● At-risk</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" style="color: var(--error);">0</div>
+            <div class="stat-label">● Critical</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num muted">0</div>
+            <div class="stat-label">○ Unknown / Down</div>
+          </div>
+        </div>
+
+        <!-- Filters: NO project filter anymore (it's global) -->
+        <div class="filter-row">
+          <span style="font-size: 13px; color: var(--text-secondary);">⎘ Filter:</span>
+          <input class="filter-input" placeholder="Tag: env=prod, tier=web">
+          <button class="btn outline sm">Apply</button>
+          <span class="chip outline" style="margin-left: 8px;">Cleared scope filter → now in top bar ✓</span>
+        </div>
+
+        <!-- Server cards -->
+        <div class="grid-3">
+          <div class="list-card">
+            <div class="list-card-header">
+              <div class="grade b">B</div>
+              <div style="flex: 1;">
+                <div class="list-card-title">prod-web-01</div>
+                <div class="list-card-meta">debian 13.4 · agent v1.2.3</div>
+              </div>
+            </div>
+            <div class="row" style="gap: 6px; margin-bottom: 8px;">
+              <span class="chip success dot">healthy</span>
+              <span class="chip success">● up</span>
+            </div>
+            <div class="row" style="gap: 4px;">
+              <span class="chip outline mono">env=prod</span>
+              <span class="chip outline mono">tier=web</span>
+            </div>
+            <div class="list-card-meta" style="margin-top: 10px;">Heartbeat: 12s ago</div>
+          </div>
+
+          <div class="list-card">
+            <div class="list-card-header">
+              <div class="grade a">A</div>
+              <div style="flex: 1;">
+                <div class="list-card-title">prod-db-01</div>
+                <div class="list-card-meta">ubuntu 22.04 · agent v1.2.3</div>
+              </div>
+            </div>
+            <div class="row" style="gap: 6px; margin-bottom: 8px;">
+              <span class="chip success dot">healthy</span>
+              <span class="chip success">● up</span>
+            </div>
+            <div class="row" style="gap: 4px;">
+              <span class="chip outline mono">env=prod</span>
+              <span class="chip outline mono">tier=db</span>
+            </div>
+            <div class="list-card-meta" style="margin-top: 10px;">Heartbeat: 5s ago</div>
+          </div>
+
+          <div class="list-card">
+            <div class="list-card-header">
+              <div class="grade c">C</div>
+              <div style="flex: 1;">
+                <div class="list-card-title">prod-db-02</div>
+                <div class="list-card-meta">ubuntu 20.04 · agent v1.2.3</div>
+              </div>
+            </div>
+            <div class="row" style="gap: 6px; margin-bottom: 8px;">
+              <span class="chip warning dot">at-risk</span>
+              <span class="chip success">● up</span>
+            </div>
+            <div class="row" style="gap: 4px;">
+              <span class="chip outline mono">env=prod</span>
+              <span class="chip outline mono">tier=db</span>
+            </div>
+            <div class="list-card-meta" style="margin-top: 10px;">Heartbeat: 8s ago</div>
+          </div>
+
+          <div class="list-card">
+            <div class="list-card-header">
+              <div class="grade b">B</div>
+              <div style="flex: 1;">
+                <div class="list-card-title">prod-worker-01</div>
+                <div class="list-card-meta">debian 12.6 · agent v1.2.3</div>
+              </div>
+            </div>
+            <div class="row" style="gap: 6px; margin-bottom: 8px;">
+              <span class="chip success dot">healthy</span>
+              <span class="chip success">● up</span>
+            </div>
+            <div class="row" style="gap: 4px;">
+              <span class="chip outline mono">env=prod</span>
+              <span class="chip outline mono">tier=worker</span>
+            </div>
+            <div class="list-card-meta" style="margin-top: 10px;">Heartbeat: 22s ago</div>
+          </div>
+
+          <div class="list-card">
+            <div class="list-card-header">
+              <div class="grade d">D</div>
+              <div style="flex: 1;">
+                <div class="list-card-title">prod-worker-05</div>
+                <div class="list-card-meta">debian 11.9 · agent v1.0.7</div>
+              </div>
+            </div>
+            <div class="row" style="gap: 6px; margin-bottom: 8px;">
+              <span class="chip outline">unknown</span>
+              <span class="chip outline">○ down</span>
+            </div>
+            <div class="row" style="gap: 4px;">
+              <span class="chip outline mono">env=prod</span>
+              <span class="chip outline mono">tier=worker</span>
+            </div>
+            <div class="list-card-meta" style="margin-top: 10px; color: #fca5a5;">Last heartbeat: 3h ago</div>
+          </div>
+
+          <div class="list-card">
+            <div class="list-card-header">
+              <div class="grade b">B</div>
+              <div style="flex: 1;">
+                <div class="list-card-title">prod-ssh-02</div>
+                <div class="list-card-meta">ubuntu 24.04 · agent v1.2.3</div>
+              </div>
+            </div>
+            <div class="row" style="gap: 6px; margin-bottom: 8px;">
+              <span class="chip warning dot">at-risk</span>
+              <span class="chip success">● up</span>
+              <span class="chip error" style="font-size: 10px;">⚠ brute-force</span>
+            </div>
+            <div class="row" style="gap: 4px;">
+              <span class="chip outline mono">env=prod</span>
+            </div>
+            <div class="list-card-meta" style="margin-top: 10px;">Heartbeat: 15s ago</div>
+          </div>
+        </div>
+
+        <a class="back" href="c-index.html" style="margin-top: 24px; display: inline-block;">← Back to Option C index</a>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

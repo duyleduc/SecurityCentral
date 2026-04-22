@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Findings — Option C</title>
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand"><div class="nav-logo">SC</div><div class="sidebar-brand-text">SecurityCentral</div></div>
+      <nav class="sidebar-nav">
+        <a class="sidebar-item" href="c-dashboard.html"><span class="icon">📊</span>Dashboard</a>
+        <a class="sidebar-item" href="c-projects.html"><span class="icon">📁</span>Projects</a>
+        <a class="sidebar-item" href="c-domains-list.html"><span class="icon">🌐</span>Domains</a>
+        <a class="sidebar-item" href="c-servers-list.html"><span class="icon">🖥</span>Servers</a>
+        <a class="sidebar-item" href="c-repos-list.html"><span class="icon">🐙</span>Repositories</a>
+        <div class="sidebar-item active"><span class="icon">🐛</span>Findings<span class="count">12</span></div>
+        <a class="sidebar-item" href="c-settings.html"><span class="icon">⚙</span>Settings</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="nav-avatar" style="width: 28px; height: 28px; font-size: 11px;">D</div>
+        <div class="sidebar-footer-email">duy.le@arneo.io</div>
+      </div>
+    </aside>
+
+    <main class="shell-main">
+      <div class="appbar">
+        <div class="appbar-page-title">Findings</div>
+        <div class="project-switcher" style="margin-left: 14px;">
+          <span class="dot"></span><span>production</span><span class="caret">▼</span>
+        </div>
+        <div class="search" style="margin-left: 16px;">
+          <span>🔍</span><input placeholder="Search findings…"><span class="kbd">⌘K</span>
+        </div>
+        <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+          <div class="nav-icon">🔔<span class="badge">4</span></div>
+          <div class="nav-avatar">D</div>
+        </div>
+      </div>
+
+      <div class="shell-content">
+        <div class="url-bar">
+          <span>🔗</span><span>app.securitycentral.io/findings</span>
+          <span class="url-scope">?project=prod</span>
+        </div>
+
+        <div class="scope-banner">
+          <span>📁</span>
+          <strong>production</strong> · 12 findings in scope
+          <a href="#">View all projects</a>
+        </div>
+
+        <h1 style="margin-bottom: 12px;">Findings</h1>
+
+        <!-- Severity stat cards -->
+        <div class="grid-4" style="margin-bottom: 20px;">
+          <div class="stat-card">
+            <div class="stat-num" style="color: var(--error);">3</div>
+            <div class="stat-label">Critical</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" style="color: var(--warning);">4</div>
+            <div class="stat-label">High</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" style="color: var(--info);">3</div>
+            <div class="stat-label">Medium</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num muted">2</div>
+            <div class="stat-label">Low</div>
+          </div>
+        </div>
+
+        <!-- Work state filter tabs -->
+        <div class="filter-row">
+          <span class="chip primary">○ new · 8</span>
+          <span class="chip outline">in-progress · 2</span>
+          <span class="chip outline">resolved · 14</span>
+          <span class="chip outline">✕ dismissed · 3</span>
+          <span style="margin-left: 16px;" class="muted">|</span>
+          <input class="filter-input" placeholder="Search by CVE, package, asset…">
+          <span class="chip outline">Source: all ▼</span>
+        </div>
+
+        <div class="card" style="padding: 0;">
+          <table>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Asset</th>
+                <th>Severity</th>
+                <th>Work state</th>
+                <th>EPSS</th>
+                <th>First seen</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div style="font-weight: 500;">CVE-2024-1234 in lodash</div>
+                  <div class="muted" style="font-size: 11px;">Remote code execution via prototype pollution</div>
+                </td>
+                <td class="mono">auth-service</td>
+                <td><span class="chip error">critical</span></td>
+                <td><span class="chip outline">○ new</span></td>
+                <td class="mono" style="color: #fca5a5;">82%</td>
+                <td class="muted">2h ago</td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="font-weight: 500;">AWS access key in config/staging.env</div>
+                  <div class="muted" style="font-size: 11px;">Looks like AKIA… on line 12</div>
+                </td>
+                <td class="mono">auth-service</td>
+                <td><span class="chip error">critical</span></td>
+                <td><span class="chip warning dot">in-progress</span></td>
+                <td class="muted">—</td>
+                <td class="muted">2h ago</td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="font-weight: 500;">SSL cert expires in 3 days</div>
+                  <div class="muted" style="font-size: 11px;">internal.foo.com · Let's Encrypt · auto-renewal not detected</div>
+                </td>
+                <td class="mono">internal.foo.com</td>
+                <td><span class="chip error">critical</span></td>
+                <td><span class="chip outline">○ new</span></td>
+                <td class="muted">—</td>
+                <td class="muted">6h ago</td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="font-weight: 500;">CVE-2024-XXXX · high CPU</div>
+                  <div class="muted" style="font-size: 11px;">OpenSSL 3.0.8 — fixed in 3.0.12</div>
+                </td>
+                <td class="mono">prod-web-01</td>
+                <td><span class="chip warning">high</span></td>
+                <td><span class="chip outline">○ new</span></td>
+                <td class="mono" style="color: #fcd34d;">34%</td>
+                <td class="muted">1d ago</td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="font-weight: 500;">SSH password auth enabled</div>
+                  <div class="muted" style="font-size: 11px;">/etc/ssh/sshd_config: PasswordAuthentication yes</div>
+                </td>
+                <td class="mono">staging-web-03</td>
+                <td><span class="chip info">medium</span></td>
+                <td><span class="chip warning dot">in-progress</span></td>
+                <td class="muted">—</td>
+                <td class="muted">3d ago</td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="font-weight: 500;">Firewall default policy is ACCEPT</div>
+                  <div class="muted" style="font-size: 11px;">iptables INPUT chain has no default DROP</div>
+                </td>
+                <td class="mono">prod-db-02</td>
+                <td><span class="chip warning">high</span></td>
+                <td><span class="chip outline">○ new</span></td>
+                <td class="muted">—</td>
+                <td class="muted">4d ago</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <a class="back" href="c-index.html" style="margin-top: 24px; display: inline-block;">← Back to Option C index</a>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

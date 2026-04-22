@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecurityCentral — UX Mockups</title>
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body>
+  <div class="page">
+    <h1>SecurityCentral — UX Redesign Mockups</h1>
+    <p class="muted" style="margin-bottom: 24px;">
+      Three options for tightening the workflow. Each opens as a full-page mockup you can click through.
+    </p>
+
+    <div class="hero-grid">
+      <a class="hero-card" href="current.html">
+        <span class="tag current">Reference</span>
+        <h3>Current state</h3>
+        <p>
+          Resource-centric nav. Project filter on every page. Status vocabulary differs per asset.
+          Mocked to show the baseline we're comparing against.
+        </p>
+        <div class="meta">
+          <span>🖥 Servers list</span>
+          <span>🌐 Domains list</span>
+          <span>📊 Dashboard</span>
+        </div>
+      </a>
+
+      <a class="hero-card" href="option-a-overview.html">
+        <span class="tag a">Option A</span>
+        <h3>Overview redesign</h3>
+        <p>
+          Task-oriented home. "Critical now", "New since yesterday", "In-flight" zones.
+          Answers <em>what should I do today</em> rather than listing what exists.
+        </p>
+        <div class="meta">
+          <span>🔴 High impact</span>
+          <span>🟡 2–3 days</span>
+          <span>🔴 High risk</span>
+        </div>
+      </a>
+
+      <a class="hero-card" href="option-b-unified-assets.html">
+        <span class="tag b">Option B</span>
+        <h3>Unified asset pages</h3>
+        <p>
+          Same layout for Server, Domain, Repo: Overview / Activity / Security / Settings.
+          Once you know one, you know all of them.
+        </p>
+        <div class="meta">
+          <span>🟡 Medium impact</span>
+          <span>🟡 3–4 days</span>
+          <span>🟢 Low risk</span>
+        </div>
+      </a>
+
+      <a class="hero-card" href="option-c-switcher-statuses.html">
+        <span class="tag c">Option C</span>
+        <h3>Project switcher + status normalization</h3>
+        <p>
+          Global project dropdown scopes the whole app. Unified health / operational / work-state
+          vocabulary with consistent colors everywhere.
+        </p>
+        <div class="meta">
+          <span>🔴 High impact (aggregate)</span>
+          <span>🟢 1–2 days</span>
+          <span>🟢 Lowest risk</span>
+        </div>
+      </a>
+
+      <a class="hero-card" href="c-index.html" style="border-color: rgba(34, 197, 94, 0.4);">
+        <span class="tag c">Option C · full walkthrough</span>
+        <h3>🎬 Click through every page</h3>
+        <p>
+          10 full page mockups with sidebar, top bar, project switcher, and normalized statuses —
+          Dashboard, Projects, Servers, Domains, Repos, Findings, Settings. Navigate between them like the real app.
+        </p>
+        <div class="meta">
+          <span>🟢 10 pages</span>
+          <span>Full app shell</span>
+          <span>Clickable</span>
+        </div>
+      </a>
+    </div>
+
+    <div class="spacer-lg"></div>
+
+    <div class="card">
+      <h2>Comparison at a glance</h2>
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>User impact</th>
+            <th>Eng effort</th>
+            <th>Risk</th>
+            <th>Visible day 1?</th>
+            <th>Unlocks later work?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>A — Overview redesign</strong></td>
+            <td><span class="chip error dot">High</span></td>
+            <td><span class="chip warning dot">Medium</span></td>
+            <td><span class="chip error dot">High</span></td>
+            <td>Yes, immediately</td>
+            <td>Sets up notifications UX</td>
+          </tr>
+          <tr>
+            <td><strong>B — Unified asset pages</strong></td>
+            <td><span class="chip warning dot">Medium</span></td>
+            <td><span class="chip warning dot">Medium</span></td>
+            <td><span class="chip success dot">Low</span></td>
+            <td>On first click</td>
+            <td>Enables search & activity feed</td>
+          </tr>
+          <tr>
+            <td><strong>C — Switcher + statuses</strong></td>
+            <td><span class="chip error dot">High (aggregate)</span></td>
+            <td><span class="chip success dot">Low</span></td>
+            <td><span class="chip success dot">Lowest</span></td>
+            <td>Everywhere at once</td>
+            <td>Prereq for A & B</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="spacer-md"></div>
+    <p class="muted" style="font-size: 13px;">
+      Recommendation: <strong>C → B → A</strong>. C is small and makes the existing app feel tighter.
+      B builds pattern consistency. A is bigger and benefits from both.
+    </p>
+  </div>
+</body>
+</html>

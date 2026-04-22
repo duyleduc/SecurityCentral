@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Option B — Unified Asset Pages</title>
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-logo">SC</div>
+    <div class="nav-title">SecurityCentral</div>
+    <div class="project-switcher"><span class="dot"></span><span>production</span><span class="caret">▼</span></div>
+    <div class="nav-items">
+      <span class="nav-item">Overview</span>
+      <span class="nav-item active">Assets ▾</span>
+      <span class="nav-item">Work</span>
+      <span class="nav-item">Activity</span>
+      <span class="nav-item">Settings ▾</span>
+    </div>
+    <div class="nav-right">
+      <div class="nav-icon">🔔<span class="badge">4</span></div>
+      <div class="nav-avatar">D</div>
+    </div>
+  </nav>
+
+  <div class="page">
+    <a class="back" href="index.html">← Back to mockups</a>
+    <h1>Unified asset detail pages</h1>
+    <p class="muted" style="margin-bottom: 20px;">
+      Same shape for Server, Domain, and Repository. Four tabs always: <strong>Overview / Activity / Security / Settings</strong>.
+      Three mockups stacked below so you can see them side-by-side.
+    </p>
+
+    <!-- SERVER -->
+    <div class="muted" style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">
+      Servers / prod-web-01
+    </div>
+    <div class="mockup" style="margin-bottom: 32px;">
+      <div class="mockup-chrome">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="mono muted" style="font-size: 11px; margin-left: 12px;">app.securitycentral.io/servers/prod-web-01</span>
+      </div>
+      <div class="mockup-body">
+        <!-- Asset header -->
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 8px;">
+          <div class="grade grade-lg b">B</div>
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span style="font-size: 22px; font-weight: 600;">prod-web-01</span>
+              <span class="chip success dot">healthy</span>
+              <span class="chip outline">🖥 server · v1.2.3</span>
+              <span class="chip outline">📁 production</span>
+            </div>
+            <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
+              <span class="chip outline mono">env=prod</span>
+              <span class="chip outline mono">tier=web</span>
+              <span class="chip outline mono">owner=platform</span>
+              <span class="muted" style="font-size: 12px; margin-left: 8px;">· last activity 30s ago</span>
+            </div>
+          </div>
+          <button class="btn outline sm">Print / Export</button>
+          <button class="btn outline sm">⋯</button>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active">Overview</div>
+          <div class="tab">Activity</div>
+          <div class="tab">Security <span class="chip error" style="margin-left: 6px; font-size: 10px; padding: 1px 6px;">2</span></div>
+          <div class="tab">Settings</div>
+        </div>
+
+        <!-- Overview content -->
+        <div class="grid-2">
+          <div class="card" style="padding: 14px;">
+            <div class="card-title">Score history · 30 days</div>
+            <div class="sparkline" style="margin-top: 8px; height: 40px;"></div>
+            <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+              <span class="muted" style="font-size: 11px;">30d ago: 68</span>
+              <span style="font-size: 12px; color: var(--success);">Now: 82 ↑14</span>
+            </div>
+          </div>
+          <div class="card" style="padding: 14px;">
+            <div class="card-title">Key metrics · now</div>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 8px;">
+              <div><div class="muted" style="font-size: 11px;">CPU</div><div style="font-size: 18px; font-weight: 600;">23%</div></div>
+              <div><div class="muted" style="font-size: 11px;">RAM</div><div style="font-size: 18px; font-weight: 600;">41%</div></div>
+              <div><div class="muted" style="font-size: 11px;">Disk</div><div style="font-size: 18px; font-weight: 600; color: var(--warning);">68%</div></div>
+              <div><div class="muted" style="font-size: 11px;">Load</div><div style="font-size: 18px; font-weight: 600;">0.82</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="spacer-md"></div>
+
+        <div class="card accent-warning">
+          <div class="card-header">
+            <div class="card-title">⚠ What needs attention <span class="chip warning" style="margin-left: 6px;">2</span></div>
+          </div>
+          <div class="alert-row" style="padding: 8px 0;">
+            <div class="alert-icon ssl">↻</div>
+            <div class="alert-body">
+              <div class="alert-title">Kernel reboot pending</div>
+              <div class="alert-sub">linux-image-6.5.0-15 installed 3 days ago; running 6.5.0-14</div>
+            </div>
+            <button class="btn sm outline">Schedule reboot</button>
+          </div>
+          <div class="alert-row" style="padding: 8px 0;">
+            <div class="alert-icon critical">⚠</div>
+            <div class="alert-body">
+              <div class="alert-title">Port 5432 (postgres) open to internet</div>
+              <div class="alert-sub">Firewall has no restriction on tcp/5432 — consider binding to localhost or restricting by IP</div>
+            </div>
+            <button class="btn sm">How to fix</button>
+          </div>
+        </div>
+
+        <div class="spacer-md"></div>
+
+        <div class="row" style="gap: 16px;">
+          <div class="card grow" style="padding: 14px;">
+            <div class="card-title">🐳 Containers</div>
+            <div style="margin-top: 8px;">
+              <span class="chip success dot">5 running</span>
+              <span class="chip outline">0 restarting</span>
+              <span class="chip outline">0 stopped</span>
+            </div>
+          </div>
+          <div class="card grow" style="padding: 14px;">
+            <div class="card-title">🔗 Quick actions</div>
+            <div class="row" style="gap: 8px; margin-top: 8px;">
+              <button class="btn sm outline">Full metrics →</button>
+              <button class="btn sm outline">SSH audit</button>
+              <button class="btn sm outline">Run attack-surface scan</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DOMAIN -->
+    <div class="muted" style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">
+      Domains / api.foo.com
+    </div>
+    <div class="mockup" style="margin-bottom: 32px;">
+      <div class="mockup-chrome">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="mono muted" style="font-size: 11px; margin-left: 12px;">app.securitycentral.io/domains/api.foo.com</span>
+      </div>
+      <div class="mockup-body">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 8px;">
+          <div class="grade grade-lg a">A</div>
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span style="font-size: 22px; font-weight: 600;">api.foo.com</span>
+              <span class="chip success dot">healthy</span>
+              <span class="chip outline">🌐 domain · :443</span>
+              <span class="chip outline">📁 production</span>
+            </div>
+            <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
+              <span class="chip outline mono">env=prod</span>
+              <span class="chip outline mono">owner=api</span>
+              <span class="muted" style="font-size: 12px; margin-left: 8px;">· last check 30s ago</span>
+            </div>
+          </div>
+          <button class="btn outline sm">Print / Export</button>
+          <button class="btn outline sm">⋯</button>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active">Overview</div>
+          <div class="tab">Activity</div>
+          <div class="tab">Security</div>
+          <div class="tab">Settings</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card" style="padding: 14px;">
+            <div class="card-title">Score history · 30 days</div>
+            <div class="sparkline" style="margin-top: 8px; height: 40px;"></div>
+            <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+              <span class="muted" style="font-size: 11px;">30d ago: 96</span>
+              <span style="font-size: 12px; color: var(--success);">Now: 98 ↑2</span>
+            </div>
+          </div>
+          <div class="card" style="padding: 14px;">
+            <div class="card-title">Key metrics · now</div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px;">
+              <div><div class="muted" style="font-size: 11px;">SSL</div><div style="font-size: 18px; font-weight: 600; color: var(--success);">A</div></div>
+              <div><div class="muted" style="font-size: 11px;">Expires</div><div style="font-size: 18px; font-weight: 600;">87d</div></div>
+              <div><div class="muted" style="font-size: 11px;">Response</div><div style="font-size: 18px; font-weight: 600;">240ms</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="spacer-md"></div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">✓ What needs attention</div></div>
+          <div style="display: flex; align-items: center; gap: 10px; padding: 6px 0;">
+            <span style="color: var(--success); font-size: 18px;">✓</span>
+            <span>All checks passing. Uptime 99.98% over the last 24h.</span>
+          </div>
+        </div>
+
+        <div class="spacer-md"></div>
+
+        <div class="row" style="gap: 16px;">
+          <div class="card grow" style="padding: 14px;">
+            <div class="card-title">⏱ Uptime · 24h</div>
+            <div class="sparkline" style="margin-top: 8px;"></div>
+            <div style="margin-top: 6px; font-size: 12px;" class="muted">99.98% · 1 blip at 04:12 (recovered in 8s)</div>
+          </div>
+          <div class="card grow" style="padding: 14px;">
+            <div class="card-title">📨 DNS</div>
+            <div class="row" style="gap: 6px; margin-top: 8px;">
+              <span class="chip success dot">SPF</span>
+              <span class="chip success dot">DKIM</span>
+              <span class="chip success dot">DMARC</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REPO -->
+    <div class="muted" style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">
+      Repositories / auth-service
+    </div>
+    <div class="mockup" style="margin-bottom: 32px;">
+      <div class="mockup-chrome">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="mono muted" style="font-size: 11px; margin-left: 12px;">app.securitycentral.io/repositories/auth-service</span>
+      </div>
+      <div class="mockup-body">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 8px;">
+          <div class="grade grade-lg c">C</div>
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span style="font-size: 22px; font-weight: 600;">auth-service</span>
+              <span class="chip warning dot">at-risk</span>
+              <span class="chip outline">🐙 github · org/auth-service</span>
+              <span class="chip outline">📁 production</span>
+            </div>
+            <div style="margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap;">
+              <span class="chip outline mono">env=prod</span>
+              <span class="chip outline mono">lang=typescript</span>
+              <span class="muted" style="font-size: 12px; margin-left: 8px;">· last scan 6h ago</span>
+            </div>
+          </div>
+          <button class="btn outline sm">Print / Export</button>
+          <button class="btn outline sm">⋯</button>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active">Overview</div>
+          <div class="tab">Activity</div>
+          <div class="tab">Security <span class="chip error" style="margin-left: 6px; font-size: 10px; padding: 1px 6px;">5</span></div>
+          <div class="tab">Settings</div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card" style="padding: 14px;">
+            <div class="card-title">Score history · 30 days</div>
+            <div class="sparkline" style="margin-top: 8px; height: 40px;"></div>
+            <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+              <span class="muted" style="font-size: 11px;">30d ago: 78</span>
+              <span style="font-size: 12px; color: #fca5a5;">Now: 62 ↓16</span>
+            </div>
+          </div>
+          <div class="card" style="padding: 14px;">
+            <div class="card-title">Key metrics · now</div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px;">
+              <div><div class="muted" style="font-size: 11px;">Default branch</div><div style="font-size: 14px; font-weight: 600;">main</div></div>
+              <div><div class="muted" style="font-size: 11px;">Last commit</div><div style="font-size: 14px; font-weight: 600;">2d ago</div></div>
+              <div><div class="muted" style="font-size: 11px;">Language</div><div style="font-size: 14px; font-weight: 600;">TypeScript</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="spacer-md"></div>
+
+        <div class="card accent-critical">
+          <div class="card-header">
+            <div class="card-title">⚠ What needs attention <span class="chip error" style="margin-left: 6px;">5</span></div>
+          </div>
+          <div class="alert-row" style="padding: 8px 0;">
+            <div class="alert-icon bug">🐛</div>
+            <div class="alert-body">
+              <div class="alert-title">3 high-severity dependency CVEs · fix available</div>
+              <div class="alert-sub">lodash 4.17.19 → 4.17.21 · axios 0.21.1 → 1.6.2 · express 4.17.1 → 4.18.2</div>
+            </div>
+            <button class="btn sm">Open PR</button>
+          </div>
+          <div class="alert-row" style="padding: 8px 0;">
+            <div class="alert-icon critical">🔑</div>
+            <div class="alert-body">
+              <div class="alert-title">1 secret detected in <span class="mono">config/staging.env</span></div>
+              <div class="alert-sub">Looks like an AWS access key (AKIA…) · line 12</div>
+            </div>
+            <button class="btn sm outline">Review</button>
+          </div>
+          <div class="alert-row" style="padding: 8px 0;">
+            <div class="alert-icon bug">⚠</div>
+            <div class="alert-body">
+              <div class="alert-title">Unsafe eval() in <span class="mono">src/utils/template.ts</span></div>
+              <div class="alert-sub">User-supplied input reaches eval without sanitization · line 47</div>
+            </div>
+            <button class="btn sm outline">View code</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="color: #a5b4fc;">💡 Why this design</h3>
+      <ul style="padding-left: 18px; color: var(--text-secondary); font-size: 13px; line-height: 1.7;">
+        <li>Same header shape (grade · name · status · type chip · tags · last activity) for every asset.</li>
+        <li>Same 4 tabs (<strong>Overview / Activity / Security / Settings</strong>) for every asset.</li>
+        <li>"What needs attention" block surfaces the top issues inline — you don't need to drill into Security unless you want detail.</li>
+        <li>Security tab keeps the deep dive (current posture / vulnerabilities / attack-surface sub-tabs for servers).</li>
+        <li>Activity tab centralizes heartbeats, scans, cert renewals, posture snapshots — same pattern everywhere.</li>
+        <li>Print/Export replaces the dedicated "Full Report" route — same data, less navigation.</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>
