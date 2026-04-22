@@ -25,6 +25,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import ShieldIcon from '@mui/icons-material/Shield';
 import { useAuth } from '../auth/AuthContext';
 import { useRealtimeEvents } from '../ws/useRealtimeEvents';
+import { ProjectSwitcher } from './ProjectSwitcher';
 
 const DRAWER_WIDTH = 240;
 
@@ -113,9 +114,11 @@ export function AppShell() {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap sx={{ flexGrow: 1 }}>
+          <Typography variant="h6" noWrap sx={{ mr: 2 }}>
             {NAV_ITEMS.find((n) => n.path === location.pathname)?.label ?? 'SecurityCentral'}
           </Typography>
+          <ProjectSwitcher />
+          <Box sx={{ flexGrow: 1 }} />
         </Toolbar>
       </AppBar>
 
