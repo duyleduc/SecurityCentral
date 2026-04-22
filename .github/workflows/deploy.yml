@@ -1,8 +1,13 @@
 name: Deploy to GCP
 
+# CI/CD is currently disabled — no auto-deploy on push.
+# Workflow can still be triggered manually from the Actions tab if needed.
+# To fully re-enable auto-deploys on push to main, restore the `push:` block below.
+#
+# on:
+#   push:
+#     branches: [main]
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       target:
