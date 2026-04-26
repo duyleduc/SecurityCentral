@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errors.js';
 import { logger } from '../../lib/logger.js';
-import { emitAgentConnected, emitServerMetrics } from '../../ws/hooks.js';
+import { emitAgentConnected, emitServerMetrics, emitBruteForceActive, emitCveCritical } from '../../ws/hooks.js';
 import { matchServerPackages, applyMatchesToFindings } from '../vulndb/vulndb.service.js';
 import { getCisControl } from '../../lib/cis-benchmarks.js';
 
@@ -384,7 +384,7 @@ export async function storeSecurityPosture(input: SecurityPostureInput) {
     throw new AppError('RESOURCE_NOT_FOUND', 'Agent not registered');
   }
 
-  const posture = await prisma.securityPosture.create({
+  await prisma.securityPosture.create({
     data: {
       serverId: server.id,
       collectedAt: new Date(input.collectedAt),
@@ -402,16 +402,9 @@ export async function storeSecurityPosture(input: SecurityPostureInput) {
       openFdAlloc: input.openFDs.allocated,
       openFdMax: Math.min(input.openFDs.max, 2_147_483_647),
       auditResults: input.auditResults ? JSON.parse(JSON.stringify(input.auditResults)) : undefined,
+      bruteForce: input.bruteForce ? JSON.parse(JSON.stringify(input.bruteForce)) : undefined,
     },
   });
-
-  // Store bruteForce data (raw SQL — field not yet in generated Prisma client).
-  if (input.bruteForce) {
-    await prisma.$executeRawUnsafe(
-      'UPDATE security_postures SET brute_force = $1::jsonb WHERE id = $2',
-      JSON.stringify(input.bruteForce), (posture as any).id,
-    );
-  }
 
   // Create findings for brute force events.
   if (input.bruteForce) {
@@ -429,6 +422,13 @@ export async function storeSecurityPosture(input: SecurityPostureInput) {
             description: `${bf.sshVelocity} SSH login failures in the last 5 minutes from ${bf.sshUniqueIps} unique IPs. Top attackers: ${(bf.sshTopAttackers ?? []).map((a: { ip: string; count: number }) => `${a.ip} (${a.count}x)`).join(', ')}`,
             detail: JSON.parse(JSON.stringify({ type: 'active_attack', ...bf })),
           },
+        });
+        // Fire dedicated brute-force notification (separate from finding:new so users can opt in independently).
+        emitBruteForceActive(server.orgId, {
+          hostname: server.hostname,
+          serverId: server.id,
+          sshVelocity: bf.sshVelocity,
+          sshUniqueIps: bf.sshUniqueIps,
         });
       }
     }
@@ -607,6 +607,17 @@ export async function storePackageInventory(input: PackageInventoryInput) {
         created: cveResult.created,
         resolved: cveResult.resolved,
       });
+
+      // Notify on critical CVEs.
+      const criticalMatches = matches.filter((m) => m.severity === 'critical');
+      if (criticalMatches.length > 0 && cveResult.created > 0) {
+        emitCveCritical(server.orgId, {
+          hostname: server.hostname,
+          serverId: server.id,
+          cveCount: criticalMatches.length,
+          topCve: criticalMatches[0].cveId,
+        });
+      }
 
       // Recompute security score after CVE changes.
       const { recomputeScore } = await import('../servers/servers.service.js');

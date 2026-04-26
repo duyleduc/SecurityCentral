@@ -47,3 +47,14 @@ notificationsRouter.get('/event-types', requirePermission('manage_org'), async (
     channels: notificationsService.getChannels(),
   }));
 });
+
+// POST /api/v1/notifications/test — fire a test notification to verify config
+notificationsRouter.post('/test', requirePermission('manage_org'), async (req, res, next) => {
+  try {
+    const eventType = (req.body?.eventType as string) || 'finding:new';
+    const result = await notificationsService.sendTest(req.auth!.orgId, eventType);
+    res.json(successEnvelope(result));
+  } catch (err) {
+    next(err);
+  }
+});

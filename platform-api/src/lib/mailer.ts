@@ -1,79 +1,6 @@
-import nodemailer, { type Transporter } from 'nodemailer';
+import { getNotificationTransport, getFromHeader, isMailEnabled } from './mailer-shared.js';
 
-import { env } from './env.js';
-import { logger } from './logger.js';
-
-/**
- * Resolve the effective SMTP config, preferring explicit SMTP_* vars and
- * falling back to the GMAIL_* dev shortcut. Returns null if nothing is configured.
- */
-interface SmtpConfig {
-  readonly host: string;
-  readonly port: number;
-  readonly secure: boolean;
-  readonly user: string;
-  readonly pass: string;
-}
-
-function resolveSmtpConfig(): SmtpConfig | null {
-  // Preferred: explicit SMTP_* config (Resend, Postmark, SES, SendGrid, Mailgun, self-hosted).
-  if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD) {
-    return {
-      host: env.SMTP_HOST,
-      port: env.SMTP_PORT,
-      secure: env.SMTP_SECURE ?? env.SMTP_PORT === 465,
-      user: env.SMTP_USER,
-      pass: env.SMTP_PASSWORD,
-    };
-  }
-
-  // Dev shortcut: Gmail App Password.
-  if (env.GMAIL_USER && env.GMAIL_APP_PASSWORD) {
-    return {
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      user: env.GMAIL_USER,
-      pass: env.GMAIL_APP_PASSWORD,
-    };
-  }
-
-  return null;
-}
-
-let cachedTransporter: Transporter | null | undefined;
-
-function getTransporter(): Transporter | null {
-  if (cachedTransporter !== undefined) return cachedTransporter;
-
-  const cfg = resolveSmtpConfig();
-  if (!cfg) {
-    logger.warn('[mailer] SMTP not configured — email disabled', {
-      hint: 'Set SMTP_HOST/SMTP_USER/SMTP_PASSWORD (or GMAIL_USER/GMAIL_APP_PASSWORD for dev)',
-    });
-    cachedTransporter = null;
-    return null;
-  }
-
-  cachedTransporter = nodemailer.createTransport({
-    host: cfg.host,
-    port: cfg.port,
-    secure: cfg.secure,
-    auth: { user: cfg.user, pass: cfg.pass },
-  });
-  logger.info('[mailer] SMTP transport initialized', { host: cfg.host, port: cfg.port, secure: cfg.secure });
-  return cachedTransporter;
-}
-
-function resolveFromHeader(): string {
-  if (env.MAIL_FROM) return env.MAIL_FROM;
-  const cfg = resolveSmtpConfig();
-  return cfg ? `SecurityCentral <${cfg.user}>` : 'SecurityCentral';
-}
-
-export function isMailEnabled(): boolean {
-  return resolveSmtpConfig() !== null;
-}
+export { isMailEnabled };
 
 interface SendInvitationArgs {
   readonly to: string;
@@ -139,11 +66,11 @@ function renderInvitationText(args: SendInvitationArgs): string {
 }
 
 export async function sendInvitationEmail(args: SendInvitationArgs): Promise<void> {
-  const tx = getTransporter();
+  const tx = getNotificationTransport();
   if (!tx) return;
 
   await tx.sendMail({
-    from: resolveFromHeader(),
+    from: getFromHeader(),
     to: args.to,
     subject: `You're invited to join ${args.orgName} on SecurityCentral`,
     html: renderInvitationHtml(args),

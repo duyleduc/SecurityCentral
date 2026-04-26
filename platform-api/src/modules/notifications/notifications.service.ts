@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../middleware/errors.js';
+import { dispatch } from '../../lib/notifications/dispatcher.js';
 
 const EVENT_TYPES = [
   'finding:new',
@@ -8,6 +9,8 @@ const EVENT_TYPES = [
   'agent:connected',
   'agent:disconnected',
   'cert:expiring',
+  'brute_force:active',
+  'cve:critical',
 ] as const;
 
 const CHANNELS = ['email', 'slack', 'webhook'] as const;
@@ -48,4 +51,25 @@ export function getEventTypes() {
 
 export function getChannels() {
   return CHANNELS;
+}
+
+/** Send a test notification to verify channel configuration works. */
+export async function sendTest(orgId: string, eventType: string): Promise<{ sent: boolean; channels: number }> {
+  if (!EVENT_TYPES.includes(eventType as (typeof EVENT_TYPES)[number])) {
+    throw new AppError('VALIDATION_ERROR', `Invalid event type: ${eventType}`);
+  }
+
+  const enabled = await prisma.notificationPreference.count({
+    where: { orgId, eventType, enabled: true },
+  });
+
+  await dispatch({
+    orgId,
+    event: eventType as (typeof EVENT_TYPES)[number],
+    title: '[Test] SecurityCentral notification',
+    description: `This is a test notification for "${eventType}". If you received it, your configured channels are working correctly.`,
+    severity: 'info',
+  });
+
+  return { sent: true, channels: enabled };
 }

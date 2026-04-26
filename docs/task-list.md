@@ -530,3 +530,44 @@ Security posture tab shows hardening audit results grouped by category. Failed c
 ### Done when
 
 SSH section shows full cipher/MAC/KEX audit with pass/fail per algorithm. Service hardening section shows Redis/DB/NFS/legacy protocol checks.
+
+---
+
+## Phase 6: Notification Delivery (Email / Slack / Webhook)
+
+**Goal:** Close the loop on detection by actually delivering alerts. Up to Phase 5 the platform creates findings and emits WebSocket events, but users have to be looking at the dashboard to see anything. Phase 6 sends out-of-band alerts to email, Slack, and arbitrary webhooks based on per-org preferences.
+
+### Backend (platform-api) — Delivery Layer
+
+- [x] Create `lib/notifications/dispatcher.ts` — central fan-out from event to channels with per-channel min-severity filtering
+- [x] Create `lib/notifications/email.ts` — HTML + text email rendering with severity-coloured header, fallback to org owners/admins as recipients
+- [x] Create `lib/notifications/slack.ts` — Slack incoming webhook with attachment + colour sidebar
+- [x] Create `lib/notifications/webhook.ts` — generic JSON POST with `X-SC-Event` header and HMAC-SHA256 signing (`X-SC-Signature`)
+- [x] Extract shared mailer transport into `lib/mailer-shared.ts` so notifications and invitations share one nodemailer instance
+- [x] Wire `dispatch()` into every relevant `ws/hooks.ts` emit — `finding:new`, `finding:resolved`, `scan:completed`, `agent:connected`, `agent:disconnected`, `cert:expiring`
+- [x] Add dedicated event types: `brute_force:active` and `cve:critical` for opt-in alerting separate from generic `finding:new`
+- [x] Trigger `emitBruteForceActive` from agents service when active SSH brute force is detected
+- [x] Trigger `emitCveCritical` from agents service when critical CVEs are matched
+- [x] Add `POST /api/v1/notifications/test` endpoint to verify channel configuration
+- [x] All deliveries are best-effort — one failed channel logs but does not block others
+
+### Backend — Configuration
+
+- [x] Notification preferences carry per-channel `config` JSON: email recipients, Slack webhook URL, webhook URL + signing secret
+- [x] Per-channel `minSeverity` filter on the config — only critical/high events reach Slack while email gets everything
+- [x] Channel config is shared across all event subscriptions for that channel (one Slack URL configured once → applies to all enabled events)
+- [x] Email recipients fall back to org owners + admins when not specified
+
+### Frontend (dashboard)
+
+- [x] Two-card layout: "Notification Channels" (configure once) + "Event Subscriptions" (toggle per event × channel)
+- [x] Per-channel config dialog with channel-specific fields: email recipients, Slack webhook URL, webhook URL + secret, severity filter
+- [x] Status indicator on each channel card: "✓ Configured" / "Not configured"
+- [x] Event toggles disabled until the channel is configured (with tooltip explanation)
+- [x] "Test" button with event picker — fires a synthetic notification through the dispatcher to verify configuration
+- [x] Toast feedback after test: success with channel count, or error message
+- [x] All 8 event types listed: `finding:new`, `finding:resolved`, `scan:completed`, `agent:connected`, `agent:disconnected`, `cert:expiring`, `brute_force:active`, `cve:critical`
+
+### Done when
+
+User configures Slack webhook → enables `brute_force:active` for Slack → simulates brute force → Slack message arrives within seconds with severity-coloured sidebar and "View in dashboard" link.

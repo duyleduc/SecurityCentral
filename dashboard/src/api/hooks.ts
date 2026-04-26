@@ -1041,19 +1041,37 @@ export function useRevokeApiKey() {
 // Notification Preferences
 // ---------------------------------------------------------------------------
 
+export interface NotificationPreference {
+  id: string;
+  channel: 'email' | 'slack' | 'webhook';
+  eventType: string;
+  enabled: boolean;
+  config: Record<string, unknown> | null;
+}
+
 export function useNotificationPreferences() {
   return useQuery({
     queryKey: ['notification-preferences'],
-    queryFn: () => apiClient<any[]>('/api/v1/notifications/preferences'),
+    queryFn: () => apiClient<NotificationPreference[]>('/api/v1/notifications/preferences'),
   });
 }
 
 export function useUpsertNotificationPref() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { channel: string; eventType: string; enabled: boolean }) =>
-      apiClient<any>('/api/v1/notifications/preferences', { method: 'PUT', body: JSON.stringify(data) }),
+    mutationFn: (data: { channel: string; eventType: string; enabled: boolean; config?: Record<string, unknown> }) =>
+      apiClient<NotificationPreference>('/api/v1/notifications/preferences', { method: 'PUT', body: JSON.stringify(data) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notification-preferences'] }),
+  });
+}
+
+export function useSendTestNotification() {
+  return useMutation({
+    mutationFn: (eventType: string) =>
+      apiClient<{ sent: boolean; channels: number }>('/api/v1/notifications/test', {
+        method: 'POST',
+        body: JSON.stringify({ eventType }),
+      }),
   });
 }
 
