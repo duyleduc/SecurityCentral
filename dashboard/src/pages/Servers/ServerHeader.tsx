@@ -39,6 +39,8 @@ import {
 } from '../../api/hooks';
 import { ScoreBadge, computeScore } from '../../components/ScoreBadge';
 import { TagsInput, type Tag } from '../../components/TagsInput';
+import { HealthChip, OpStateChip } from '../../components/status';
+import { healthFromServerStatus, opStateFromServerStatus } from '../../lib/status';
 
 export type ServerTab = 'monitoring' | 'security';
 
@@ -132,12 +134,10 @@ export function ServerHeader({ server, activeTab }: ServerHeaderProps) {
           )}
         </Stack>
         <Box sx={{ flex: 1 }}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
+          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
             <Typography variant="h4">{server.hostname}</Typography>
-            <Chip
-              label={server.status}
-              color={server.status === 'online' ? 'success' : server.status === 'warning' ? 'warning' : 'error'}
-            />
+            <HealthChip health={healthFromServerStatus(server.status)} />
+            <OpStateChip state={opStateFromServerStatus(server.status)} />
             {server.project && (
               <Chip icon={<FolderIcon sx={{ fontSize: 14 }} />} label={server.project.name} size="small" variant="outlined"
                 onClick={() => navigate(`/projects/${server.project!.id}`)} />

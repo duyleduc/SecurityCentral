@@ -15,12 +15,17 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import WarningIcon from '@mui/icons-material/Warning';
 import { useEndpoint, useHeartbeats, useTriggerCheck, useTriggerSslScan, useLatestSslScan, useUpdateEndpoint } from '../../api/hooks';
 import { useRealtimeHeartbeat } from '../../ws/useRealtimeHeartbeat';
+import { HealthChip, OpStateChip } from '../../components/status';
+import { healthFromDomainStatus, opStateFromDomainStatus } from '../../lib/status';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import DnsIcon from '@mui/icons-material/Dns';
 
-const STATUS_LABEL: Record<string, { color: string; text: string }> = {
-  healthy: { color: '#16a34a', text: 'Up' },
-  degraded: { color: '#d97706', text: 'Degraded' },
-  down: { color: '#dc2626', text: 'Down' },
-  pending: { color: '#9e9e9e', text: 'Pending' },
+/** Dot color in the title bar — tracks backend status directly. */
+const DOT_COLOR: Record<string, string> = {
+  healthy: '#16a34a',
+  degraded: '#d97706',
+  down: '#dc2626',
+  pending: '#9e9e9e',
 };
 
 export function DomainDetailPage() {
@@ -46,7 +51,7 @@ export function DomainDetailPage() {
   if (!endpoint) return <Typography>Endpoint not found</Typography>;
 
   const ep = endpoint as any;
-  const statusInfo = STATUS_LABEL[ep.status] ?? STATUS_LABEL.pending;
+  const dotColor = DOT_COLOR[ep.status] ?? DOT_COLOR.pending;
   const sslDetails = latestSslHb?.details as any;
   const sslInfo = sslDetails?.ssl;
   const dnsInfo = sslDetails?.dns;
@@ -64,28 +69,39 @@ export function DomainDetailPage() {
 
   const handleSslScan = () => sslScan.mutate(id!);
 
+  const minMs = uptimeBeats.length ? Math.min(...uptimeBeats.map((h) => h.responseMs ?? 0)) : null;
+  const maxMs = uptimeBeats.length ? Math.max(...uptimeBeats.map((h) => h.responseMs ?? 0)) : null;
+
   return (
     <Box>
-      {/* Header */}
-      <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 3 }}>
-        <IconButton onClick={() => navigate('/domains')}><ArrowBackIcon /></IconButton>
-        <Box sx={{ flex: 1 }}>
-          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
-            <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: statusInfo.color, flexShrink: 0 }} />
-            <Typography variant="h5" fontWeight={600}>
+      {/* Header — grade + name + health/op chips + actions (matches c-domain-detail.html) */}
+      <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2.5 }} flexWrap="wrap" useFlexGap>
+        <IconButton onClick={() => navigate('/domains')} sx={{ flexShrink: 0 }}>
+          <ArrowBackIcon />
+        </IconButton>
+        {sslInfo ? (
+          <GradeBadge grade={sslInfo.grade} color={sslInfo.gradeColor} size={56} />
+        ) : (
+          <Box sx={{ width: 56, height: 56, borderRadius: '50%', bgcolor: dotColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <LockIcon sx={{ color: '#fff' }} />
+          </Box>
+        )}
+        <Box sx={{ flex: 1, minWidth: 240 }}>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Typography variant="h4" fontWeight={600}>
               {ep.host}{ep.port !== 443 ? `:${ep.port}` : ''}
             </Typography>
-            <Chip label={statusInfo.text} size="small" sx={{ bgcolor: statusInfo.color, color: '#fff', fontWeight: 600 }} />
-            {ep.project && (
-              <Chip label={ep.project.name} size="small" variant="outlined" />
-            )}
+            <HealthChip health={healthFromDomainStatus(ep.status)} />
+            <OpStateChip state={opStateFromDomainStatus(ep.status)} />
+            <Chip label={`🌐 :${ep.port ?? 443}`} size="small" variant="outlined" />
+            {ep.project && <Chip label={ep.project.name} size="small" variant="outlined" />}
           </Stack>
           {ep.tags?.length > 0 && (
-            <Stack direction="row" spacing={0.5} sx={{ mt: 0.75 }} flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={0.5} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
               {(ep.tags as Array<{ key: string; value: string }>).map((t) => (
                 <Chip
                   key={t.key}
-                  label={t.value ? `${t.key}:${t.value}` : t.key}
+                  label={t.value ? `${t.key}=${t.value}` : t.key}
                   size="small"
                   variant="outlined"
                   sx={{ fontFamily: 'monospace', fontSize: '0.7rem', borderColor: 'primary.dark' }}
@@ -94,90 +110,102 @@ export function DomainDetailPage() {
             </Stack>
           )}
         </Box>
-        <Button variant="outlined" size="small" startIcon={<SettingsIcon />} onClick={openSettings}>Settings</Button>
+        <Stack direction="row" spacing={1}>
+          <Button variant="outlined" size="small" startIcon={<RefreshIcon />} onClick={() => triggerCheck.mutate(id!)} disabled={triggerCheck.isPending}>
+            Check now
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={sslScan.isPending ? <CircularProgress size={14} /> : <SecurityIcon />}
+            onClick={handleSslScan}
+            disabled={sslScan.isPending}
+          >
+            {sslScan.isPending ? 'Scanning…' : 'Scan SSL'}
+          </Button>
+          <Button variant="outlined" size="small" startIcon={<SettingsIcon />} onClick={openSettings}>
+            Settings
+          </Button>
+        </Stack>
       </Stack>
 
-      {/* SSL Scan Section */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-            <Stack direction="row" spacing={1.5} alignItems="center">
-              <LockIcon sx={{ color: sslInfo ? (sslInfo.grade === 'F' || sslInfo.grade === 'C' ? '#dc2626' : '#16a34a') : '#9e9e9e' }} />
-              <Typography variant="h6">SSL / TLS Security</Typography>
-            </Stack>
-            <Button
-              variant="contained" size="small"
-              startIcon={sslScan.isPending ? <CircularProgress size={16} color="inherit" /> : <SecurityIcon />}
-              onClick={handleSslScan}
-              disabled={sslScan.isPending}
-            >
-              {sslScan.isPending ? 'Scanning...' : 'Run SSL Scan'}
-            </Button>
-          </Stack>
+      {sslScan.isPending && (
+        <Box sx={{ mb: 2 }}>
+          <LinearProgress />
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            Checking certificate, protocol, cipher suite, chain validity, HSTS, DNS records…
+          </Typography>
+        </Box>
+      )}
 
-          {/* Progress bar while scanning */}
-          {sslScan.isPending && (
-            <Box sx={{ mb: 2 }}>
-              <LinearProgress />
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                Checking certificate, protocol, cipher suite, chain validity, HSTS, DNS records...
-              </Typography>
-            </Box>
-          )}
+      {/* 3 summary cards — Uptime 24h / SSL Grade / Avg Response */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2, mb: 2 }}>
+        <Paper variant="outlined" sx={{ p: 2.5, textAlign: 'center' }}>
+          <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Uptime ({uptimeBeats.length || '—'} checks)
+          </Typography>
+          <Typography
+            variant="h3"
+            sx={{
+              fontWeight: 700,
+              my: 0.5,
+              color: uptimePct == null ? 'text.secondary' : Number(uptimePct) >= 99 ? '#16a34a' : Number(uptimePct) >= 95 ? '#d97706' : '#dc2626',
+            }}
+          >
+            {uptimePct ? `${uptimePct}%` : '—'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {uptimeBeats.length ? `${upCount}/${uptimeBeats.length} checks up` : 'Waiting for data'}
+          </Typography>
+        </Paper>
 
-          {/* SSL Score — clickable to open report */}
-          {sslInfo ? (
-            <Box
-              onClick={() => setSslReportOpen(true)}
-              sx={{ cursor: 'pointer', '&:hover': { opacity: 0.85 }, transition: 'opacity 0.15s' }}
-            >
-              <Stack direction="row" spacing={3} alignItems="center">
-                <GradeBadge grade={sslInfo.grade} color={sslInfo.gradeColor} size={64} />
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="subtitle1" fontWeight={600}>{sslInfo.gradeNote}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {sslInfo.tlsVersion} · {sslInfo.cipherName} · {sslInfo.keyAlgorithm} {sslInfo.keyBits ? `${sslInfo.keyBits}-bit` : ''}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Expires in {sslInfo.daysLeft}d · Issued by {sslInfo.issuerCn} · Click for full report
-                  </Typography>
-                </Box>
-                <Stack alignItems="center">
-                  <Typography variant="h4" fontWeight={700} sx={{ color: sslInfo.gradeColor }}>{sslInfo.daysLeft}</Typography>
-                  <Typography variant="caption" color="text.secondary">days left</Typography>
-                </Stack>
-              </Stack>
-            </Box>
-          ) : !sslScan.isPending ? (
-            <Box sx={{ textAlign: 'center', py: 3 }}>
-              <Typography color="text.secondary">No SSL scan results yet. Click "Run SSL Scan" to check.</Typography>
-            </Box>
-          ) : null}
-        </CardContent>
-      </Card>
+        <Paper variant="outlined" sx={{ p: 2.5, textAlign: 'center', cursor: sslInfo ? 'pointer' : 'default' }} onClick={() => sslInfo && setSslReportOpen(true)}>
+          <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            SSL Grade
+          </Typography>
+          <Typography variant="h3" sx={{ fontWeight: 700, my: 0.5, color: sslInfo?.gradeColor ?? 'text.secondary' }}>
+            {sslInfo?.grade ?? '—'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {sslInfo ? `expires in ${sslInfo.daysLeft}d · ${sslInfo.issuerCn ?? '—'}` : 'Run SSL scan to see grade'}
+          </Typography>
+        </Paper>
 
-      {/* Summary cards */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 2, mb: 3 }}>
-        <SummaryCard label="Uptime" value={uptimePct ? `${uptimePct}%` : '--'}
-          color={uptimePct == null ? '#9e9e9e' : Number(uptimePct) >= 99 ? '#16a34a' : Number(uptimePct) >= 95 ? '#d97706' : '#dc2626'}
-          sub={`${upCount}/${uptimeBeats.length} checks`} />
-        <SummaryCard label="Avg Response" value={avgMs != null ? `${avgMs}ms` : '--'} sub="across all checks" />
-        <SummaryCard label="Check Interval" value={`${ep.uptimeInterval ?? 15}s`} sub={`Timeout: ${ep.uptimeTimeout ?? 30}s`} />
-        {latestBeat?.responseMs != null && (
-          <SummaryCard label="Last Response" value={`${latestBeat.responseMs}ms`}
-            color={latestBeat.responseMs < 300 ? '#16a34a' : latestBeat.responseMs < 1000 ? '#d97706' : '#dc2626'}
-            sub={`HTTP ${latestBeat.statusCode ?? '?'}`} />
-        )}
+        <Paper variant="outlined" sx={{ p: 2.5, textAlign: 'center' }}>
+          <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Avg Response
+          </Typography>
+          <Typography
+            variant="h3"
+            sx={{
+              fontWeight: 700,
+              my: 0.5,
+              color: avgMs == null ? 'text.secondary' : avgMs < 300 ? '#16a34a' : avgMs < 1000 ? '#d97706' : '#dc2626',
+            }}
+          >
+            {avgMs != null ? `${avgMs}ms` : '—'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {minMs != null && maxMs != null ? `min ${minMs}ms · max ${maxMs}ms` : 'last 24h'}
+          </Typography>
+        </Paper>
       </Box>
 
-      {/* Heartbeat bar */}
+      {/* Uptime heartbeat + response chart */}
       {uptimeBeats.length > 0 && (
-        <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+        <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
-            <Typography variant="subtitle2">Heartbeat</Typography>
-            <Typography variant="caption" color="text.secondary">{uptimeBeats.length} checks</Typography>
+            <Typography variant="subtitle2">Uptime · last {uptimeBeats.length} checks</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {latestBeat ? `HTTP ${latestBeat.statusCode ?? '?'} · ${latestBeat.responseMs ?? '?'}ms` : ''}
+            </Typography>
           </Stack>
           <HeartbeatBar beats={uptimeBeats} />
+          {uptimeBeats.length > 1 && (
+            <Box sx={{ mt: 2 }}>
+              <ResponseTimeChart data={uptimeBeats} />
+            </Box>
+          )}
           <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}>
             <Typography variant="caption" color="text.secondary">
               {new Date(uptimeBeats[uptimeBeats.length - 1]?.createdAt).toLocaleString()}
@@ -189,19 +217,150 @@ export function DomainDetailPage() {
         </Paper>
       )}
 
-      {/* Response time chart */}
-      {uptimeBeats.length > 1 && (
-        <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1.5 }}>Response Time</Typography>
-          <ResponseTimeChart data={uptimeBeats} />
+      {uptimeBeats.length === 0 && !isLoading && (
+        <Paper sx={{ py: 4, textAlign: 'center', mb: 2 }}>
+          <Typography color="text.secondary">No uptime checks yet. Waiting for sc-monitor…</Typography>
         </Paper>
       )}
 
-      {uptimeBeats.length === 0 && !isLoading && (
-        <Paper sx={{ py: 4, textAlign: 'center' }}>
-          <Typography color="text.secondary">No uptime checks yet. Waiting for sc-monitor...</Typography>
-        </Paper>
-      )}
+      {/* 2-col: TLS certificate + DNS records (matches mockup) */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 2 }}>
+        {/* TLS / Certificate */}
+        <Card variant="outlined">
+          <CardContent>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+              <LockIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              <Typography variant="h6">TLS / Certificate</Typography>
+              {sslInfo && (
+                <Button size="small" sx={{ ml: 'auto' }} onClick={() => setSslReportOpen(true)}>
+                  Full report →
+                </Button>
+              )}
+            </Stack>
+            {sslInfo ? (
+              <Box component="table" sx={{ width: '100%', '& td': { py: 0.75, fontSize: '0.85rem', verticalAlign: 'top' } }}>
+                <tbody>
+                  <tr>
+                    <td style={{ color: '#94a3b8', width: '35%' }}>Issuer</td>
+                    <td>{sslInfo.issuerCn ?? '—'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: '#94a3b8' }}>Subject</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{sslInfo.subjectCn ?? '—'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: '#94a3b8' }}>Expires</td>
+                    <td>
+                      {sslInfo.expiry ? new Date(sslInfo.expiry).toLocaleDateString() : '—'}{' '}
+                      <Box component="span" sx={{
+                        color: sslInfo.daysLeft <= 7 ? '#dc2626' : sslInfo.daysLeft <= 30 ? '#d97706' : 'text.secondary',
+                      }}>
+                        ({sslInfo.daysLeft}d)
+                      </Box>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: '#94a3b8' }}>TLS version</td>
+                    <td>{sslInfo.tlsVersion ?? '—'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: '#94a3b8' }}>Cipher</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{sslInfo.cipherName ?? '—'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: '#94a3b8' }}>Chain</td>
+                    <td>
+                      <Chip
+                        label={sslInfo.chainValid ? 'valid' : 'invalid'}
+                        size="small"
+                        color={sslInfo.chainValid ? 'success' : 'error'}
+                        variant="outlined"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No SSL scan yet. Run one to populate this card.
+              </Typography>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* DNS records */}
+        <Card variant="outlined">
+          <CardContent>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+              <DnsIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              <Typography variant="h6">DNS records</Typography>
+            </Stack>
+            {dnsInfo ? (
+              <>
+                <Stack direction="row" spacing={0.75} sx={{ mb: 2 }}>
+                  <Chip
+                    label="SPF"
+                    size="small"
+                    color={dnsInfo.spf === 'pass' ? 'success' : 'warning'}
+                    variant="outlined"
+                    icon={dnsInfo.spf === 'pass' ? <CheckCircleIcon /> : <WarningIcon />}
+                  />
+                  <Chip
+                    label="DKIM"
+                    size="small"
+                    color={dnsInfo.dkim === 'pass' ? 'success' : 'warning'}
+                    variant="outlined"
+                    icon={dnsInfo.dkim === 'pass' ? <CheckCircleIcon /> : <WarningIcon />}
+                  />
+                  <Chip
+                    label="DMARC"
+                    size="small"
+                    color={dnsInfo.dmarc === 'pass' ? 'success' : 'warning'}
+                    variant="outlined"
+                    icon={dnsInfo.dmarc === 'pass' ? <CheckCircleIcon /> : <WarningIcon />}
+                  />
+                  {dnsInfo.caa && (
+                    <Chip
+                      label="CAA"
+                      size="small"
+                      color={dnsInfo.caa === 'pass' ? 'success' : 'warning'}
+                      variant="outlined"
+                    />
+                  )}
+                </Stack>
+                <Box component="table" sx={{ width: '100%', '& td': { py: 0.75, fontSize: '0.85rem', verticalAlign: 'top' } }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ color: '#94a3b8', width: '35%' }}>SPF</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.72rem' }}>
+                        {dnsInfo.spfRecord || (dnsInfo.spf === 'pass' ? 'present' : 'missing')}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ color: '#94a3b8' }}>DMARC</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.72rem' }}>
+                        {dnsInfo.dmarcRecord || (dnsInfo.dmarc === 'pass' ? 'present' : 'missing')}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style={{ color: '#94a3b8' }}>DKIM</td>
+                      <td>
+                        {dnsInfo.dkim === 'pass'
+                          ? <Chip label="present" size="small" color="success" variant="outlined" />
+                          : <Typography variant="caption" color="text.secondary">missing — email spoofing possible</Typography>}
+                      </td>
+                    </tr>
+                  </tbody>
+                </Box>
+              </>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                DNS data is collected during SSL scans. Run a scan to populate this card.
+              </Typography>
+            )}
+          </CardContent>
+        </Card>
+      </Box>
 
       {/* SSL Report Dialog */}
       {sslInfo && (

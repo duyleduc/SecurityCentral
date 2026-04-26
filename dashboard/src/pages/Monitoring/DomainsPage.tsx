@@ -17,12 +17,25 @@ import SearchIcon from '@mui/icons-material/Search';
 import { useEndpoints, useCreateEndpoint, useDeleteEndpoint, useTriggerCheck, useProjects, useTagKeys } from '../../api/hooks';
 import { useRealtimeHeartbeat } from '../../ws/useRealtimeHeartbeat';
 import { TagsInput, type Tag } from '../../components/TagsInput';
+import { HealthChip, OpStateChip } from '../../components/status';
+import { ScopeBanner } from '../../components/ScopeBanner';
+import { useProjectScope } from '../../lib/useProjectScope';
+import { healthFromDomainStatus, opStateFromDomainStatus, type Health } from '../../lib/status';
 
-const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  healthy: { color: '#16a34a', label: 'Healthy' },
-  degraded: { color: '#d97706', label: 'Degraded' },
-  down: { color: '#dc2626', label: 'Down' },
-  pending: { color: '#9e9e9e', label: 'Pending' },
+/** Domain backend status → the status dot color used in the list table. */
+const DOT_COLOR: Record<string, string> = {
+  healthy: '#16a34a',
+  degraded: '#d97706',
+  down: '#dc2626',
+  pending: '#9e9e9e',
+};
+
+/** Map our normalized Health to a backend `status` query value. */
+const HEALTH_TO_STATUS_QUERY: Record<Health, string | undefined> = {
+  healthy: 'healthy',
+  'at-risk': 'degraded',
+  critical: 'down',
+  unknown: 'pending',
 };
 
 function relativeTime(dateStr: string | null): string {
@@ -37,14 +50,15 @@ function relativeTime(dateStr: string | null): string {
 }
 
 export function DomainsPage() {
-  const [statusFilter, setStatusFilter] = useState('');
+  const { projectId: scopedProjectId } = useProjectScope();
+  const [healthFilter, setHealthFilter] = useState<Health | null>(null);
   const [tagQuery, setTagQuery] = useState('');
   const [tagInput, setTagInput] = useState('');
-  const [projectFilter, setProjectFilter] = useState('');
+
   const filters = {
-    status: statusFilter || undefined,
+    status: healthFilter ? HEALTH_TO_STATUS_QUERY[healthFilter] : undefined,
     tags: tagQuery || undefined,
-    projectId: projectFilter || undefined,
+    projectId: scopedProjectId || undefined,
   };
   const { data: endpoints, isLoading } = useEndpoints(filters);
   const { data: projects } = useProjects();
@@ -59,20 +73,19 @@ export function DomainsPage() {
   useRealtimeHeartbeat();
 
   // Unfiltered counts for the summary cards — tag + project filters still apply,
-  // so the status distribution reflects the current scope.
+  // so the health distribution reflects the current scope.
   const { data: allEndpointsForCounts } = useEndpoints({
     tags: tagQuery || undefined,
-    projectId: projectFilter || undefined,
+    projectId: scopedProjectId || undefined,
   });
-  const healthy = allEndpointsForCounts?.filter((e) => e.status === 'healthy').length ?? 0;
-  const degraded = allEndpointsForCounts?.filter((e) => e.status === 'degraded').length ?? 0;
-  const down = allEndpointsForCounts?.filter((e) => e.status === 'down').length ?? 0;
-  const pending = allEndpointsForCounts?.filter((e) => e.status === 'pending').length ?? 0;
-  const total = allEndpointsForCounts?.length ?? 0;
-  const hasFilters = !!statusFilter || !!tagQuery || !!projectFilter;
+  const healthyCount  = allEndpointsForCounts?.filter((e) => healthFromDomainStatus(e.status) === 'healthy').length ?? 0;
+  const atRiskCount   = allEndpointsForCounts?.filter((e) => healthFromDomainStatus(e.status) === 'at-risk').length ?? 0;
+  const criticalCount = allEndpointsForCounts?.filter((e) => healthFromDomainStatus(e.status) === 'critical').length ?? 0;
+  const unknownCount  = allEndpointsForCounts?.filter((e) => healthFromDomainStatus(e.status) === 'unknown').length ?? 0;
+  const hasFilters = !!healthFilter || !!tagQuery;
 
-  const toggleStatus = (status: string) => {
-    setStatusFilter((prev) => (prev === status ? '' : status));
+  const toggleHealth = (h: Health) => {
+    setHealthFilter((prev) => (prev === h ? null : h));
   };
 
   return (
@@ -89,15 +102,17 @@ export function DomainsPage() {
         </Button>
       </Stack>
 
-      {/* Summary cards — click to filter, click again to clear */}
+      <ScopeBanner summary={`${allEndpointsForCounts?.length ?? 0} endpoints in scope`} />
+
+      {/* Summary cards — click to filter by health, click again to clear */}
       <Grid container spacing={3} mb={3}>
-        {[
-          { label: 'Healthy', value: healthy, color: 'success.main', status: 'healthy' },
-          { label: 'Degraded', value: degraded, color: 'warning.main', status: 'degraded' },
-          { label: 'Down', value: down, color: 'error.main', status: 'down' },
-          { label: 'Pending', value: pending, color: 'text.secondary', status: 'pending' },
-        ].map((s) => {
-          const active = statusFilter === s.status;
+        {([
+          { label: 'Healthy',  value: healthyCount,  color: 'success.main',   health: 'healthy'  as Health },
+          { label: 'At-risk',  value: atRiskCount,   color: 'warning.main',   health: 'at-risk'  as Health },
+          { label: 'Critical', value: criticalCount, color: 'error.main',     health: 'critical' as Health },
+          { label: 'Unknown',  value: unknownCount,  color: 'text.secondary', health: 'unknown'  as Health },
+        ]).map((s) => {
+          const active = healthFilter === s.health;
           return (
             <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
               <Card sx={{
@@ -105,7 +120,7 @@ export function DomainsPage() {
                 borderColor: active ? s.color : 'transparent',
                 transition: 'border-color 0.15s',
               }}>
-                <CardActionArea onClick={() => toggleStatus(s.status)}>
+                <CardActionArea onClick={() => toggleHealth(s.health)}>
                   <CardContent>
                     <Typography variant="h3" color={s.color}>{s.value}</Typography>
                     <Typography variant="body2" color="text.secondary">
@@ -119,22 +134,9 @@ export function DomainsPage() {
         })}
       </Grid>
 
-      {/* Filters */}
+      {/* Filters — project filter removed; scope is global via top-bar switcher */}
       <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
         <FilterListIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-        <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel>Project</InputLabel>
-          <Select
-            value={projectFilter}
-            label="Project"
-            onChange={(e) => setProjectFilter(e.target.value)}
-          >
-            <MenuItem value="">All projects</MenuItem>
-            {projects?.map((p) => (
-              <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
         <TextField
           size="small"
           placeholder="Filter by tags: env=prod, tier=web"
@@ -160,7 +162,7 @@ export function DomainsPage() {
           </Button>
         )}
         {hasFilters && (
-          <Chip label="Clear filters" size="small" variant="outlined" onDelete={() => { setStatusFilter(''); setTagQuery(''); setTagInput(''); setProjectFilter(''); }} />
+          <Chip label="Clear filters" size="small" variant="outlined" onDelete={() => { setHealthFilter(null); setTagQuery(''); setTagInput(''); }} />
         )}
       </Stack>
 
@@ -184,17 +186,17 @@ export function DomainsPage() {
               <TableRow>
                 <TableCell sx={{ width: 30 }} />
                 <TableCell>Endpoint</TableCell>
-                <TableCell align="center">Status</TableCell>
+                <TableCell align="center">Health</TableCell>
+                <TableCell align="center">Op state</TableCell>
                 <TableCell align="center">SSL</TableCell>
-                <TableCell>Last Checked</TableCell>
+                <TableCell>Last checked</TableCell>
                 <TableCell align="right">Response</TableCell>
-                <TableCell>Interval</TableCell>
                 <TableCell sx={{ width: 100 }} />
               </TableRow>
             </TableHead>
             <TableBody>
               {endpoints.map((ep) => {
-                const cfg = STATUS_CONFIG[ep.status] ?? STATUS_CONFIG.pending;
+                const dotColor = DOT_COLOR[ep.status] ?? DOT_COLOR.pending;
                 const lastHb = ep.heartbeats?.[0];
                 const ssl = ep.latestSsl;
 
@@ -205,7 +207,7 @@ export function DomainsPage() {
                     onClick={() => navigate(`/domains/${ep.id}`)}
                   >
                     <TableCell>
-                      <FiberManualRecordIcon sx={{ fontSize: 10, color: cfg.color }} />
+                      <FiberManualRecordIcon sx={{ fontSize: 10, color: dotColor }} />
                     </TableCell>
                     <TableCell>
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -221,8 +223,6 @@ export function DomainsPage() {
                               label={ep.project.name}
                               size="small"
                               variant="outlined"
-                              clickable
-                              onClick={() => setProjectFilter(ep.project!.id)}
                               sx={{ fontSize: '0.7rem' }}
                             />
                           )}
@@ -244,29 +244,34 @@ export function DomainsPage() {
                       </Stack>
                     </TableCell>
                     <TableCell align="center">
-                      <Chip
-                        label={cfg.label}
-                        size="small"
-                        sx={{
-                          bgcolor: cfg.color,
-                          color: '#fff',
-                          fontWeight: 600,
-                          fontSize: '0.65rem',
-                          height: 22,
-                        }}
-                      />
+                      <HealthChip health={healthFromDomainStatus(ep.status)} />
                     </TableCell>
                     <TableCell align="center">
-                      <SslGradeBadge grade={ssl?.sslGrade} gradeColor={ssl?.sslGradeColor} daysLeft={ssl?.sslDaysLeft} valid={ssl?.sslValid} />
+                      <OpStateChip state={opStateFromDomainStatus(ep.status)} />
+                    </TableCell>
+                    <TableCell align="center">
+                      <Stack direction="row" spacing={0.5} justifyContent="center" alignItems="center">
+                        <SslGradeBadge grade={ssl?.sslGrade} gradeColor={ssl?.sslGradeColor} daysLeft={ssl?.sslDaysLeft} valid={ssl?.sslValid} />
+                        {ssl?.sslDaysLeft != null && (
+                          <Chip
+                            label={`${ssl.sslDaysLeft}d`}
+                            size="small"
+                            variant="outlined"
+                            sx={{
+                              fontSize: '0.65rem',
+                              height: 18,
+                              borderColor: ssl.sslDaysLeft <= 7 ? 'error.main' : ssl.sslDaysLeft <= 30 ? 'warning.main' : 'divider',
+                              color: ssl.sslDaysLeft <= 7 ? 'error.main' : ssl.sslDaysLeft <= 30 ? 'warning.main' : 'text.secondary',
+                            }}
+                          />
+                        )}
+                      </Stack>
                     </TableCell>
                     <TableCell sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
                       {relativeTime(ep.lastCheckAt)}
                     </TableCell>
                     <TableCell align="right" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
                       {lastHb?.responseMs != null ? `${lastHb.responseMs}ms` : '--'}
-                    </TableCell>
-                    <TableCell sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                      {ep.uptimeInterval ?? 15}s
                     </TableCell>
                     <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                       <Stack direction="row" spacing={0.5} justifyContent="flex-end">

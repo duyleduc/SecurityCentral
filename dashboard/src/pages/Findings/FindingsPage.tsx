@@ -4,6 +4,9 @@ import {
   Box,
   Typography,
   Card,
+  CardContent,
+  CardActionArea,
+  Grid,
   Table,
   TableBody,
   TableCell,
@@ -20,6 +23,8 @@ import {
   TablePagination,
 } from '@mui/material';
 import { useFindings, type FindingsFilters } from '../../api/hooks';
+import { WorkStateChip } from '../../components/status';
+import { workStateFromFindingStatus, type WorkState } from '../../lib/status';
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: '#dc2626',
@@ -29,15 +34,24 @@ const SEVERITY_COLORS: Record<string, string> = {
   info: '#6b7280',
 };
 
-const STATUS_COLORS: Record<string, 'error' | 'warning' | 'success' | 'default'> = {
-  open: 'error',
-  in_progress: 'warning',
-  resolved: 'success',
+const SOURCES = ['all', 'code_scanner', 'infra_agent', 'cert_monitor'];
+
+/** Work-state tab → backend `status` query param. */
+const WORK_STATE_TO_QUERY: Record<WorkState | 'all', string | undefined> = {
+  all: undefined,
+  new: 'open',
+  'in-progress': 'in_progress',
+  resolved: 'resolved',
+  dismissed: 'ignored',
 };
 
-const SEVERITIES = ['all', 'critical', 'high', 'medium', 'low', 'info'];
-const STATUSES = ['all', 'open', 'in_progress', 'resolved'];
-const SOURCES = ['all', 'code_scanner', 'infra_agent', 'cert_monitor'];
+const WORK_STATE_TABS: Array<{ key: WorkState | 'all'; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'new', label: '○ new' },
+  { key: 'in-progress', label: '◔ in-progress' },
+  { key: 'resolved', label: '● resolved' },
+  { key: 'dismissed', label: '✕ dismissed' },
+];
 
 function formatLabel(value: string): string {
   return value
@@ -47,16 +61,16 @@ function formatLabel(value: string): string {
 }
 
 export function FindingsPage() {
-  const [severity, setSeverity] = useState('all');
-  const [status, setStatus] = useState('all');
+  const [severity, setSeverity] = useState<string>('all');
   const [source, setSource] = useState('all');
+  const [workState, setWorkState] = useState<WorkState | 'all'>('new');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
   const navigate = useNavigate();
 
   const filters: FindingsFilters = {
     ...(severity !== 'all' && { severity }),
-    ...(status !== 'all' && { status }),
+    ...(WORK_STATE_TO_QUERY[workState] && { status: WORK_STATE_TO_QUERY[workState] }),
     ...(source !== 'all' && { source }),
     page: page + 1,
     limit: rowsPerPage,
@@ -64,30 +78,81 @@ export function FindingsPage() {
 
   const { data: findings, isLoading } = useFindings(filters);
 
+  // Parallel query for severity distribution within the current work-state filter,
+  // not limited by severity — used for the stat cards.
+  const { data: severityCountsSource } = useFindings({
+    ...(WORK_STATE_TO_QUERY[workState] && { status: WORK_STATE_TO_QUERY[workState] }),
+    ...(source !== 'all' && { source }),
+    page: 1,
+    limit: 500,
+  });
+
+  const counts = {
+    critical: severityCountsSource?.filter((f) => f.severity === 'critical').length ?? 0,
+    high:     severityCountsSource?.filter((f) => f.severity === 'high').length ?? 0,
+    medium:   severityCountsSource?.filter((f) => f.severity === 'medium').length ?? 0,
+    low:      severityCountsSource?.filter((f) => f.severity === 'low').length ?? 0,
+    info:     severityCountsSource?.filter((f) => f.severity === 'info').length ?? 0,
+  };
+
+  const toggleSeverity = (sev: string) => {
+    setSeverity((prev) => (prev === sev ? 'all' : sev));
+    setPage(0);
+  };
+
   return (
     <Box>
       <Typography variant="h4" mb={3}>
         Findings
       </Typography>
 
-      {/* Filters */}
-      <Stack direction="row" spacing={2} mb={3}>
-        <FormControl size="small" sx={{ minWidth: 140 }}>
-          <InputLabel>Severity</InputLabel>
-          <Select value={severity} label="Severity" onChange={(e) => { setSeverity(e.target.value); setPage(0); }}>
-            {SEVERITIES.map((s) => (
-              <MenuItem key={s} value={s}>{formatLabel(s)}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <FormControl size="small" sx={{ minWidth: 140 }}>
-          <InputLabel>Status</InputLabel>
-          <Select value={status} label="Status" onChange={(e) => { setStatus(e.target.value); setPage(0); }}>
-            {STATUSES.map((s) => (
-              <MenuItem key={s} value={s}>{formatLabel(s)}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+      {/* Severity stat cards — click to filter, click again to clear */}
+      <Grid container spacing={3} mb={3}>
+        {([
+          { label: 'Critical', value: counts.critical, color: '#dc2626', key: 'critical' },
+          { label: 'High',     value: counts.high,     color: '#ea580c', key: 'high' },
+          { label: 'Medium',   value: counts.medium,   color: '#d97706', key: 'medium' },
+          { label: 'Low',      value: counts.low,      color: '#2563eb', key: 'low' },
+        ]).map((s) => {
+          const active = severity === s.key;
+          return (
+            <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
+              <Card sx={{
+                border: '2px solid',
+                borderColor: active ? s.color : 'transparent',
+                transition: 'border-color 0.15s',
+              }}>
+                <CardActionArea onClick={() => toggleSeverity(s.key)}>
+                  <CardContent>
+                    <Typography variant="h3" sx={{ color: s.color }}>{s.value}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {s.label}{active && ' · filtering'}
+                    </Typography>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            </Grid>
+          );
+        })}
+      </Grid>
+
+      {/* Work-state filter chips + source dropdown */}
+      <Stack direction="row" spacing={1} alignItems="center" mb={3} flexWrap="wrap" useFlexGap>
+        {WORK_STATE_TABS.map((t) => {
+          const isActive = workState === t.key;
+          return (
+            <Chip
+              key={t.key}
+              label={t.label}
+              size="small"
+              color={isActive ? 'primary' : 'default'}
+              variant={isActive ? 'filled' : 'outlined'}
+              onClick={() => { setWorkState(t.key); setPage(0); }}
+              sx={{ textTransform: 'lowercase', fontWeight: 500 }}
+            />
+          );
+        })}
+        <Box sx={{ flex: 1 }} />
         <FormControl size="small" sx={{ minWidth: 160 }}>
           <InputLabel>Source</InputLabel>
           <Select value={source} label="Source" onChange={(e) => { setSource(e.target.value); setPage(0); }}>
@@ -107,7 +172,7 @@ export function FindingsPage() {
                 <TableCell>Severity</TableCell>
                 <TableCell>Title</TableCell>
                 <TableCell>Source</TableCell>
-                <TableCell>Status</TableCell>
+                <TableCell>Work state</TableCell>
                 <TableCell>CVE</TableCell>
                 <TableCell align="right">CVSS</TableCell>
                 <TableCell>Asset</TableCell>
@@ -153,11 +218,7 @@ export function FindingsPage() {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={formatLabel(f.status)}
-                        size="small"
-                        color={STATUS_COLORS[f.status] ?? 'default'}
-                      />
+                      <WorkStateChip state={workStateFromFindingStatus(f.status)} />
                     </TableCell>
                     <TableCell>
                       {f.cveId ? (

@@ -1,36 +1,57 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Card, CardContent, Grid, Chip, Button, Alert, Skeleton, Stack, Divider,
+  Box, Typography, Card, CardContent, Chip, Button, Alert, Skeleton, Stack, Divider,
+  Dialog, DialogTitle, DialogContent, DialogActions,
+  FormControl, InputLabel, Select, MenuItem, Link as MuiLink,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import { useFinding, useUpdateFinding, type Finding } from '../../api/hooks';
+import LightbulbIcon from '@mui/icons-material/Lightbulb';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
+import { useFinding, useUpdateFinding } from '../../api/hooks';
+import { WorkStateChip } from '../../components/status';
+import { workStateFromFindingStatus, type WorkState } from '../../lib/status';
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: '#dc2626', high: '#ea580c', medium: '#d97706', low: '#2563eb', info: '#6b7280',
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  open: '#dc2626', in_progress: '#f59e0b', resolved: '#16a34a', suppressed: '#64748b', false_positive: '#0ea5e9',
+/** Work-state UI → backend `status` string. */
+const WORK_STATE_TO_STATUS: Record<WorkState, string> = {
+  new: 'open',
+  'in-progress': 'in_progress',
+  resolved: 'resolved',
+  dismissed: 'ignored',
 };
 
-const STATUS_TRANSITIONS: Record<string, string[]> = {
-  open: ['in_progress', 'resolved', 'suppressed', 'false_positive'],
-  in_progress: ['resolved', 'suppressed', 'false_positive'],
-  resolved: ['open'],
-  suppressed: ['open'],
-  false_positive: ['open'],
-};
+const DISMISS_REASONS = [
+  { value: 'not-a-risk', label: 'Not a risk' },
+  { value: 'accepted', label: 'Accepted risk' },
+  { value: 'wont-fix', label: "Won't fix" },
+];
 
-const STATUS_LABEL: Record<string, string> = {
-  open: 'Open', in_progress: 'In Progress', resolved: 'Resolved', suppressed: 'Suppressed', false_positive: 'False Positive',
-};
+function relativeTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 export function FindingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: finding, isLoading } = useFinding(id ?? '');
   const updateMutation = useUpdateFinding();
+  const [dismissOpen, setDismissOpen] = useState(false);
+  const [dismissReason, setDismissReason] = useState<string>('not-a-risk');
 
   const handleBack = () => {
     if (window.history.length > 1) navigate(-1);
@@ -51,12 +72,25 @@ export function FindingDetailPage() {
   }
 
   const severity = finding.severity;
-  const status = finding.status;
-  const transitions = STATUS_TRANSITIONS[status] ?? [];
-  const detail = (finding as any).detail as Record<string, unknown> | null;
+  const workState = workStateFromFindingStatus(finding.status);
+  const detail = ((finding as unknown as { detail?: Record<string, unknown> | null }).detail ?? {}) as Record<string, unknown>;
+  const epss = detail.epss as number | undefined;
+  const isKev = detail.cisaKev === true;
+  const remediation = detail.remediation as string | undefined;
+  const fixedVersion = detail.fixedVersion as string | undefined;
+  const packageName = detail.packageName as string | undefined;
+  const installedVersion = detail.installedVersion as string | undefined;
+  const filePath = detail.file as string | undefined;
+  const lineNumber = detail.line as number | undefined;
+  const dismissReasonSaved = detail.dismissReason as string | undefined;
 
-  const handleStatusChange = (newStatus: string) => {
-    updateMutation.mutate({ id: id!, status: newStatus });
+  const setWorkState = (next: WorkState) => {
+    updateMutation.mutate({ id: id!, status: WORK_STATE_TO_STATUS[next] });
+  };
+
+  const confirmDismiss = () => {
+    updateMutation.mutate({ id: id!, status: 'ignored' });
+    setDismissOpen(false);
   };
 
   return (
@@ -65,132 +99,326 @@ export function FindingDetailPage() {
         Back
       </Button>
 
-      <Card>
+      {/* === Header card — severity/state/KEV/EPSS/CVSS chips, title, subtext === */}
+      <Card sx={{ mb: 2 }}>
         <CardContent sx={{ p: 3 }}>
-          {/* Header: severity + status chips, status action buttons */}
-          <Stack sx={{ mb: 3 }} spacing={1.5}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Stack direction="row" spacing={1}>
-                <Chip
-                  label={severity}
-                  size="small"
-                  sx={{ bgcolor: SEVERITY_COLORS[severity] ?? '#6b7280', color: '#fff', textTransform: 'uppercase' }}
-                />
-                <Chip
-                  label={STATUS_LABEL[status] ?? status}
-                  size="small"
-                  variant="outlined"
-                  sx={{ borderColor: STATUS_COLORS[status] ?? '#64748b', color: STATUS_COLORS[status] ?? '#64748b' }}
-                />
-              </Stack>
-
-              <Stack direction="row" spacing={1}>
-                {transitions.map((s) => (
-                  <Button
-                    key={s}
-                    variant={s === 'resolved' ? 'contained' : 'outlined'}
-                    size="small"
-                    onClick={() => handleStatusChange(s)}
-                    disabled={updateMutation.isPending}
-                    sx={{
-                      ...(s === 'resolved' && { bgcolor: '#16a34a', color: '#fff', '&:hover': { bgcolor: '#15803d' } }),
-                      ...(s === 'suppressed' && { borderColor: '#64748b', color: '#64748b' }),
-                      ...(s === 'false_positive' && { borderColor: '#0ea5e9', color: '#0ea5e9' }),
-                      ...(s === 'in_progress' && { borderColor: '#f59e0b', color: '#f59e0b' }),
-                      ...(s === 'open' && { borderColor: '#dc2626', color: '#dc2626' }),
-                    }}
-                  >
-                    {STATUS_LABEL[s]}
-                  </Button>
-                ))}
-              </Stack>
-            </Stack>
-
-            <Typography variant="h6">{finding.title}</Typography>
+          <Stack direction="row" spacing={1} sx={{ mb: 1.5 }} flexWrap="wrap" useFlexGap alignItems="center">
+            <Chip
+              label={severity}
+              size="small"
+              sx={{ bgcolor: SEVERITY_COLORS[severity] ?? '#6b7280', color: '#fff', textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.5 }}
+            />
+            <WorkStateChip state={workState} />
+            {isKev && (
+              <Chip label="KEV" size="small" color="error" variant="filled" sx={{ fontWeight: 700, letterSpacing: 0.5 }} />
+            )}
+            {epss != null && (
+              <Chip
+                label={`EPSS ${(epss * 100).toFixed(1)}%`}
+                size="small"
+                variant="outlined"
+                sx={{ color: epss >= 0.5 ? 'error.main' : epss >= 0.1 ? 'warning.main' : 'text.secondary' }}
+              />
+            )}
+            {finding.cvssScore != null && (
+              <Chip label={`CVSS ${finding.cvssScore.toFixed(1)}`} size="small" variant="outlined" />
+            )}
+            {workState === 'dismissed' && dismissReasonSaved && (
+              <Chip
+                label={`reason: ${DISMISS_REASONS.find((r) => r.value === dismissReasonSaved)?.label ?? dismissReasonSaved}`}
+                size="small"
+                variant="outlined"
+              />
+            )}
           </Stack>
 
-          {updateMutation.isError && (
-            <Alert severity="error" sx={{ mb: 2 }}>{(updateMutation.error as Error).message}</Alert>
+          {finding.cveId && (
+            <Typography variant="h4" sx={{ fontFamily: 'monospace', mb: 0.5, fontWeight: 600 }}>
+              {finding.cveId}
+            </Typography>
           )}
-          {updateMutation.isSuccess && (
-            <Alert severity="success" sx={{ mb: 2 }}>Status updated</Alert>
-          )}
-
-          {/* Info grid */}
-          <Grid container spacing={2} sx={{ mb: 3 }}>
-            <InfoItem label="CVE ID" value={finding.cveId} mono />
-            <InfoItem label="CVSS Score" value={finding.cvssScore != null ? String(finding.cvssScore) : null} />
-            <InfoItem label="Source" value={finding.source} />
-            <InfoItem label="Created" value={finding.createdAt ? new Date(finding.createdAt).toLocaleString() : null} />
+          <Typography variant="h6" sx={{ fontWeight: 500, mb: 0.5 }}>
+            {finding.title}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
             {finding.repository && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
-                  Repository
-                </Typography>
-                <Button
-                  size="small"
+              <>
+                Detected on{' '}
+                <MuiLink
+                  component="button"
+                  type="button"
                   onClick={() => navigate(`/repositories/${finding.repository!.id}`)}
+                  sx={{ fontWeight: 600 }}
                 >
                   {finding.repository.owner}/{finding.repository.name}
-                </Button>
-              </Grid>
+                </MuiLink>
+              </>
             )}
             {finding.server && (
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
-                  Server
-                </Typography>
-                <Button
-                  size="small"
+              <>
+                Detected on{' '}
+                <MuiLink
+                  component="button"
+                  type="button"
                   onClick={() => navigate(`/servers/${finding.server!.id}`)}
+                  sx={{ fontWeight: 600 }}
                 >
                   {finding.server.hostname}
-                </Button>
-              </Grid>
+                </MuiLink>
+              </>
             )}
-          </Grid>
-
-          <Divider sx={{ mb: 3 }} />
-
-          {/* Description */}
-          {finding.description && (
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>Description</Typography>
-              <Typography variant="body2" sx={{ lineHeight: 1.6 }}>{finding.description}</Typography>
-            </Box>
-          )}
-
-          {/* Detail (package info, file location, etc.) */}
-          {detail && Object.keys(detail).length > 0 && (
-            <Box>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>Details</Typography>
-              <Box sx={{ bgcolor: 'background.default', borderRadius: 1, p: 2, fontFamily: 'monospace', fontSize: '0.75rem' }}>
-                {Object.entries(detail).map(([k, v]) => (
-                  <Box key={k} sx={{ mb: 0.5 }}>
-                    <Typography component="span" variant="body2" color="text.secondary">{k}:</Typography>{' '}
-                    <Typography component="span" variant="body2">
-                      {typeof v === 'object' ? JSON.stringify(v) : String(v ?? '-')}
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-          )}
+            {' · first seen '}{relativeTime(finding.createdAt)}
+            {' · source: '}<Box component="span" sx={{ fontFamily: 'monospace' }}>{finding.source}</Box>
+          </Typography>
         </CardContent>
       </Card>
-    </Box>
-  );
-}
 
-function InfoItem({ label, value, mono }: { label: string; value?: string | null; mono?: boolean }) {
-  return (
-    <Grid size={{ xs: 12, sm: 6 }}>
-      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
-        {label}
-      </Typography>
-      <Typography variant="body2" sx={{ fontFamily: mono ? 'monospace' : 'inherit' }}>
-        {value ?? '-'}
-      </Typography>
-    </Grid>
+      {updateMutation.isError && (
+        <Alert severity="error" sx={{ mb: 2 }}>{(updateMutation.error as Error).message}</Alert>
+      )}
+
+      {/* === 2-col layout: main content (left, wider) + sidebar (right) === */}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' },
+          gap: 2,
+          alignItems: 'start',
+        }}
+      >
+        {/* LEFT — Description, Remediation, Evidence */}
+        <Stack spacing={2}>
+          {finding.description && (
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>Description</Typography>
+                <Typography variant="body2" sx={{ lineHeight: 1.7, color: 'text.secondary' }}>
+                  {finding.description}
+                </Typography>
+              </CardContent>
+            </Card>
+          )}
+
+          {(remediation || fixedVersion) && (
+            <Card>
+              <CardContent>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+                  <LightbulbIcon fontSize="small" sx={{ color: 'warning.main' }} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Remediation</Typography>
+                </Stack>
+                {remediation && (
+                  <Box
+                    sx={{
+                      bgcolor: 'background.default',
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 1,
+                      p: 1.5,
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      whiteSpace: 'pre-wrap',
+                      mb: fixedVersion ? 1 : 0,
+                    }}
+                  >
+                    {remediation}
+                  </Box>
+                )}
+                {fixedVersion && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    Fixed in version <Box component="span" sx={{ fontFamily: 'monospace', color: 'success.main', fontWeight: 600 }}>{fixedVersion}</Box>
+                  </Typography>
+                )}
+                {finding.repository && (
+                  <Button size="small" variant="contained" sx={{ mt: 1.5 }}>
+                    Open automated PR
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {(packageName || filePath) && (
+            <Card>
+              <CardContent>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+                  <FactCheckIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Evidence</Typography>
+                </Stack>
+                <Box sx={{ fontFamily: 'monospace', fontSize: 12, color: 'text.secondary', lineHeight: 1.9 }}>
+                  {packageName && (
+                    <Box>
+                      Package: <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>{packageName}</Box>
+                      {installedVersion ? ` @ ${installedVersion}` : ''}
+                    </Box>
+                  )}
+                  {filePath && (
+                    <Box>
+                      File: <Box component="span" sx={{ color: 'text.primary' }}>{filePath}{lineNumber != null ? `:${lineNumber}` : ''}</Box>
+                    </Box>
+                  )}
+                </Box>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Fallback: raw detail blob if no structured data matched above */}
+          {!finding.description && !remediation && !packageName && !filePath && Object.keys(detail).length > 0 && (
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>Details</Typography>
+                <Box sx={{ bgcolor: 'background.default', borderRadius: 1, p: 2, fontFamily: 'monospace', fontSize: 12 }}>
+                  {Object.entries(detail).map(([k, v]) => (
+                    <Box key={k} sx={{ mb: 0.5 }}>
+                      <Typography component="span" variant="body2" color="text.secondary">{k}:</Typography>{' '}
+                      <Typography component="span" variant="body2">
+                        {typeof v === 'object' ? JSON.stringify(v) : String(v ?? '-')}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </CardContent>
+            </Card>
+          )}
+        </Stack>
+
+        {/* RIGHT sidebar — Actions, Timeline, References */}
+        <Stack spacing={2} sx={{ position: { md: 'sticky' }, top: { md: 88 } }}>
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>Actions</Typography>
+              <Stack spacing={1}>
+                {workState !== 'in-progress' && workState !== 'resolved' && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    fullWidth
+                    startIcon={<PlayArrowIcon />}
+                    disabled={updateMutation.isPending}
+                    onClick={() => setWorkState('in-progress')}
+                    sx={{ borderColor: 'warning.main', color: 'warning.main' }}
+                  >
+                    Mark in-progress
+                  </Button>
+                )}
+                {workState !== 'resolved' && (
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="success"
+                    fullWidth
+                    startIcon={<CheckCircleIcon />}
+                    disabled={updateMutation.isPending}
+                    onClick={() => setWorkState('resolved')}
+                  >
+                    Mark resolved
+                  </Button>
+                )}
+                {workState !== 'dismissed' && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    fullWidth
+                    startIcon={<CancelIcon />}
+                    disabled={updateMutation.isPending}
+                    onClick={() => setDismissOpen(true)}
+                    sx={{ borderColor: 'text.secondary', color: 'text.secondary' }}
+                  >
+                    Dismiss…
+                  </Button>
+                )}
+                {(workState === 'resolved' || workState === 'dismissed') && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    fullWidth
+                    disabled={updateMutation.isPending}
+                    onClick={() => setWorkState('new')}
+                  >
+                    Reopen
+                  </Button>
+                )}
+              </Stack>
+              <Divider sx={{ my: 1.5 }} />
+              <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.6, display: 'block' }}>
+                Dismissing requires a reason:
+                <br />not-a-risk · accepted · won't fix
+              </Typography>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>Timeline</Typography>
+              <Stack spacing={0.75} sx={{ fontSize: 12, color: 'text.secondary' }}>
+                <Box>● {relativeTime(finding.createdAt)} · Detected during scan</Box>
+                {workState === 'in-progress' && <Box>● now · Marked in-progress</Box>}
+                {workState === 'resolved' && <Box>● now · Marked resolved</Box>}
+                {workState === 'dismissed' && <Box>● now · Dismissed</Box>}
+                {workState === 'new' && <Typography variant="caption" color="text.disabled">… waiting for action</Typography>}
+              </Stack>
+            </CardContent>
+          </Card>
+
+          {finding.cveId && (
+            <Card>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 600 }}>References</Typography>
+                <Stack spacing={0.75}>
+                  <MuiLink
+                    href={finding.cveId.startsWith('CVE-')
+                      ? `https://nvd.nist.gov/vuln/detail/${finding.cveId}`
+                      : `https://osv.dev/vulnerability/${finding.cveId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontSize: 12 }}
+                  >
+                    {finding.cveId.startsWith('CVE-') ? 'nvd.nist.gov' : 'osv.dev'} <OpenInNewIcon sx={{ fontSize: 12 }} />
+                  </MuiLink>
+                  {isKev && (
+                    <MuiLink
+                      href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontSize: 12 }}
+                    >
+                      CISA KEV catalog <OpenInNewIcon sx={{ fontSize: 12 }} />
+                    </MuiLink>
+                  )}
+                </Stack>
+              </CardContent>
+            </Card>
+          )}
+        </Stack>
+      </Box>
+
+      {/* Dismiss dialog */}
+      <Dialog open={dismissOpen} onClose={() => setDismissOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Dismiss this finding</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Dismissing closes the finding without action. Pick a reason so future scans and teammates know why.
+          </Typography>
+          <FormControl fullWidth size="small">
+            <InputLabel>Reason</InputLabel>
+            <Select value={dismissReason} label="Reason" onChange={(e) => setDismissReason(e.target.value)}>
+              {DISMISS_REASONS.map((r) => (
+                <MenuItem key={r.value} value={r.value}>{r.label}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDismissOpen(false)} disabled={updateMutation.isPending}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={confirmDismiss}
+            disabled={updateMutation.isPending}
+          >
+            Dismiss
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 }

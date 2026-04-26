@@ -21,6 +21,8 @@ import {
   type Scan,
 } from '../../api/hooks';
 import { ScoreBadge, computeScore } from '../../components/ScoreBadge';
+import { WorkStateChip } from '../../components/status';
+import { workStateFromFindingStatus } from '../../lib/status';
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: '#dc2626',
@@ -279,10 +281,7 @@ function ScanRow({ scan, repoId }: { scan: Scan; repoId: string }) {
                           {f.cvssScore != null ? f.cvssScore.toFixed(1) : '-'}
                         </TableCell>
                         <TableCell>
-                          <Chip
-                            label={f.status.replace('_', ' ')} size="small"
-                            color={f.status === 'open' ? 'error' : f.status === 'resolved' ? 'success' : 'default'}
-                          />
+                          <WorkStateChip state={workStateFromFindingStatus(f.status)} />
                         </TableCell>
                       </TableRow>
                     ))}

@@ -20,9 +20,6 @@ import {
   IconButton,
   Stack,
   MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import StorageIcon from '@mui/icons-material/Storage';
@@ -34,6 +31,11 @@ import ClearIcon from '@mui/icons-material/Clear';
 import SearchIcon from '@mui/icons-material/Search';
 import { useServers, useProjects, useCreateInstallToken, useAgentLatestVersion, type InstallToken, type Server } from '../../api/hooks';
 import { TagsInput, type Tag } from '../../components/TagsInput';
+import { HealthChip, OpStateChip } from '../../components/status';
+import { ScopeBanner } from '../../components/ScopeBanner';
+import { ScoreBadge } from '../../components/ScoreBadge';
+import { useProjectScope } from '../../lib/useProjectScope';
+import { healthFromServerStatus, opStateFromServerStatus, type Health } from '../../lib/status';
 
 /**
  * Match a server's tags against a comma-separated query.
@@ -49,23 +51,13 @@ function matchesTagQuery(server: Server, query: string): boolean {
   });
 }
 
-function StatusColor(status: string): 'success' | 'warning' | 'error' | 'default' {
-  switch (status) {
-    case 'online': return 'success';
-    case 'warning': return 'warning';
-    case 'critical':
-    case 'offline':
-    case 'dead': return 'error';
-    default: return 'default';
-  }
-}
-
 export function ServersPage() {
   const { data: servers, isLoading } = useServers();
   const { data: projects } = useProjects();
   const { data: latestAgent } = useAgentLatestVersion();
   const createToken = useCreateInstallToken();
   const navigate = useNavigate();
+  const { projectId: scopedProjectId } = useProjectScope();
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
@@ -78,8 +70,8 @@ export function ServersPage() {
   const [expiresIn, setExpiresIn] = useState('');
   const [tagQuery, setTagQuery] = useState('');
   const [tagInput, setTagInput] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [projectFilter, setProjectFilter] = useState('');
+  /** Health filter from clicking a summary card. Null = show all. */
+  const [healthFilter, setHealthFilter] = useState<Health | null>(null);
 
   const apiUrl = (import.meta.env.VITE_API_URL as string) || 'http://localhost:3000';
 
@@ -137,37 +129,36 @@ export function ServersPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Tag + project filtered but status-unfiltered, so cards show accurate distribution.
-  const tagFilteredServers = useMemo(
+  // Scope (project) + tag filtered, but health-unfiltered — so cards show accurate distribution.
+  const scopedServers = useMemo(
     () => (servers ?? []).filter((s) => {
       if (!matchesTagQuery(s, tagQuery)) return false;
-      if (projectFilter && s.projectId !== projectFilter) return false;
+      if (scopedProjectId && s.projectId !== scopedProjectId) return false;
       return true;
     }),
-    [servers, tagQuery, projectFilter],
+    [servers, tagQuery, scopedProjectId],
   );
 
   const filteredServers = useMemo(
-    () => tagFilteredServers.filter((s) => {
-      if (!statusFilter) return true;
-      if (statusFilter === 'offline') return s.status === 'offline' || s.status === 'dead';
-      return s.status === statusFilter;
+    () => scopedServers.filter((s) => {
+      if (!healthFilter) return true;
+      return healthFromServerStatus(s.status) === healthFilter;
     }),
-    [tagFilteredServers, statusFilter],
+    [scopedServers, healthFilter],
   );
 
-  const online = tagFilteredServers.filter((s) => s.status === 'online').length;
-  const warning = tagFilteredServers.filter((s) => s.status === 'warning').length;
-  const critical = tagFilteredServers.filter((s) => s.status === 'critical').length;
-  const offline = tagFilteredServers.filter((s) => s.status === 'offline' || s.status === 'dead').length;
+  const healthyCount  = scopedServers.filter((s) => healthFromServerStatus(s.status) === 'healthy').length;
+  const atRiskCount   = scopedServers.filter((s) => healthFromServerStatus(s.status) === 'at-risk').length;
+  const criticalCount = scopedServers.filter((s) => healthFromServerStatus(s.status) === 'critical').length;
+  const unknownCount  = scopedServers.filter((s) => healthFromServerStatus(s.status) === 'unknown').length;
 
   const applyTagFilter = (expr: string) => {
     setTagInput(expr);
     setTagQuery(expr);
   };
 
-  const toggleStatus = (status: string) => {
-    setStatusFilter((prev) => (prev === status ? '' : status));
+  const toggleHealth = (h: Health) => {
+    setHealthFilter((prev) => (prev === h ? null : h));
   };
 
   return (
@@ -179,15 +170,17 @@ export function ServersPage() {
         </Button>
       </Box>
 
-      {/* Summary cards — click to filter, click again to clear */}
+      <ScopeBanner counts={{ servers: scopedServers.length }} />
+
+      {/* Summary cards — click to filter by health, click again to clear */}
       <Grid container spacing={3} mb={4}>
-        {[
-          { label: 'Online', value: online, color: 'success.main', status: 'online' },
-          { label: 'Warning', value: warning, color: 'warning.main', status: 'warning' },
-          { label: 'Critical', value: critical, color: 'error.main', status: 'critical' },
-          { label: 'Offline', value: offline, color: 'error.main', status: 'offline' },
-        ].map((s) => {
-          const active = statusFilter === s.status;
+        {([
+          { label: 'Healthy',  value: healthyCount,  color: 'success.main',   health: 'healthy'  as Health },
+          { label: 'At-risk',  value: atRiskCount,   color: 'warning.main',   health: 'at-risk'  as Health },
+          { label: 'Critical', value: criticalCount, color: 'error.main',     health: 'critical' as Health },
+          { label: 'Unknown',  value: unknownCount,  color: 'text.secondary', health: 'unknown'  as Health },
+        ]).map((s) => {
+          const active = healthFilter === s.health;
           return (
             <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
               <Card sx={{
@@ -195,7 +188,7 @@ export function ServersPage() {
                 borderColor: active ? s.color : 'transparent',
                 transition: 'border-color 0.15s',
               }}>
-                <CardActionArea onClick={() => toggleStatus(s.status)}>
+                <CardActionArea onClick={() => toggleHealth(s.health)}>
                   <CardContent>
                     <Typography variant="h3" color={s.color}>{s.value}</Typography>
                     <Typography variant="body2" color="text.secondary">
@@ -209,22 +202,9 @@ export function ServersPage() {
         })}
       </Grid>
 
-      {/* Filters */}
+      {/* Filters — project filter removed; scope is global via top-bar switcher */}
       <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
         <FilterListIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-        <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel>Project</InputLabel>
-          <Select
-            value={projectFilter}
-            label="Project"
-            onChange={(e) => setProjectFilter(e.target.value)}
-          >
-            <MenuItem value="">All projects</MenuItem>
-            {projects?.map((p) => (
-              <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
         <TextField
           size="small"
           placeholder="Filter by tags: env=prod, tier=web"
@@ -247,68 +227,94 @@ export function ServersPage() {
         {tagInput && tagInput !== tagQuery && (
           <Button size="small" variant="outlined" onClick={() => setTagQuery(tagInput)}>Apply</Button>
         )}
-        {(tagQuery || projectFilter || statusFilter) && (
+        {(tagQuery || healthFilter) && (
           <Chip
-            label={`${filteredServers.length} of ${servers?.length ?? 0} match`}
+            label={`${filteredServers.length} of ${scopedServers.length} match`}
             size="small"
             variant="outlined"
-            onDelete={() => { applyTagFilter(''); setProjectFilter(''); setStatusFilter(''); }}
+            onDelete={() => { applyTagFilter(''); setHealthFilter(null); }}
           />
         )}
       </Stack>
 
       {isLoading && <Typography>Loading...</Typography>}
 
-      {/* Server cards */}
+      {/* Server cards — mockup-aligned: grade badge + hostname + health/op chips + tags + heartbeat */}
       <Grid container spacing={3}>
         {filteredServers.map((srv) => (
           <Grid key={srv.id} size={{ xs: 12, sm: 6, md: 4 }}>
-            <Card>
-              <CardActionArea onClick={() => navigate(`/servers/${srv.id}`)}>
+            <Card sx={{ height: '100%' }}>
+              <CardActionArea
+                onClick={() => navigate(`/servers/${srv.id}`)}
+                sx={{ height: '100%', alignItems: 'stretch' }}
+              >
                 <CardContent>
-                  <Box display="flex" alignItems="center" gap={1} mb={1}>
-                    <StorageIcon color={srv.status === 'online' ? 'success' : srv.status === 'critical' ? 'error' : 'disabled'} />
-                    <Typography variant="h6" noWrap>{srv.label || srv.hostname}</Typography>
+                  {/* Header: grade + name + OS metadata */}
+                  <Box display="flex" alignItems="center" gap={1.5} mb={1.5}>
+                    {srv.securityScore != null
+                      ? <ScoreBadge score={srv.securityScore} size="medium" />
+                      : <StorageIcon color="disabled" sx={{ fontSize: 40 }} />}
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="h6" noWrap>{srv.label || srv.hostname}</Typography>
+                      <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.7rem' }} noWrap>
+                        {srv.osFamily ? `${srv.osFamily} ${srv.osVersion ?? ''}` : '—'}
+                        {srv.agentVersion ? ` · agent v${srv.agentVersion}` : ''}
+                      </Typography>
+                    </Box>
                   </Box>
-                  <Box display="flex" gap={0.5} flexWrap="wrap" mb={1}>
-                    <Chip icon={<StorageIcon sx={{ fontSize: 14 }} />} label={srv.hostname} size="small" variant="outlined" sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }} />
-                    <Chip label={srv.status} size="small" color={StatusColor(srv.status)} />
+
+                  {/* Health + op state */}
+                  <Box display="flex" gap={0.5} flexWrap="wrap" mb={1} alignItems="center">
+                    <HealthChip health={healthFromServerStatus(srv.status)} />
+                    <OpStateChip state={opStateFromServerStatus(srv.status)} />
+                    {srv.agentVersion && latestAgent?.version && srv.agentVersion !== latestAgent.version && srv.agentVersion !== 'dev' && (
+                      <Chip icon={<UpgradeIcon sx={{ fontSize: 14 }} />} label="update" size="small" color="info" variant="outlined" />
+                    )}
+                  </Box>
+
+                  {/* Hostname (monospace) */}
+                  <Box display="flex" gap={0.5} flexWrap="wrap" mb={1} alignItems="center">
+                    <Chip
+                      icon={<StorageIcon sx={{ fontSize: 14 }} />}
+                      label={srv.hostname}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontFamily: 'monospace', fontSize: '0.7rem' }}
+                    />
                     {srv.project && (
                       <Chip
                         icon={<FolderIcon sx={{ fontSize: 14 }} />}
                         label={srv.project.name}
                         size="small"
                         variant="outlined"
-                        clickable
-                        onClick={(e) => { e.stopPropagation(); setProjectFilter(srv.project!.id); }}
                       />
                     )}
-                    {srv.tags.map((t) => {
-                      const filterExpr = t.value ? `${t.key}=${t.value}` : t.key;
-                      return (
-                        <Chip
-                          key={t.key}
-                          label={t.value ? `${t.key}: ${t.value}` : t.key}
-                          size="small"
-                          variant="outlined"
-                          clickable
-                          onClick={(e) => { e.stopPropagation(); applyTagFilter(filterExpr); }}
-                          sx={{ fontSize: '0.7rem', borderColor: 'primary.dark', cursor: 'pointer' }}
-                        />
-                      );
-                    })}
-                    {srv.agentVersion && latestAgent?.version && srv.agentVersion !== latestAgent.version && srv.agentVersion !== 'dev' && (
-                      <Chip icon={<UpgradeIcon sx={{ fontSize: 14 }} />} label="update" size="small" color="info" variant="outlined" />
-                    )}
                   </Box>
-                  {srv.osFamily && (
-                    <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem' }}>
-                      {srv.osFamily} {srv.osVersion ?? ''} {srv.agentVersion ? `· agent v${srv.agentVersion}` : ''}
-                    </Typography>
+
+                  {/* Tags */}
+                  {srv.tags.length > 0 && (
+                    <Box display="flex" gap={0.5} flexWrap="wrap" mb={1} alignItems="center" onClick={(e) => e.stopPropagation()}>
+                      {srv.tags.map((t) => {
+                        const filterExpr = t.value ? `${t.key}=${t.value}` : t.key;
+                        return (
+                          <Chip
+                            key={t.key}
+                            label={t.value ? `${t.key}=${t.value}` : t.key}
+                            size="small"
+                            variant="outlined"
+                            clickable
+                            onClick={() => applyTagFilter(filterExpr)}
+                            sx={{ fontFamily: 'monospace', fontSize: '0.65rem', height: 20, borderColor: 'primary.dark', cursor: 'pointer' }}
+                          />
+                        );
+                      })}
+                    </Box>
                   )}
+
+                  {/* Heartbeat footer */}
                   {srv.lastHeartbeat && (
-                    <Typography variant="caption" color="text.secondary">
-                      Last heartbeat: {new Date(srv.lastHeartbeat).toLocaleString()}
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                      Heartbeat: {new Date(srv.lastHeartbeat).toLocaleString()}
                     </Typography>
                   )}
                 </CardContent>
