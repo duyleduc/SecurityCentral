@@ -17,6 +17,7 @@ monitoringRouter.get('/', requirePermission('view_dashboard'), async (req, res, 
     const filters = {
       status: req.query.status as string | undefined,
       tags: req.query.tags as string | undefined,
+      projectId: req.query.projectId as string | undefined,
     };
     const endpoints = await monitoringService.list(req.auth!.orgId, filters);
     res.json(successEnvelope(endpoints));

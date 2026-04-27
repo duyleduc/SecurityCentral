@@ -25,16 +25,18 @@ import {
 import { useFindings, type FindingsFilters } from '../../api/hooks';
 import { WorkStateChip } from '../../components/status';
 import { workStateFromFindingStatus, type WorkState } from '../../lib/status';
+import { StatCard } from '../../components/design';
+import { useProjectScope } from '../../lib/useProjectScope';
 
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: '#dc2626',
-  high: '#ea580c',
-  medium: '#d97706',
-  low: '#2563eb',
-  info: '#6b7280',
+  critical: '#ef4444',
+  high: '#f59e0b',
+  medium: '#22d3ee',
+  low: '#94a3b8',
+  info: '#94a3b8',
 };
 
-const SOURCES = ['all', 'code_scanner', 'infra_agent', 'cert_monitor'];
+const SOURCES = ['all', 'code_scanner', 'infra_agent', 'cert_monitor', 'cve_scan', 'security_audit', 'brute_force'];
 
 /** Work-state tab → backend `status` query param. */
 const WORK_STATE_TO_QUERY: Record<WorkState | 'all', string | undefined> = {
@@ -61,6 +63,7 @@ function formatLabel(value: string): string {
 }
 
 export function FindingsPage() {
+  const { projectId: scopedProjectId } = useProjectScope();
   const [severity, setSeverity] = useState<string>('all');
   const [source, setSource] = useState('all');
   const [workState, setWorkState] = useState<WorkState | 'all'>('new');
@@ -72,6 +75,7 @@ export function FindingsPage() {
     ...(severity !== 'all' && { severity }),
     ...(WORK_STATE_TO_QUERY[workState] && { status: WORK_STATE_TO_QUERY[workState] }),
     ...(source !== 'all' && { source }),
+    ...(scopedProjectId && { projectId: scopedProjectId }),
     page: page + 1,
     limit: rowsPerPage,
   };
@@ -83,6 +87,7 @@ export function FindingsPage() {
   const { data: severityCountsSource } = useFindings({
     ...(WORK_STATE_TO_QUERY[workState] && { status: WORK_STATE_TO_QUERY[workState] }),
     ...(source !== 'all' && { source }),
+    ...(scopedProjectId && { projectId: scopedProjectId }),
     page: 1,
     limit: 500,
   });
@@ -107,33 +112,23 @@ export function FindingsPage() {
       </Typography>
 
       {/* Severity stat cards — click to filter, click again to clear */}
-      <Grid container spacing={3} mb={3}>
+      <Grid container spacing={2} mb={3}>
         {([
-          { label: 'Critical', value: counts.critical, color: '#dc2626', key: 'critical' },
-          { label: 'High',     value: counts.high,     color: '#ea580c', key: 'high' },
-          { label: 'Medium',   value: counts.medium,   color: '#d97706', key: 'medium' },
-          { label: 'Low',      value: counts.low,      color: '#2563eb', key: 'low' },
-        ]).map((s) => {
-          const active = severity === s.key;
-          return (
-            <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
-              <Card sx={{
-                border: '2px solid',
-                borderColor: active ? s.color : 'transparent',
-                transition: 'border-color 0.15s',
-              }}>
-                <CardActionArea onClick={() => toggleSeverity(s.key)}>
-                  <CardContent>
-                    <Typography variant="h3" sx={{ color: s.color }}>{s.value}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {s.label}{active && ' · filtering'}
-                    </Typography>
-                  </CardContent>
-                </CardActionArea>
-              </Card>
-            </Grid>
-          );
-        })}
+          { label: 'Critical', value: counts.critical, color: 'error', key: 'critical' },
+          { label: 'High',     value: counts.high,     color: 'warning', key: 'high' },
+          { label: 'Medium',   value: counts.medium,   color: 'info', key: 'medium' },
+          { label: 'Low',      value: counts.low,      color: 'muted', key: 'low' },
+        ] as const).map((s) => (
+          <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
+            <StatCard
+              value={s.value}
+              label={severity === s.key ? `${s.label} · filtering` : s.label}
+              color={s.color}
+              active={severity === s.key}
+              onClick={() => toggleSeverity(s.key)}
+            />
+          </Grid>
+        ))}
       </Grid>
 
       {/* Work-state filter chips + source dropdown */}
@@ -200,8 +195,8 @@ export function FindingsPage() {
                         label={f.severity}
                         size="small"
                         sx={{
-                          bgcolor: SEVERITY_COLORS[f.severity] ?? '#6b7280',
-                          color: '#fff',
+                          bgcolor: `${SEVERITY_COLORS[f.severity] ?? '#94a3b8'}26`,
+                          color: SEVERITY_COLORS[f.severity] ?? '#94a3b8',
                           fontWeight: 600,
                           textTransform: 'capitalize',
                         }}

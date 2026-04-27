@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import {
   Box,
   Drawer,
@@ -23,9 +23,12 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import MenuIcon from '@mui/icons-material/Menu';
 import LogoutIcon from '@mui/icons-material/Logout';
 import ShieldIcon from '@mui/icons-material/Shield';
+import SearchIcon from '@mui/icons-material/Search';
 import { useAuth } from '../auth/AuthContext';
 import { useRealtimeEvents } from '../ws/useRealtimeEvents';
 import { ProjectSwitcher } from './ProjectSwitcher';
+import { useDashboardSummary } from '../api/hooks';
+import { useProjectScope, useScopedNavigate } from '../lib/useProjectScope';
 
 const DRAWER_WIDTH = 240;
 
@@ -42,11 +45,23 @@ const NAV_ITEMS = [
 export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { logout, user } = useAuth();
-  const navigate = useNavigate();
+  const scopedNavigate = useScopedNavigate();
   const location = useLocation();
 
   // Subscribe to all real-time WebSocket events
   useRealtimeEvents();
+
+  // Pull summary so we can show count badges in the sidebar (matches mockup).
+  const { projectId } = useProjectScope();
+  const { data: summary } = useDashboardSummary(projectId);
+  const findingsCount = summary?.findings?.total ?? 0;
+  const itemCounts: Record<string, number> = {
+    '/projects': summary?.assets?.projects ?? 0,
+    '/domains': summary?.assets?.domains ?? 0,
+    '/servers': summary?.assets?.servers ?? 0,
+    '/repositories': summary?.assets?.repositories ?? 0,
+    '/findings': findingsCount,
+  };
 
   const drawer = (
     <Box>
@@ -58,29 +73,47 @@ export function AppShell() {
       </Toolbar>
       <Divider />
       <List>
-        {NAV_ITEMS.map((item) => (
-          <ListItemButton
-            key={item.path}
-            selected={location.pathname === item.path}
-            onClick={() => {
-              navigate(item.path);
-              setMobileOpen(false);
-            }}
-            sx={{
-              mx: 1,
-              borderRadius: 2,
-              mb: 0.5,
-              '&.Mui-selected': {
-                bgcolor: 'primary.main',
-                color: 'white',
-                '& .MuiListItemIcon-root': { color: 'white' },
-              },
-            }}
-          >
-            <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.label} />
-          </ListItemButton>
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const count = itemCounts[item.path] ?? 0;
+          const showCount = count > 0 && item.path !== '/' && item.path !== '/settings';
+          const isActive = location.pathname === item.path
+            || (item.path !== '/' && location.pathname.startsWith(item.path));
+          return (
+            <ListItemButton
+              key={item.path}
+              selected={isActive}
+              onClick={() => { scopedNavigate(item.path); setMobileOpen(false); }}
+              sx={{
+                mx: 1, borderRadius: 1.5, mb: 0.25,
+                position: 'relative',
+                '&.Mui-selected': {
+                  bgcolor: 'rgba(99, 102, 241, 0.15)',
+                  color: '#c7d2fe',
+                  '& .MuiListItemIcon-root': { color: '#c7d2fe' },
+                  '&::before': {
+                    content: '""', position: 'absolute', left: -4, top: 6, bottom: 6, width: 3,
+                    background: '#6366f1', borderRadius: '0 2px 2px 0',
+                  },
+                },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.label}
+                primaryTypographyProps={{ fontSize: 14, fontWeight: isActive ? 500 : 400 }} />
+              {showCount && (
+                <Box sx={{
+                  ml: 1, px: 1, py: 0.125, borderRadius: 5,
+                  fontSize: 11, fontWeight: 600,
+                  bgcolor: isActive ? 'rgba(99, 102, 241, 0.3)' : 'rgba(148, 163, 184, 0.15)',
+                  color: isActive ? '#c7d2fe' : 'text.secondary',
+                  minWidth: 22, textAlign: 'center',
+                }}>
+                  {count}
+                </Box>
+              )}
+            </ListItemButton>
+          );
+        })}
       </List>
       <Box sx={{ mt: 'auto', p: 2 }}>
         <Divider sx={{ mb: 1 }} />
@@ -114,10 +147,33 @@ export function AppShell() {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap sx={{ mr: 2 }}>
-            {NAV_ITEMS.find((n) => n.path === location.pathname)?.label ?? 'SecurityCentral'}
+          <Typography variant="h6" noWrap sx={{ mr: 2, fontSize: 15, fontWeight: 500 }}>
+            {NAV_ITEMS.find((n) => n.path === location.pathname || (n.path !== '/' && location.pathname.startsWith(n.path)))?.label ?? 'SecurityCentral'}
           </Typography>
           <ProjectSwitcher />
+          {/* Search bar (mockup .search) */}
+          <Box sx={{
+            ml: 2, display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1,
+            background: 'rgba(148, 163, 184, 0.08)', borderRadius: 1.5, px: 1.5, py: 0.625,
+            width: 300, maxWidth: '40%', border: '1px solid transparent',
+            '&:focus-within': { borderColor: 'rgba(99, 102, 241, 0.4)', background: 'rgba(148, 163, 184, 0.12)' },
+          }}>
+            <SearchIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+            <Box component="input"
+              placeholder="Search servers, domains, repos…"
+              sx={{
+                background: 'none', border: 'none', outline: 'none',
+                color: 'text.primary', flex: 1, fontFamily: 'inherit', fontSize: 13,
+                '&::placeholder': { color: 'text.disabled' },
+              }} />
+            <Box sx={{
+              fontSize: 10, color: 'text.disabled',
+              border: '1px solid', borderColor: 'divider', borderRadius: 0.5,
+              px: 0.625, py: 0.125, fontFamily: 'monospace',
+            }}>
+              ⌘K
+            </Box>
+          </Box>
           <Box sx={{ flexGrow: 1 }} />
         </Toolbar>
       </AppBar>

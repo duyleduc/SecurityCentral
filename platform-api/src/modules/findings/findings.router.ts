@@ -24,6 +24,7 @@ findingsRouter.get(
         source: req.query.source as string | undefined,
         repositoryId: req.query.repositoryId as string | undefined,
         serverId: req.query.serverId as string | undefined,
+        projectId: req.query.projectId as string | undefined,
         page: Number(req.query.page ?? 1),
         limit: Number(req.query.limit ?? 20),
       });

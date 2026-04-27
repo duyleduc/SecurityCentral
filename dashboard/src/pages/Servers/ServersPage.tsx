@@ -34,6 +34,7 @@ import { TagsInput, type Tag } from '../../components/TagsInput';
 import { HealthChip, OpStateChip } from '../../components/status';
 import { ScopeBanner } from '../../components/ScopeBanner';
 import { ScoreBadge } from '../../components/ScoreBadge';
+import { StatCard } from '../../components/design';
 import { useProjectScope } from '../../lib/useProjectScope';
 import { healthFromServerStatus, opStateFromServerStatus, type Health } from '../../lib/status';
 
@@ -52,12 +53,12 @@ function matchesTagQuery(server: Server, query: string): boolean {
 }
 
 export function ServersPage() {
-  const { data: servers, isLoading } = useServers();
+  const { projectId: scopedProjectId } = useProjectScope();
+  const { data: servers, isLoading } = useServers(scopedProjectId);
   const { data: projects } = useProjects();
   const { data: latestAgent } = useAgentLatestVersion();
   const createToken = useCreateInstallToken();
   const navigate = useNavigate();
-  const { projectId: scopedProjectId } = useProjectScope();
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
@@ -173,30 +174,23 @@ export function ServersPage() {
       <ScopeBanner counts={{ servers: scopedServers.length }} />
 
       {/* Summary cards — click to filter by health, click again to clear */}
-      <Grid container spacing={3} mb={4}>
+      <Grid container spacing={2} mb={3}>
         {([
-          { label: 'Healthy',  value: healthyCount,  color: 'success.main',   health: 'healthy'  as Health },
-          { label: 'At-risk',  value: atRiskCount,   color: 'warning.main',   health: 'at-risk'  as Health },
-          { label: 'Critical', value: criticalCount, color: 'error.main',     health: 'critical' as Health },
-          { label: 'Unknown',  value: unknownCount,  color: 'text.secondary', health: 'unknown'  as Health },
+          { label: '● Healthy',  value: healthyCount,  color: 'success' as const, health: 'healthy'  as Health },
+          { label: '● At-risk',  value: atRiskCount,   color: 'warning' as const, health: 'at-risk'  as Health },
+          { label: '● Critical', value: criticalCount, color: 'error'   as const, health: 'critical' as Health },
+          { label: '○ Unknown',  value: unknownCount,  color: 'muted'   as const, health: 'unknown'  as Health },
         ]).map((s) => {
           const active = healthFilter === s.health;
           return (
             <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
-              <Card sx={{
-                border: '2px solid',
-                borderColor: active ? s.color : 'transparent',
-                transition: 'border-color 0.15s',
-              }}>
-                <CardActionArea onClick={() => toggleHealth(s.health)}>
-                  <CardContent>
-                    <Typography variant="h3" color={s.color}>{s.value}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {s.label}{active && ' · filtering'}
-                    </Typography>
-                  </CardContent>
-                </CardActionArea>
-              </Card>
+              <StatCard
+                value={s.value}
+                label={active ? `${s.label} · filtering` : s.label}
+                color={s.color}
+                active={active}
+                onClick={() => toggleHealth(s.health)}
+              />
             </Grid>
           );
         })}

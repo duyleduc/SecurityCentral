@@ -14,11 +14,18 @@ import (
 	"github.com/securitycentral/sc-monitor/internal/platform"
 )
 
+// connectionState tracks whether we're currently in a "down" state so we only
+// log the first failure (and recovery) instead of spamming every poll.
+type connectionState struct {
+	down bool
+}
+
 // Run starts the polling loop. It blocks until ctx is cancelled.
 func Run(ctx context.Context, cfg config.Config) error {
 	client := platform.New(cfg.APIURL, cfg.APIKey)
 	ticker := time.NewTicker(cfg.PollInterval)
 	defer ticker.Stop()
+	state := &connectionState{}
 
 	// Start a minimal health HTTP server (needed for Cloud Run).
 	port := os.Getenv("PORT")
@@ -38,7 +45,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 	slog.Info("monitor started", "apiUrl", cfg.APIURL, "poll", cfg.PollInterval, "concurrency", cfg.Concurrency)
 
 	// Run immediately on start
-	poll(client, cfg.Concurrency)
+	poll(client, cfg.Concurrency, state)
 
 	for {
 		select {
@@ -46,16 +53,25 @@ func Run(ctx context.Context, cfg config.Config) error {
 			slog.Info("monitor stopping")
 			return nil
 		case <-ticker.C:
-			poll(client, cfg.Concurrency)
+			poll(client, cfg.Concurrency, state)
 		}
 	}
 }
 
-func poll(client *platform.Client, concurrency int) {
+func poll(client *platform.Client, concurrency int, state *connectionState) {
 	endpoints, err := client.GetDueEndpoints()
 	if err != nil {
-		slog.Error("failed to get due endpoints", "error", err)
+		// Only log the first failure to avoid spamming when the API is down.
+		if !state.down {
+			slog.Error("failed to get due endpoints — will retry silently until API recovers", "error", err)
+			state.down = true
+		}
 		return
+	}
+	// Recovered from a previous failure → log once.
+	if state.down {
+		slog.Info("API connection recovered")
+		state.down = false
 	}
 
 	if len(endpoints) == 0 {

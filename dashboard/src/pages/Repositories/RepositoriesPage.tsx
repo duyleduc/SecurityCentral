@@ -11,6 +11,7 @@ import CodeIcon from '@mui/icons-material/Code';
 import { useRepositories, type Repository } from '../../api/hooks';
 import { HealthChip } from '../../components/status';
 import { ScopeBanner } from '../../components/ScopeBanner';
+import { StatCard } from '../../components/design';
 import { useProjectScope } from '../../lib/useProjectScope';
 import type { Health } from '../../lib/status';
 
@@ -68,30 +69,23 @@ export function RepositoriesPage() {
       <ScopeBanner summary={`${repos?.length ?? 0} repositories in scope`} />
 
       {/* Summary cards — click to filter */}
-      <Grid container spacing={3} mb={3}>
+      <Grid container spacing={2} mb={3}>
         {([
-          { label: 'Healthy',   value: counts.healthy,     color: 'success.main',   key: 'healthy'   as RepoBucket },
-          { label: 'At-risk',   value: counts['at-risk'],  color: 'warning.main',   key: 'at-risk'   as RepoBucket },
-          { label: 'Critical',  value: counts.critical,    color: 'error.main',     key: 'critical'  as RepoBucket },
-          { label: 'Unscanned', value: counts.unscanned,   color: 'text.secondary', key: 'unscanned' as RepoBucket },
+          { label: '● Healthy',   value: counts.healthy,    color: 'success' as const, key: 'healthy'   as RepoBucket },
+          { label: '● At-risk',   value: counts['at-risk'], color: 'warning' as const, key: 'at-risk'   as RepoBucket },
+          { label: '● Critical',  value: counts.critical,   color: 'error'   as const, key: 'critical'  as RepoBucket },
+          { label: '○ Unscanned', value: counts.unscanned,  color: 'muted'   as const, key: 'unscanned' as RepoBucket },
         ]).map((s) => {
           const active = healthFilter === s.key;
           return (
             <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
-              <Card sx={{
-                border: '2px solid',
-                borderColor: active ? s.color : 'transparent',
-                transition: 'border-color 0.15s',
-              }}>
-                <CardActionArea onClick={() => toggle(s.key)}>
-                  <CardContent>
-                    <Typography variant="h3" color={s.color}>{s.value}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {s.label}{active && ' · filtering'}
-                    </Typography>
-                  </CardContent>
-                </CardActionArea>
-              </Card>
+              <StatCard
+                value={s.value}
+                label={active ? `${s.label} · filtering` : s.label}
+                color={s.color}
+                active={active}
+                onClick={() => toggle(s.key)}
+              />
             </Grid>
           );
         })}

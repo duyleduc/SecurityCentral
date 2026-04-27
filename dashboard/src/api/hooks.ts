@@ -360,10 +360,11 @@ export interface InstallToken {
   project?: { id: string; name: string } | null;
 }
 
-export function useServers() {
+export function useServers(projectId?: string | null) {
+  const qs = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
   return useQuery({
-    queryKey: ['servers'],
-    queryFn: () => apiClient<Server[]>('/api/v1/servers'),
+    queryKey: ['servers', projectId ?? null],
+    queryFn: () => apiClient<Server[]>(`/api/v1/servers${qs}`),
   });
 }
 
@@ -812,28 +813,46 @@ export interface FindingsFilters {
   source?: string;
   repositoryId?: string;
   serverId?: string;
+  projectId?: string | null;
   page?: number;
   limit?: number;
 }
 
-export function useDashboardSummary() {
+function projectQuery(projectId?: string | null): string {
+  return projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+}
+
+export function useDashboardSummary(projectId?: string | null) {
   return useQuery({
-    queryKey: ['dashboard', 'summary'],
-    queryFn: () => apiClient<DashboardSummary>('/api/v1/dashboard/summary'),
+    queryKey: ['dashboard', 'summary', projectId ?? null],
+    queryFn: () => apiClient<DashboardSummary>(`/api/v1/dashboard/summary${projectQuery(projectId)}`),
   });
 }
 
-export function useDashboardTopRisks() {
+export function useDashboardTopRisks(projectId?: string | null) {
   return useQuery({
-    queryKey: ['dashboard', 'top-risks'],
-    queryFn: () => apiClient<Finding[]>('/api/v1/dashboard/top-risks'),
+    queryKey: ['dashboard', 'top-risks', projectId ?? null],
+    queryFn: () => apiClient<Finding[]>(`/api/v1/dashboard/top-risks${projectQuery(projectId)}`),
   });
 }
 
-export function useDashboardAssets() {
+interface DashboardAssetsResponse {
+  repositories: DashboardAsset[];
+  servers: DashboardAsset[];
+  endpoints: DashboardAsset[];
+}
+
+export function useDashboardAssets(projectId?: string | null) {
   return useQuery({
-    queryKey: ['dashboard', 'assets'],
-    queryFn: () => apiClient<DashboardAsset[]>('/api/v1/dashboard/assets'),
+    queryKey: ['dashboard', 'assets', projectId ?? null],
+    queryFn: () => apiClient<DashboardAssetsResponse>(`/api/v1/dashboard/assets${projectQuery(projectId)}`),
+    select: (data): DashboardAsset[] => {
+      if (!data) return [];
+      const repos = Array.isArray(data.repositories) ? data.repositories : [];
+      const servers = Array.isArray(data.servers) ? data.servers : [];
+      const endpoints = Array.isArray(data.endpoints) ? data.endpoints : [];
+      return [...repos, ...servers, ...endpoints];
+    },
   });
 }
 
@@ -844,6 +863,7 @@ export function useFindings(filters: FindingsFilters = {}) {
   if (filters.source) params.set('source', filters.source);
   if (filters.repositoryId) params.set('repositoryId', filters.repositoryId);
   if (filters.serverId) params.set('serverId', filters.serverId);
+  if (filters.projectId) params.set('projectId', filters.projectId);
   if (filters.page) params.set('page', String(filters.page));
   if (filters.limit) params.set('limit', String(filters.limit));
   const qs = params.toString();

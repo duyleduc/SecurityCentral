@@ -14,7 +14,9 @@ serversRouter.use(requireAuth);
 // GET /api/v1/servers
 serversRouter.get('/', requirePermission('view_dashboard'), async (req, res, next) => {
   try {
-    const servers = await serversService.list(req.auth!.orgId);
+    const projectId = typeof req.query.projectId === 'string' && req.query.projectId.length > 0
+      ? req.query.projectId : null;
+    const servers = await serversService.list(req.auth!.orgId, projectId);
     res.json(successEnvelope(servers));
   } catch (err) {
     next(err);

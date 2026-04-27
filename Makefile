@@ -1,15 +1,24 @@
 .PHONY: start stop restart dev dev-stop dev-restart test build migrate seed ensure-db
 
-# Infrastructure
+# Infrastructure — only Postgres is needed for local dev.
+# The API/dashboard containers (sc-api, sc-dashboard) would conflict with the
+# `npm run dev` servers on the same ports, so we explicitly skip them here.
 start:
-	docker compose up -d
+	docker compose up -d postgres
 	@echo "Waiting for Postgres to be healthy..."
 	@until docker compose exec postgres pg_isready -U securitycentral -d securitycentral 2>/dev/null; do sleep 1; done
 	@echo "Postgres is ready."
+	@# If the prod containers were started by an earlier `docker compose up -d`,
+	@# stop them so they don't fight the dev servers for ports 3000 / 80.
+	-@docker stop sc-api sc-dashboard 2>/dev/null; true
 
 stop:
 	-@lsof -ti:3000 | xargs kill -9 2>/dev/null || true
 	-@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
+	-@pkill -9 -f "platform-api.*tsx" 2>/dev/null; true
+	-@pkill -9 -f "dashboard.*vite" 2>/dev/null; true
+	-@pkill -9 -f "bin/sc-monitor" 2>/dev/null; true
+	-@docker stop sc-api sc-dashboard 2>/dev/null; true
 	docker compose down
 
 restart: stop start

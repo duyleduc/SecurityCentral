@@ -1,11 +1,35 @@
 import { prisma } from '../../lib/prisma.js';
 import { calculateScore } from '../../lib/scoring.js';
 
+// Build a Finding `where` clause that constrains findings to assets owned by
+// the given project. Findings have no direct projectId — we route through the
+// repository/server relations and a list of endpoint IDs in the project.
+async function findingProjectScope(orgId: string, projectId?: string | null) {
+  const base = { orgId };
+  if (!projectId) return base;
+  const endpoints = await prisma.monitoredEndpoint.findMany({
+    where: { orgId, projectId },
+    select: { id: true },
+  });
+  const endpointIds = endpoints.map((e) => e.id);
+  return {
+    ...base,
+    OR: [
+      { repository: { is: { projectId } } },
+      { server: { is: { projectId } } },
+      ...(endpointIds.length > 0 ? [{ endpointId: { in: endpointIds } }] : []),
+    ],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/v1/dashboard/summary
 // ---------------------------------------------------------------------------
 
-export async function getSummary(orgId: string) {
+export async function getSummary(orgId: string, projectId?: string | null) {
+  const assetScope = projectId ? { orgId, projectId } : { orgId };
+  const findingScope = await findingProjectScope(orgId, projectId);
+
   const [
     projectCount,
     repositoryCount,
@@ -15,16 +39,16 @@ export async function getSummary(orgId: string) {
     recentFindings,
   ] = await Promise.all([
     prisma.project.count({ where: { orgId } }),
-    prisma.repository.count({ where: { orgId } }),
-    prisma.server.count({ where: { orgId } }),
-    prisma.monitoredEndpoint.count({ where: { orgId } }),
+    prisma.repository.count({ where: assetScope }),
+    prisma.server.count({ where: assetScope }),
+    prisma.monitoredEndpoint.count({ where: assetScope }),
     prisma.finding.groupBy({
       by: ['severity'],
-      where: { orgId, status: 'open' },
+      where: { ...findingScope, status: 'open' },
       _count: true,
     }),
     prisma.finding.count({
-      where: { orgId, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+      where: { ...findingScope, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
     }),
   ]);
 
@@ -55,12 +79,13 @@ export async function getSummary(orgId: string) {
 // GET /api/v1/dashboard/top-risks
 // ---------------------------------------------------------------------------
 
-export async function getTopRisks(orgId: string, limit = 10) {
+export async function getTopRisks(orgId: string, projectId?: string | null, limit = 10) {
+  const findingScope = await findingProjectScope(orgId, projectId);
   const findings = await prisma.finding.findMany({
-    where: { orgId, status: 'open', severity: { in: ['critical', 'high'] } },
+    where: { ...findingScope, status: 'open', severity: { in: ['critical', 'high'] } },
     include: {
-      repository: { select: { id: true, owner: true, name: true } },
-      server: { select: { id: true, hostname: true } },
+      repository: { select: { id: true, owner: true, name: true, projectId: true } },
+      server: { select: { id: true, hostname: true, projectId: true } },
     },
     orderBy: [{ severity: 'asc' }, { cvssScore: 'desc' }, { createdAt: 'desc' }],
     take: limit,
@@ -73,20 +98,20 @@ export async function getTopRisks(orgId: string, limit = 10) {
 // GET /api/v1/dashboard/assets
 // ---------------------------------------------------------------------------
 
-export async function getAssets(orgId: string) {
+export async function getAssets(orgId: string, projectId?: string | null) {
   const [repositories, servers, endpoints] = await Promise.all([
-    getRepoScores(orgId),
-    getServerScores(orgId),
-    getEndpointScores(orgId),
+    getRepoScores(orgId, projectId),
+    getServerScores(orgId, projectId),
+    getEndpointScores(orgId, projectId),
   ]);
 
   return { repositories, servers, endpoints };
 }
 
-async function getRepoScores(orgId: string) {
+async function getRepoScores(orgId: string, projectId?: string | null) {
   const repos = await prisma.repository.findMany({
-    where: { orgId },
-    select: { id: true, owner: true, name: true, provider: true, lastScanAt: true },
+    where: projectId ? { orgId, projectId } : { orgId },
+    select: { id: true, owner: true, name: true, provider: true, lastScanAt: true, projectId: true },
     orderBy: { createdAt: 'desc' },
     take: 20,
   });
@@ -103,10 +128,10 @@ async function getRepoScores(orgId: string) {
   }));
 }
 
-async function getServerScores(orgId: string) {
+async function getServerScores(orgId: string, projectId?: string | null) {
   const servers = await prisma.server.findMany({
-    where: { orgId },
-    select: { id: true, hostname: true, status: true, lastHeartbeat: true },
+    where: projectId ? { orgId, projectId } : { orgId },
+    select: { id: true, hostname: true, status: true, lastHeartbeat: true, projectId: true },
     orderBy: { createdAt: 'desc' },
     take: 20,
   });
@@ -123,10 +148,10 @@ async function getServerScores(orgId: string) {
   }));
 }
 
-async function getEndpointScores(orgId: string) {
+async function getEndpointScores(orgId: string, projectId?: string | null) {
   const endpoints = await prisma.monitoredEndpoint.findMany({
-    where: { orgId },
-    select: { id: true, host: true, status: true, lastCheckAt: true },
+    where: projectId ? { orgId, projectId } : { orgId },
+    select: { id: true, host: true, status: true, lastCheckAt: true, projectId: true },
     orderBy: { createdAt: 'desc' },
     take: 20,
   });

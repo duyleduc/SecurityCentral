@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 
 const LOCAL_STORAGE_KEY = 'sc_project_scope';
 const QUERY_PARAM = 'project';
@@ -44,4 +44,28 @@ export function getStoredProjectScope(): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Navigate while preserving the current project scope as `?project=<id>`.
+ * Use for sidebar tab switches and cross-page links that should keep the user
+ * inside the same project.
+ */
+export function useScopedNavigate() {
+  const navigate = useNavigate();
+  const { projectId } = useProjectScope();
+  return useCallback(
+    (to: string) => {
+      if (!projectId) {
+        navigate(to);
+        return;
+      }
+      // Don't append if the target already has its own `project` param.
+      const [path, search = ''] = to.split('?');
+      const params = new URLSearchParams(search);
+      if (!params.get(QUERY_PARAM)) params.set(QUERY_PARAM, projectId);
+      navigate(`${path}?${params.toString()}`);
+    },
+    [navigate, projectId],
+  );
 }

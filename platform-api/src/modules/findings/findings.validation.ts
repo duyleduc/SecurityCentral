@@ -10,6 +10,7 @@ export const FindingsListQuerySchema = z.object({
   source: z.enum(['code_scanner', 'infra_agent', 'cert_monitor', 'cve_scan', 'security_audit', 'brute_force']).optional(),
   repositoryId: z.string().uuid().optional(),
   serverId: z.string().uuid().optional(),
+  projectId: z.string().uuid().optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(1000).default(20),
 });

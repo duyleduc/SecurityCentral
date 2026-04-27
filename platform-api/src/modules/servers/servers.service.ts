@@ -102,9 +102,9 @@ function serializeMetric(m: Record<string, unknown>): Record<string, unknown> {
   return out;
 }
 
-export async function list(orgId: string) {
+export async function list(orgId: string, projectId?: string | null) {
   return prisma.server.findMany({
-    where: { orgId },
+    where: projectId ? { orgId, projectId } : { orgId },
     include: {
       project: { select: { id: true, name: true } },
       _count: { select: { metrics: true, findings: true } },

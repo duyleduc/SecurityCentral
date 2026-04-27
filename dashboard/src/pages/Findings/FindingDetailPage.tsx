@@ -17,7 +17,7 @@ import { WorkStateChip } from '../../components/status';
 import { workStateFromFindingStatus, type WorkState } from '../../lib/status';
 
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: '#dc2626', high: '#ea580c', medium: '#d97706', low: '#2563eb', info: '#6b7280',
+  critical: '#ef4444', high: '#f59e0b', medium: '#22d3ee', low: '#94a3b8', info: '#94a3b8',
 };
 
 /** Work-state UI → backend `status` string. */

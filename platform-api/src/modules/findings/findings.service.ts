@@ -14,6 +14,7 @@ interface ListOptions {
   readonly source?: string;
   readonly repositoryId?: string;
   readonly serverId?: string;
+  readonly projectId?: string;
   readonly page: number;
   readonly limit: number;
 }
@@ -25,6 +26,18 @@ export async function list(opts: ListOptions) {
   if (opts.source) where.source = opts.source;
   if (opts.repositoryId) where.repositoryId = opts.repositoryId;
   if (opts.serverId) where.serverId = opts.serverId;
+  if (opts.projectId) {
+    const endpoints = await prisma.monitoredEndpoint.findMany({
+      where: { orgId: opts.orgId, projectId: opts.projectId },
+      select: { id: true },
+    });
+    const endpointIds = endpoints.map((e) => e.id);
+    where.OR = [
+      { repository: { is: { projectId: opts.projectId } } },
+      { server: { is: { projectId: opts.projectId } } },
+      ...(endpointIds.length > 0 ? [{ endpointId: { in: endpointIds } }] : []),
+    ];
+  }
 
   const [items, total] = await Promise.all([
     prisma.finding.findMany({

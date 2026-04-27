@@ -19,6 +19,7 @@ import { useRealtimeHeartbeat } from '../../ws/useRealtimeHeartbeat';
 import { TagsInput, type Tag } from '../../components/TagsInput';
 import { HealthChip, OpStateChip } from '../../components/status';
 import { ScopeBanner } from '../../components/ScopeBanner';
+import { StatCard } from '../../components/design';
 import { useProjectScope } from '../../lib/useProjectScope';
 import { healthFromDomainStatus, opStateFromDomainStatus, type Health } from '../../lib/status';
 
@@ -105,30 +106,23 @@ export function DomainsPage() {
       <ScopeBanner summary={`${allEndpointsForCounts?.length ?? 0} endpoints in scope`} />
 
       {/* Summary cards — click to filter by health, click again to clear */}
-      <Grid container spacing={3} mb={3}>
+      <Grid container spacing={2} mb={3}>
         {([
-          { label: 'Healthy',  value: healthyCount,  color: 'success.main',   health: 'healthy'  as Health },
-          { label: 'At-risk',  value: atRiskCount,   color: 'warning.main',   health: 'at-risk'  as Health },
-          { label: 'Critical', value: criticalCount, color: 'error.main',     health: 'critical' as Health },
-          { label: 'Unknown',  value: unknownCount,  color: 'text.secondary', health: 'unknown'  as Health },
+          { label: '● Healthy',  value: healthyCount,  color: 'success' as const, health: 'healthy'  as Health },
+          { label: '● At-risk',  value: atRiskCount,   color: 'warning' as const, health: 'at-risk'  as Health },
+          { label: '● Critical', value: criticalCount, color: 'error'   as const, health: 'critical' as Health },
+          { label: '○ Unknown',  value: unknownCount,  color: 'muted'   as const, health: 'unknown'  as Health },
         ]).map((s) => {
           const active = healthFilter === s.health;
           return (
             <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
-              <Card sx={{
-                border: '2px solid',
-                borderColor: active ? s.color : 'transparent',
-                transition: 'border-color 0.15s',
-              }}>
-                <CardActionArea onClick={() => toggleHealth(s.health)}>
-                  <CardContent>
-                    <Typography variant="h3" color={s.color}>{s.value}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {s.label}{active && ' · filtering'}
-                    </Typography>
-                  </CardContent>
-                </CardActionArea>
-              </Card>
+              <StatCard
+                value={s.value}
+                label={active ? `${s.label} · filtering` : s.label}
+                color={s.color}
+                active={active}
+                onClick={() => toggleHealth(s.health)}
+              />
             </Grid>
           );
         })}
