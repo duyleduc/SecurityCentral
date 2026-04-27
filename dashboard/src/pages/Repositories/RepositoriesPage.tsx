@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Button, Card, CardContent, CardActionArea, Grid,
+  Box, Typography, Button, Card, CardContent, IconButton, InputAdornment,
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
-  Paper, Skeleton, Chip, Stack,
+  Paper, Skeleton, Chip, Stack, TextField,
 } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import CodeIcon from '@mui/icons-material/Code';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 import { useRepositories, type Repository } from '../../api/hooks';
 import { HealthChip } from '../../components/status';
-import { ScopeBanner } from '../../components/ScopeBanner';
-import { StatCard } from '../../components/design';
+import { StatusPill } from '../../components/design';
 import { useProjectScope } from '../../lib/useProjectScope';
 import type { Health } from '../../lib/status';
 
@@ -36,6 +37,7 @@ export function RepositoriesPage() {
   const { data: repos, isLoading } = useRepositories(projectId ?? undefined);
   const navigate = useNavigate();
   const [healthFilter, setHealthFilter] = useState<RepoBucket | null>(null);
+  const [search, setSearch] = useState('');
 
   const counts = useMemo(() => {
     const buckets: Record<RepoBucket, number> = { healthy: 0, 'at-risk': 0, critical: 0, unscanned: 0 };
@@ -46,50 +48,83 @@ export function RepositoriesPage() {
   }, [repos]);
 
   const filtered = useMemo(() => {
-    if (!healthFilter) return repos ?? [];
-    return (repos ?? []).filter((r) => healthFromRepo(r) === healthFilter);
-  }, [repos, healthFilter]);
+    return (repos ?? []).filter((r) => {
+      if (healthFilter && healthFromRepo(r) !== healthFilter) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        const haystack = `${r.owner}/${r.name} ${r.language ?? ''}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [repos, healthFilter, search]);
 
   const toggle = (h: RepoBucket) =>
     setHealthFilter((prev) => (prev === h ? null : h));
 
+  const total = repos?.length ?? 0;
+  const hasFilters = !!healthFilter || !!search;
+  const clearAll = () => { setHealthFilter(null); setSearch(''); };
+
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">Repositories</Typography>
-        <Button
-          variant="contained"
-          startIcon={<SettingsIcon />}
-          onClick={() => navigate('/settings')}
-        >
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+        <Box>
+          <Typography variant="h4">Repositories</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Code scanning across connected providers ·{' '}
+            <Box component="span" sx={{ color: 'text.primary', fontWeight: 500 }}>
+              {total} {total === 1 ? 'repo' : 'repos'}
+            </Box>
+          </Typography>
+        </Box>
+        <Button variant="contained" startIcon={<SettingsIcon />} onClick={() => navigate('/settings')}>
           Manage Integrations
         </Button>
-      </Box>
+      </Stack>
 
-      <ScopeBanner summary={`${repos?.length ?? 0} repositories in scope`} />
+      <Card sx={{ mb: 2 }}>
+        <CardContent sx={{ py: 1.25, px: 1.75, '&:last-child': { pb: 1.25 } }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.25} alignItems={{ md: 'center' }}>
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+              <StatusPill label="All" count={total} active={healthFilter === null} onClick={() => setHealthFilter(null)} />
+              <StatusPill label="Healthy" color="#22c55e" count={counts.healthy} active={healthFilter === 'healthy'} onClick={() => toggle('healthy')} />
+              <StatusPill label="At-risk" color="#f59e0b" count={counts['at-risk']} active={healthFilter === 'at-risk'} onClick={() => toggle('at-risk')} />
+              <StatusPill label="Critical" color="#ef4444" count={counts.critical} active={healthFilter === 'critical'} onClick={() => toggle('critical')} />
+              <StatusPill label="Unscanned" color="#94a3b8" count={counts.unscanned} active={healthFilter === 'unscanned'} onClick={() => toggle('unscanned')} />
+            </Stack>
 
-      {/* Summary cards — click to filter */}
-      <Grid container spacing={2} mb={3}>
-        {([
-          { label: '● Healthy',   value: counts.healthy,    color: 'success' as const, key: 'healthy'   as RepoBucket },
-          { label: '● At-risk',   value: counts['at-risk'], color: 'warning' as const, key: 'at-risk'   as RepoBucket },
-          { label: '● Critical',  value: counts.critical,   color: 'error'   as const, key: 'critical'  as RepoBucket },
-          { label: '○ Unscanned', value: counts.unscanned,  color: 'muted'   as const, key: 'unscanned' as RepoBucket },
-        ]).map((s) => {
-          const active = healthFilter === s.key;
-          return (
-            <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
-              <StatCard
-                value={s.value}
-                label={active ? `${s.label} · filtering` : s.label}
-                color={s.color}
-                active={active}
-                onClick={() => toggle(s.key)}
+            <Box sx={{ flex: 1 }} />
+
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <TextField
+                size="small" placeholder="Search owner/name or language" value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: search ? (
+                      <IconButton size="small" onClick={() => setSearch('')}>
+                        <ClearIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    ) : null,
+                  },
+                }}
+                sx={{ width: 280 }}
               />
-            </Grid>
-          );
-        })}
-      </Grid>
+              {hasFilters && (
+                <Button size="small" onClick={clearAll} sx={{ textTransform: 'none', color: 'text.secondary' }}>
+                  Clear
+                </Button>
+              )}
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
 
       <TableContainer component={Paper}>
         <Table size="small">

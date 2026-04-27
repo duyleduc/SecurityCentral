@@ -55,7 +55,7 @@ export function ProjectsPage() {
       }}>
         {projects?.map((p) => {
           const counts = p._count as { servers?: number; monitoredEndpoints?: number; repositories?: number };
-          const colour = colourFor(p.id);
+          const colour = (p as { banner?: string | null }).banner || colourFor(p.id);
           const meta = [
             `${counts?.servers ?? 0} servers`,
             `${counts?.monitoredEndpoints ?? 0} domains`,

@@ -132,6 +132,7 @@ model Project {
   description String   @default("") @db.VarChar(1000)
   notes       String   @db.Text
   banner      String?  @db.VarChar(500)
+  tags        Json     @default("[]") @db.JsonB
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(3)
 

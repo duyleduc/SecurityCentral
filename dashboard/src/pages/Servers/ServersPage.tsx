@@ -18,6 +18,7 @@ import {
   Tabs,
   Tab,
   IconButton,
+  InputAdornment,
   Stack,
   MenuItem,
 } from '@mui/material';
@@ -32,9 +33,8 @@ import SearchIcon from '@mui/icons-material/Search';
 import { useServers, useProjects, useCreateInstallToken, useAgentLatestVersion, type InstallToken, type Server } from '../../api/hooks';
 import { TagsInput, type Tag } from '../../components/TagsInput';
 import { HealthChip, OpStateChip } from '../../components/status';
-import { ScopeBanner } from '../../components/ScopeBanner';
 import { ScoreBadge } from '../../components/ScoreBadge';
-import { StatCard } from '../../components/design';
+import { StatusPill } from '../../components/design';
 import { useProjectScope } from '../../lib/useProjectScope';
 import { healthFromServerStatus, opStateFromServerStatus, type Health } from '../../lib/status';
 
@@ -71,7 +71,8 @@ export function ServersPage() {
   const [expiresIn, setExpiresIn] = useState('');
   const [tagQuery, setTagQuery] = useState('');
   const [tagInput, setTagInput] = useState('');
-  /** Health filter from clicking a summary card. Null = show all. */
+  const [hostSearch, setHostSearch] = useState('');
+  /** Health filter from clicking a status pill. Null = show all. */
   const [healthFilter, setHealthFilter] = useState<Health | null>(null);
 
   const apiUrl = (import.meta.env.VITE_API_URL as string) || 'http://localhost:3000';
@@ -142,10 +143,15 @@ export function ServersPage() {
 
   const filteredServers = useMemo(
     () => scopedServers.filter((s) => {
-      if (!healthFilter) return true;
-      return healthFromServerStatus(s.status) === healthFilter;
+      if (healthFilter && healthFromServerStatus(s.status) !== healthFilter) return false;
+      if (hostSearch) {
+        const q = hostSearch.toLowerCase();
+        const haystack = `${s.hostname} ${s.label ?? ''}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
     }),
-    [scopedServers, healthFilter],
+    [scopedServers, healthFilter, hostSearch],
   );
 
   const healthyCount  = scopedServers.filter((s) => healthFromServerStatus(s.status) === 'healthy').length;
@@ -162,74 +168,94 @@ export function ServersPage() {
     setHealthFilter((prev) => (prev === h ? null : h));
   };
 
+  const hasFilters = !!healthFilter || !!tagQuery || !!hostSearch;
+  const clearAll = () => {
+    setHealthFilter(null);
+    setTagQuery('');
+    setTagInput('');
+    setHostSearch('');
+  };
+
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">Servers</Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+        <Box>
+          <Typography variant="h4">Servers</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Agent-monitored hosts ·{' '}
+            <Box component="span" sx={{ color: 'text.primary', fontWeight: 500 }}>
+              {scopedServers.length} {scopedServers.length === 1 ? 'server' : 'servers'}
+            </Box>
+          </Typography>
+        </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
           Add Server
         </Button>
-      </Box>
-
-      <ScopeBanner counts={{ servers: scopedServers.length }} />
-
-      {/* Summary cards — click to filter by health, click again to clear */}
-      <Grid container spacing={2} mb={3}>
-        {([
-          { label: '● Healthy',  value: healthyCount,  color: 'success' as const, health: 'healthy'  as Health },
-          { label: '● At-risk',  value: atRiskCount,   color: 'warning' as const, health: 'at-risk'  as Health },
-          { label: '● Critical', value: criticalCount, color: 'error'   as const, health: 'critical' as Health },
-          { label: '○ Unknown',  value: unknownCount,  color: 'muted'   as const, health: 'unknown'  as Health },
-        ]).map((s) => {
-          const active = healthFilter === s.health;
-          return (
-            <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
-              <StatCard
-                value={s.value}
-                label={active ? `${s.label} · filtering` : s.label}
-                color={s.color}
-                active={active}
-                onClick={() => toggleHealth(s.health)}
-              />
-            </Grid>
-          );
-        })}
-      </Grid>
-
-      {/* Filters — project filter removed; scope is global via top-bar switcher */}
-      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
-        <FilterListIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-        <TextField
-          size="small"
-          placeholder="Filter by tags: env=prod, tier=web"
-          value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') setTagQuery(tagInput); }}
-          slotProps={{
-            input: {
-              endAdornment: tagInput ? (
-                <IconButton size="small" onClick={() => { setTagInput(''); setTagQuery(''); }}>
-                  <ClearIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              ) : (
-                <SearchIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
-              ),
-            },
-          }}
-          sx={{ width: 320 }}
-        />
-        {tagInput && tagInput !== tagQuery && (
-          <Button size="small" variant="outlined" onClick={() => setTagQuery(tagInput)}>Apply</Button>
-        )}
-        {(tagQuery || healthFilter) && (
-          <Chip
-            label={`${filteredServers.length} of ${scopedServers.length} match`}
-            size="small"
-            variant="outlined"
-            onDelete={() => { applyTagFilter(''); setHealthFilter(null); }}
-          />
-        )}
       </Stack>
+
+      <Card sx={{ mb: 2 }}>
+        <CardContent sx={{ py: 1.25, px: 1.75, '&:last-child': { pb: 1.25 } }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.25} alignItems={{ md: 'center' }}>
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+              <StatusPill label="All" count={scopedServers.length} active={healthFilter === null} onClick={() => setHealthFilter(null)} />
+              <StatusPill label="Healthy" color="#22c55e" count={healthyCount} active={healthFilter === 'healthy'} onClick={() => toggleHealth('healthy')} />
+              <StatusPill label="At-risk" color="#f59e0b" count={atRiskCount} active={healthFilter === 'at-risk'} onClick={() => toggleHealth('at-risk')} />
+              <StatusPill label="Critical" color="#ef4444" count={criticalCount} active={healthFilter === 'critical'} onClick={() => toggleHealth('critical')} />
+              <StatusPill label="Unknown" color="#94a3b8" count={unknownCount} active={healthFilter === 'unknown'} onClick={() => toggleHealth('unknown')} />
+            </Stack>
+
+            <Box sx={{ flex: 1 }} />
+
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <TextField
+                size="small" placeholder="Search hosts" value={hostSearch}
+                onChange={(e) => setHostSearch(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: hostSearch ? (
+                      <IconButton size="small" onClick={() => setHostSearch('')}>
+                        <ClearIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    ) : null,
+                  },
+                }}
+                sx={{ width: 200 }}
+              />
+              <TextField
+                size="small" placeholder="Tags: env=prod, tier=web" value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') setTagQuery(tagInput); }}
+                onBlur={() => setTagQuery(tagInput)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <FilterListIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: tagInput ? (
+                      <IconButton size="small" onClick={() => { setTagInput(''); setTagQuery(''); }}>
+                        <ClearIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    ) : null,
+                  },
+                }}
+                sx={{ width: 240, '& .MuiInputBase-input': { fontFamily: 'monospace', fontSize: 12 } }}
+              />
+              {hasFilters && (
+                <Button size="small" onClick={clearAll} sx={{ textTransform: 'none', color: 'text.secondary' }}>
+                  Clear
+                </Button>
+              )}
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
 
       {isLoading && <Typography>Loading...</Typography>}
 

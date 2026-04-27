@@ -60,7 +60,17 @@ export async function create(input: CreateProjectInput) {
   });
 }
 
-export async function update(orgId: string, id: string, data: { name?: string; description?: string; notes?: string; banner?: string | null }) {
+export async function update(
+  orgId: string,
+  id: string,
+  data: {
+    name?: string;
+    description?: string;
+    notes?: string;
+    banner?: string | null;
+    tags?: Array<{ key: string; value: string }>;
+  },
+) {
   const existing = await prisma.project.findFirst({ where: { id, orgId } });
   if (!existing) {
     throw new AppError('RESOURCE_NOT_FOUND', 'Project not found');
@@ -78,7 +88,15 @@ export async function remove(orgId: string, id: string) {
     throw new AppError('RESOURCE_NOT_FOUND', 'Project not found');
   }
 
-  await prisma.project.delete({ where: { id } });
+  // Unassign assets (servers, endpoints, repositories, install tokens) before
+  // deleting so their FKs don't block the delete. Assets are kept.
+  await prisma.$transaction([
+    prisma.server.updateMany({ where: { orgId, projectId: id }, data: { projectId: null } }),
+    prisma.monitoredEndpoint.updateMany({ where: { orgId, projectId: id }, data: { projectId: null } }),
+    prisma.repository.updateMany({ where: { orgId, projectId: id }, data: { projectId: null } }),
+    prisma.installToken.updateMany({ where: { orgId, projectId: id }, data: { projectId: null } }),
+    prisma.project.delete({ where: { id } }),
+  ]);
 }
 
 export async function getSummary(orgId: string, id: string) {

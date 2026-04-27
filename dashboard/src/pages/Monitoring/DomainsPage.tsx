@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Card, CardContent, CardActionArea, Grid, Button, Chip, Stack, Alert, TextField,
+  Box, Typography, Card, CardContent, Button, Chip, Stack, Alert, TextField, InputAdornment,
   Table, TableContainer, TableHead, TableBody, TableRow, TableCell,
   Paper, Skeleton, Tabs, Tab, Select, MenuItem, IconButton, Tooltip, FormControl, InputLabel,
   Dialog, DialogTitle, DialogContent, DialogActions,
@@ -18,8 +18,7 @@ import { useEndpoints, useCreateEndpoint, useDeleteEndpoint, useTriggerCheck, us
 import { useRealtimeHeartbeat } from '../../ws/useRealtimeHeartbeat';
 import { TagsInput, type Tag } from '../../components/TagsInput';
 import { HealthChip, OpStateChip } from '../../components/status';
-import { ScopeBanner } from '../../components/ScopeBanner';
-import { StatCard } from '../../components/design';
+import { StatusPill } from '../../components/design';
 import { useProjectScope } from '../../lib/useProjectScope';
 import { healthFromDomainStatus, opStateFromDomainStatus, type Health } from '../../lib/status';
 
@@ -55,6 +54,7 @@ export function DomainsPage() {
   const [healthFilter, setHealthFilter] = useState<Health | null>(null);
   const [tagQuery, setTagQuery] = useState('');
   const [tagInput, setTagInput] = useState('');
+  const [hostSearch, setHostSearch] = useState('');
 
   const filters = {
     status: healthFilter ? HEALTH_TO_STATUS_QUERY[healthFilter] : undefined,
@@ -73,92 +73,125 @@ export function DomainsPage() {
   // Subscribe to real-time heartbeat updates
   useRealtimeHeartbeat();
 
-  // Unfiltered counts for the summary cards — tag + project filters still apply,
+  // Unfiltered counts for the status pills — tag + project filters still apply,
   // so the health distribution reflects the current scope.
   const { data: allEndpointsForCounts } = useEndpoints({
     tags: tagQuery || undefined,
     projectId: scopedProjectId || undefined,
   });
+  const total = allEndpointsForCounts?.length ?? 0;
   const healthyCount  = allEndpointsForCounts?.filter((e) => healthFromDomainStatus(e.status) === 'healthy').length ?? 0;
   const atRiskCount   = allEndpointsForCounts?.filter((e) => healthFromDomainStatus(e.status) === 'at-risk').length ?? 0;
   const criticalCount = allEndpointsForCounts?.filter((e) => healthFromDomainStatus(e.status) === 'critical').length ?? 0;
   const unknownCount  = allEndpointsForCounts?.filter((e) => healthFromDomainStatus(e.status) === 'unknown').length ?? 0;
-  const hasFilters = !!healthFilter || !!tagQuery;
+  const hasFilters = !!healthFilter || !!tagQuery || !!hostSearch;
+
+  // Apply host-search client-side (small datasets; backend doesn't paginate).
+  const visibleEndpoints = (endpoints ?? []).filter((ep) =>
+    !hostSearch || ep.host.toLowerCase().includes(hostSearch.toLowerCase()),
+  );
 
   const toggleHealth = (h: Health) => {
     setHealthFilter((prev) => (prev === h ? null : h));
   };
 
+  const clearAll = () => {
+    setHealthFilter(null);
+    setTagQuery('');
+    setTagInput('');
+    setHostSearch('');
+  };
+
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+      {/* Compact header — title + subtitle + primary action in a single row. */}
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
         <Box>
           <Typography variant="h4">Domain Monitoring</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Monitor TLS certificates and endpoint reachability
+            Monitor TLS certificates and endpoint reachability ·{' '}
+            <Box component="span" sx={{ color: 'text.primary', fontWeight: 500 }}>
+              {total} {total === 1 ? 'endpoint' : 'endpoints'}
+            </Box>
           </Typography>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setShowAdd(!showAdd)}>
-          Add Domains
+          Add Domain
         </Button>
       </Stack>
 
-      <ScopeBanner summary={`${allEndpointsForCounts?.length ?? 0} endpoints in scope`} />
+      {/* Toolbar — status pills + search + tag filter, all in one card. */}
+      <Card sx={{ mb: 2 }}>
+        <CardContent sx={{ py: 1.25, px: 1.75, '&:last-child': { pb: 1.25 } }}>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={1.25}
+            alignItems={{ md: 'center' }}
+          >
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+              <StatusPill label="All" count={total} active={healthFilter === null} onClick={() => setHealthFilter(null)} />
+              <StatusPill label="Healthy" color="#22c55e" count={healthyCount} active={healthFilter === 'healthy'} onClick={() => toggleHealth('healthy')} />
+              <StatusPill label="At-risk" color="#f59e0b" count={atRiskCount} active={healthFilter === 'at-risk'} onClick={() => toggleHealth('at-risk')} />
+              <StatusPill label="Critical" color="#ef4444" count={criticalCount} active={healthFilter === 'critical'} onClick={() => toggleHealth('critical')} />
+              <StatusPill label="Unknown" color="#94a3b8" count={unknownCount} active={healthFilter === 'unknown'} onClick={() => toggleHealth('unknown')} />
+            </Stack>
 
-      {/* Summary cards — click to filter by health, click again to clear */}
-      <Grid container spacing={2} mb={3}>
-        {([
-          { label: '● Healthy',  value: healthyCount,  color: 'success' as const, health: 'healthy'  as Health },
-          { label: '● At-risk',  value: atRiskCount,   color: 'warning' as const, health: 'at-risk'  as Health },
-          { label: '● Critical', value: criticalCount, color: 'error'   as const, health: 'critical' as Health },
-          { label: '○ Unknown',  value: unknownCount,  color: 'muted'   as const, health: 'unknown'  as Health },
-        ]).map((s) => {
-          const active = healthFilter === s.health;
-          return (
-            <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
-              <StatCard
-                value={s.value}
-                label={active ? `${s.label} · filtering` : s.label}
-                color={s.color}
-                active={active}
-                onClick={() => toggleHealth(s.health)}
+            <Box sx={{ flex: 1 }} />
+
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <TextField
+                size="small"
+                placeholder="Search hosts"
+                value={hostSearch}
+                onChange={(e) => setHostSearch(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: hostSearch ? (
+                      <IconButton size="small" onClick={() => setHostSearch('')}>
+                        <ClearIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    ) : null,
+                  },
+                }}
+                sx={{ width: 200 }}
               />
-            </Grid>
-          );
-        })}
-      </Grid>
-
-      {/* Filters — project filter removed; scope is global via top-bar switcher */}
-      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
-        <FilterListIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-        <TextField
-          size="small"
-          placeholder="Filter by tags: env=prod, tier=web"
-          value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') setTagQuery(tagInput); }}
-          slotProps={{
-            input: {
-              endAdornment: tagInput ? (
-                <IconButton size="small" onClick={() => { setTagInput(''); setTagQuery(''); }}>
-                  <ClearIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              ) : (
-                <SearchIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
-              ),
-            },
-          }}
-          sx={{ width: 280 }}
-        />
-        {tagInput && tagInput !== tagQuery && (
-          <Button size="small" variant="outlined" onClick={() => setTagQuery(tagInput)}>
-            Apply
-          </Button>
-        )}
-        {hasFilters && (
-          <Chip label="Clear filters" size="small" variant="outlined" onDelete={() => { setHealthFilter(null); setTagQuery(''); setTagInput(''); }} />
-        )}
-      </Stack>
+              <TextField
+                size="small"
+                placeholder="Tags: env=prod, tier=web"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') setTagQuery(tagInput); }}
+                onBlur={() => setTagQuery(tagInput)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <FilterListIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: tagInput ? (
+                      <IconButton size="small" onClick={() => { setTagInput(''); setTagQuery(''); }}>
+                        <ClearIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    ) : null,
+                  },
+                }}
+                sx={{ width: 240, '& .MuiInputBase-input': { fontFamily: 'monospace', fontSize: 12 } }}
+              />
+              {hasFilters && (
+                <Button size="small" onClick={clearAll} sx={{ textTransform: 'none', color: 'text.secondary' }}>
+                  Clear
+                </Button>
+              )}
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
 
       {showAdd && <AddDomainsForm projects={projects ?? []} onDone={() => setShowAdd(false)} />}
 
@@ -168,11 +201,20 @@ export function DomainsPage() {
           <Box sx={{ p: 5 }}>
             {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} variant="text" sx={{ mb: 1 }} />)}
           </Box>
-        ) : !endpoints?.length ? (
+        ) : !visibleEndpoints.length ? (
           <Box sx={{ py: 5, textAlign: 'center' }}>
             <LockIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1.5 }} />
-            <Typography variant="h6" sx={{ mb: 1 }}>No domains monitored</Typography>
-            <Typography variant="body2" color="text.secondary">Add domains to start monitoring</Typography>
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              {hasFilters ? 'No domains match these filters' : 'No domains monitored'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {hasFilters ? 'Try clearing filters or broadening your search.' : 'Add domains to start monitoring'}
+            </Typography>
+            {hasFilters && (
+              <Button variant="outlined" size="small" onClick={clearAll} sx={{ mt: 2 }}>
+                Clear filters
+              </Button>
+            )}
           </Box>
         ) : (
           <Table size="small">
@@ -189,7 +231,7 @@ export function DomainsPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {endpoints.map((ep) => {
+              {visibleEndpoints.map((ep) => {
                 const dotColor = DOT_COLOR[ep.status] ?? DOT_COLOR.pending;
                 const lastHb = ep.heartbeats?.[0];
                 const ssl = ep.latestSsl;

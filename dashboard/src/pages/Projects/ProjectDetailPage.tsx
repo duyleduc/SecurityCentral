@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type KeyboardEvent } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Card, CardContent, Button, Chip, Stack, TextField,
-  Tabs, Tab, IconButton, Divider, Alert,
+  Tabs, Tab, Divider, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Snackbar,
 } from '@mui/material';
 import FolderIcon from '@mui/icons-material/Folder';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -10,7 +10,7 @@ import StorageIcon from '@mui/icons-material/Storage';
 import DnsIcon from '@mui/icons-material/Dns';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import CodeIcon from '@mui/icons-material/Code';
-import { useProject, useUpdateProject } from '../../api/hooks';
+import { useProject, useUpdateProject, useDeleteProject } from '../../api/hooks';
 import { SectionCard, SettingRow } from '../../components/design';
 
 const COLOR_PALETTE = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7'];
@@ -37,20 +37,28 @@ export function ProjectDetailPage() {
   const navigate = useNavigate();
   const { data: project, isLoading } = useProject(id ?? '');
   const updateMutation = useUpdateProject();
+  const deleteMutation = useDeleteProject();
 
   const [tab, setTab] = useState(0);
   const [nameDraft, setNameDraft] = useState('');
   const [descriptionDraft, setDescriptionDraft] = useState('');
   const [notesDraft, setNotesDraft] = useState('');
+  const [colorDraft, setColorDraft] = useState('');
+  const [tagsDraft, setTagsDraft] = useState<Array<{ key: string; value: string }>>([]);
+  const [tagInput, setTagInput] = useState('');
   const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
 
   useEffect(() => {
     if (project) {
       setNameDraft(project.name);
       setDescriptionDraft(project.description ?? '');
-      // notes is on the detail object
-      const detail = project as unknown as { notes?: string };
+      const detail = project as unknown as { notes?: string; banner?: string | null; tags?: Array<{ key: string; value: string }> };
       setNotesDraft(detail.notes ?? '');
+      setColorDraft(detail.banner ?? colourFor(project.id));
+      setTagsDraft(Array.isArray(detail.tags) ? detail.tags : []);
     }
   }, [project]);
 
@@ -68,31 +76,101 @@ export function ProjectDetailPage() {
     servers: Array<{ id: string; hostname: string; status: string }>;
     monitoredEndpoints: Array<{ id: string; host: string; status: string }>;
     repositories: Array<{ id: string; owner: string; name: string; provider: string; language: string | null; lastScanAt: string | null }>;
+    tags?: Array<{ key: string; value: string }>;
     _count: { servers: number; monitoredEndpoints: number; repositories: number };
   };
 
-  const colour = colourFor(detail.id);
+  const fallbackColor = colourFor(detail.id);
+  const persistedColor = detail.banner ?? fallbackColor;
+  const colour = colorDraft || persistedColor;
+  const persistedTags = Array.isArray(detail.tags) ? detail.tags : [];
+
+  const tagsEqual = tagsDraft.length === persistedTags.length
+    && tagsDraft.every((t, i) => t.key === persistedTags[i].key && t.value === persistedTags[i].value);
+
   const isDirty = nameDraft !== detail.name
     || descriptionDraft !== (detail.description ?? '')
-    || notesDraft !== (detail.notes ?? '');
+    || notesDraft !== (detail.notes ?? '')
+    || colorDraft !== persistedColor
+    || !tagsEqual;
 
   const handleSave = () => {
+    setErrorMsg(null);
     updateMutation.mutate({
       id: detail.id,
-      name: nameDraft,
+      name: nameDraft.trim(),
       description: descriptionDraft,
       notes: notesDraft,
-    }, { onSuccess: () => setSavedAt(new Date()) });
+      banner: colorDraft || null,
+      tags: tagsDraft,
+    }, {
+      onSuccess: () => setSavedAt(new Date()),
+      onError: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Failed to save project';
+        setErrorMsg(message);
+      },
+    });
   };
 
   const handleDiscard = () => {
     setNameDraft(detail.name);
     setDescriptionDraft(detail.description ?? '');
     setNotesDraft(detail.notes ?? '');
+    setColorDraft(persistedColor);
+    setTagsDraft(persistedTags);
+    setTagInput('');
+  };
+
+  const handleAddTag = () => {
+    const trimmed = tagInput.trim();
+    if (!trimmed) return;
+    // Accept "key=value" or just "key" (value defaults to empty).
+    const eqIdx = trimmed.indexOf('=');
+    const key = (eqIdx === -1 ? trimmed : trimmed.slice(0, eqIdx)).trim();
+    const value = eqIdx === -1 ? '' : trimmed.slice(eqIdx + 1).trim();
+    if (!key) return;
+    if (tagsDraft.some((t) => t.key === key && t.value === value)) {
+      setTagInput('');
+      return;
+    }
+    setTagsDraft([...tagsDraft, { key, value }]);
+    setTagInput('');
+  };
+
+  const handleRemoveTag = (idx: number) => {
+    setTagsDraft(tagsDraft.filter((_, i) => i !== idx));
+  };
+
+  const openDeleteDialog = () => {
+    setDeleteConfirmName('');
+    setErrorMsg(null);
+    setConfirmDelete(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    setErrorMsg(null);
+    deleteMutation.mutate(detail.id, {
+      onSuccess: () => {
+        setConfirmDelete(false);
+        navigate('/projects');
+      },
+      onError: (err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Failed to delete project';
+        setErrorMsg(message);
+      },
+    });
+  };
+
+  // Ctrl/Cmd+S handler for save.
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      if (isDirty && !updateMutation.isPending) handleSave();
+    }
   };
 
   return (
-    <Box>
+    <Box onKeyDown={handleKeyDown} tabIndex={-1}>
       {/* Breadcrumb */}
       <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 1 }}>
         <Typography
@@ -176,6 +254,39 @@ export function ProjectDetailPage() {
 
       {tab === 0 && (
         <Stack spacing={2}>
+          {/* Section-wide save bar — sticky so it stays in view while scrolling
+              between the Description, General, Inherited tags, and Danger zone cards. */}
+          <Card sx={{
+            position: 'sticky', top: 8, zIndex: 5,
+            backdropFilter: 'blur(8px)',
+            background: 'rgba(17, 26, 46, 0.85)',
+            borderColor: isDirty ? 'rgba(99, 102, 241, 0.45)' : 'divider',
+          }}>
+            <CardContent sx={{ py: 1.25, '&:last-child': { pb: 1.25 } }}>
+              <Stack direction="row" alignItems="center" spacing={1.5}>
+                <Typography sx={{ fontSize: 13, fontWeight: 500, color: isDirty ? 'text.primary' : 'text.secondary' }}>
+                  {isDirty ? 'You have unsaved changes' : 'Settings'}
+                </Typography>
+                {savedAt && !isDirty && (
+                  <Typography sx={{ fontSize: 12, color: 'success.main' }}>
+                    ✓ saved {timeAgo(savedAt.toISOString())}
+                  </Typography>
+                )}
+                <Box sx={{ flex: 1 }} />
+                <Typography sx={{ fontSize: 11, color: 'text.disabled', mr: 0.5, display: { xs: 'none', sm: 'inline' } }}>
+                  ⌘S
+                </Typography>
+                <Button size="small" variant="outlined" onClick={handleDiscard} disabled={!isDirty || updateMutation.isPending}>
+                  Discard
+                </Button>
+                <Button size="small" variant="contained" onClick={handleSave}
+                  disabled={!isDirty || updateMutation.isPending}>
+                  {updateMutation.isPending ? 'Saving…' : 'Save changes'}
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+
           {/* Description card with prominent textarea (mockup .description-card) */}
           <Card>
             <CardContent>
@@ -185,10 +296,6 @@ export function ProjectDetailPage() {
                   <span>Markdown supported</span>
                   <span>·</span>
                   <span>{notesDraft.length} / 10,000 characters</span>
-                  {savedAt && <>
-                    <span>·</span>
-                    <Box component="span" sx={{ color: 'success.main' }}>✓ saved {timeAgo(savedAt.toISOString())}</Box>
-                  </>}
                 </Stack>
               </Stack>
               <Typography sx={{ fontSize: 12, color: 'text.disabled', mb: 1.5 }}>
@@ -209,20 +316,6 @@ export function ProjectDetailPage() {
                 }}
                 slotProps={{ htmlInput: { maxLength: 10000 } }}
               />
-
-              <Stack direction="row" spacing={1} mt={1.25}>
-                <Button size="small" variant="contained" onClick={handleSave}
-                  disabled={!isDirty || updateMutation.isPending}>
-                  Save
-                </Button>
-                <Button size="small" variant="outlined" onClick={handleDiscard} disabled={!isDirty}>
-                  Discard changes
-                </Button>
-                <Box sx={{ flex: 1 }} />
-                <Typography sx={{ fontSize: 11, color: 'text.disabled', alignSelf: 'center' }}>
-                  ⌘S to save
-                </Typography>
-              </Stack>
             </CardContent>
           </Card>
 
@@ -254,10 +347,13 @@ export function ProjectDetailPage() {
                 <Stack direction="row" spacing={0.75}>
                   {COLOR_PALETTE.map((c) => (
                     <Box key={c}
+                      onClick={() => setColorDraft(c)}
                       sx={{
                         width: 24, height: 24, borderRadius: 0.75, bgcolor: c,
                         cursor: 'pointer',
-                        border: c === colour ? '2px solid #fff' : '2px solid transparent',
+                        border: c === colorDraft ? '2px solid #fff' : '2px solid transparent',
+                        transition: 'transform 0.1s',
+                        '&:hover': { transform: 'scale(1.1)' },
                       }}
                     />
                   ))}
@@ -266,23 +362,43 @@ export function ProjectDetailPage() {
             />
           </SectionCard>
 
-          {/* Inherited tags (visual placeholder; backend support for inherited tags is future-work) */}
-          <SectionCard
-            title="Inherited tags"
-            action={<Button size="small" variant="outlined" disabled>+ Add tag</Button>}
-          >
+          {/* Inherited tags */}
+          <SectionCard title="Inherited tags">
             <Typography sx={{ fontSize: 12, color: 'text.disabled', mb: 1.5 }}>
-              These tags will be automatically applied to every new server, domain, and repository added to this project.
-              Assets keep their own tags on top.
+              Free-form labels for this project. Format <code>key=value</code>.
+              Click the × on any tag to remove it. Changes are saved with the rest of the section.
             </Typography>
-            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
-              {[`env=${detail.name.toLowerCase()}`].map((t) => (
-                <Chip key={t} label={t} size="small" variant="outlined"
-                  sx={{ fontFamily: 'monospace', fontSize: 11 }} />
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap mb={1.25}>
+              {tagsDraft.length === 0 && (
+                <Typography sx={{ fontSize: 12, color: 'text.disabled', alignSelf: 'center' }}>
+                  No tags yet.
+                </Typography>
+              )}
+              {tagsDraft.map((t, i) => (
+                <Chip
+                  key={`${t.key}=${t.value}-${i}`}
+                  label={t.value ? `${t.key}=${t.value}` : t.key}
+                  size="small" variant="outlined"
+                  onDelete={() => handleRemoveTag(i)}
+                  sx={{ fontFamily: 'monospace', fontSize: 11 }}
+                />
               ))}
-              <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>
-                Inherited tags require backend support — coming soon.
-              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={1}>
+              <TextField
+                size="small" placeholder="key=value" value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddTag();
+                  }
+                }}
+                sx={{ minWidth: 240, '& .MuiInputBase-input': { fontFamily: 'monospace', fontSize: 12 } }}
+              />
+              <Button size="small" variant="outlined" onClick={handleAddTag} disabled={!tagInput.trim()}>
+                Add tag
+              </Button>
             </Stack>
           </SectionCard>
 
@@ -303,7 +419,11 @@ export function ProjectDetailPage() {
               <SettingRow
                 title={<Box component="span" sx={{ color: '#fca5a5' }}>Delete project</Box>}
                 description="Permanently deletes the project and unassigns all its assets (assets themselves are kept). This cannot be undone."
-                control={<Button size="small" variant="contained" color="error">Delete project…</Button>}
+                control={
+                  <Button size="small" variant="contained" color="error" onClick={openDeleteDialog}>
+                    Delete project…
+                  </Button>
+                }
               />
             </CardContent>
           </Card>
@@ -413,6 +533,47 @@ export function ProjectDetailPage() {
           </SectionCard>
         </Stack>
       )}
+
+      <Dialog open={confirmDelete} onClose={() => !deleteMutation.isPending && setConfirmDelete(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ color: '#fca5a5' }}>Delete project</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            This permanently deletes <strong>{detail.name}</strong>. The project's assets ({detail._count.servers} servers,
+            {' '}{detail._count.monitoredEndpoints} domains, {detail._count.repositories} repos) will be unassigned but kept.
+            This cannot be undone.
+          </DialogContentText>
+          <DialogContentText sx={{ mb: 1, fontSize: 13 }}>
+            Type <code>{detail.name}</code> to confirm.
+          </DialogContentText>
+          <TextField
+            fullWidth size="small" autoFocus
+            value={deleteConfirmName}
+            onChange={(e) => setDeleteConfirmName(e.target.value)}
+            placeholder={detail.name}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(false)} disabled={deleteMutation.isPending}>Cancel</Button>
+          <Button
+            color="error" variant="contained"
+            disabled={deleteConfirmName !== detail.name || deleteMutation.isPending}
+            onClick={handleDeleteConfirm}
+          >
+            {deleteMutation.isPending ? 'Deleting…' : 'Delete project'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={!!errorMsg}
+        autoHideDuration={6000}
+        onClose={() => setErrorMsg(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="error" onClose={() => setErrorMsg(null)} variant="filled">
+          {errorMsg}
+        </Alert>
+      </Snackbar>
 
       {tab === 3 && (
         <SectionCard title="Defaults applied to new assets">

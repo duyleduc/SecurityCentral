@@ -43,6 +43,60 @@ export function ScoreRing({ score, size = 72, bg = '#111a2e' }: ScoreRingProps) 
 }
 
 // ---------------------------------------------------------------------------
+// StatusPill — compact filterable count chip (replaces large stat-card grids)
+// ---------------------------------------------------------------------------
+
+interface StatusPillProps {
+  label: string;
+  count: number;
+  /** Optional dot colour (hex). Omit for the neutral "All" pill. */
+  color?: string;
+  active: boolean;
+  onClick: () => void;
+}
+
+export function StatusPill({ label, count, color, active, onClick }: StatusPillProps) {
+  const dotColor = color ?? '#94a3b8';
+  return (
+    <Box
+      role="button" tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
+      }}
+      sx={{
+        display: 'inline-flex', alignItems: 'center', gap: 0.75,
+        px: 1.25, py: 0.5, borderRadius: 999,
+        border: '1px solid',
+        borderColor: active ? `${dotColor}88` : 'rgba(148, 163, 184, 0.18)',
+        background: active ? `${dotColor}1a` : 'transparent',
+        cursor: 'pointer', userSelect: 'none',
+        transition: 'all 0.12s',
+        '&:hover': {
+          borderColor: active ? `${dotColor}aa` : 'rgba(148, 163, 184, 0.32)',
+          background: active ? `${dotColor}24` : 'rgba(148, 163, 184, 0.06)',
+        },
+      }}
+    >
+      {color ? (
+        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: dotColor, flexShrink: 0 }} />
+      ) : null}
+      <Typography sx={{ fontSize: 12, fontWeight: 500, color: active ? 'text.primary' : 'text.secondary' }}>
+        {label}
+      </Typography>
+      <Typography sx={{
+        fontSize: 11, fontWeight: 700,
+        color: active ? dotColor : 'text.disabled',
+        fontVariantNumeric: 'tabular-nums',
+        minWidth: 14, textAlign: 'right',
+      }}>
+        {count}
+      </Typography>
+    </Box>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // StatCard — large number tile with click-through (mockup .stat-card)
 // ---------------------------------------------------------------------------
 

@@ -11,6 +11,7 @@ export interface Project {
   description: string;
   notes: string;
   banner: string | null;
+  tags: Array<{ key: string; value: string }>;
   createdAt: string;
   _count?: { servers: number; monitoredEndpoints: number };
 }
@@ -120,7 +121,7 @@ export function useTagKeys(projectId?: string) {
 export function useUpdateProject() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; name?: string; description?: string; notes?: string; banner?: string | null }) =>
+    mutationFn: ({ id, ...data }: { id: string; name?: string; description?: string; notes?: string; banner?: string | null; tags?: Array<{ key: string; value: string }> }) =>
       apiClient<Project>(`/api/v1/projects/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
@@ -137,7 +138,15 @@ export function useDeleteProject() {
   return useMutation({
     mutationFn: (id: string) =>
       apiClient<void>(`/api/v1/projects/${id}`, { method: 'DELETE' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+    onSuccess: () => {
+      // Project deletion unassigns servers/domains/repos/tokens, so invalidate
+      // every list that may show project membership.
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      qc.invalidateQueries({ queryKey: ['servers'] });
+      qc.invalidateQueries({ queryKey: ['endpoints'] });
+      qc.invalidateQueries({ queryKey: ['repositories'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
   });
 }
 

@@ -5,8 +5,6 @@ import {
   Typography,
   Card,
   CardContent,
-  CardActionArea,
-  Grid,
   Table,
   TableBody,
   TableCell,
@@ -21,11 +19,17 @@ import {
   Stack,
   CircularProgress,
   TablePagination,
+  TextField,
+  IconButton,
+  InputAdornment,
+  Button,
 } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
 import { useFindings, type FindingsFilters } from '../../api/hooks';
 import { WorkStateChip } from '../../components/status';
 import { workStateFromFindingStatus, type WorkState } from '../../lib/status';
-import { StatCard } from '../../components/design';
+import { StatusPill } from '../../components/design';
 import { useProjectScope } from '../../lib/useProjectScope';
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -69,6 +73,7 @@ export function FindingsPage() {
   const [workState, setWorkState] = useState<WorkState | 'all'>('new');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
+  const [search, setSearch] = useState('');
   const navigate = useNavigate();
 
   const filters: FindingsFilters = {
@@ -105,34 +110,99 @@ export function FindingsPage() {
     setPage(0);
   };
 
+  const total = counts.critical + counts.high + counts.medium + counts.low + counts.info;
+  const hasFilters = severity !== 'all' || source !== 'all' || workState !== 'new' || !!search;
+  const clearAll = () => {
+    setSeverity('all');
+    setSource('all');
+    setWorkState('new');
+    setSearch('');
+    setPage(0);
+  };
+
+  // Apply search client-side over title + cve + asset.
+  const visibleFindings = (findings ?? []).filter((f) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    const asset = f.repository ? `${f.repository.owner}/${f.repository.name}` : f.server?.hostname ?? '';
+    return (
+      f.title.toLowerCase().includes(q)
+      || (f.cveId ?? '').toLowerCase().includes(q)
+      || asset.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <Box>
-      <Typography variant="h4" mb={3}>
-        Findings
-      </Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+        <Box>
+          <Typography variant="h4">Findings</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Vulnerabilities and misconfigurations across all assets ·{' '}
+            <Box component="span" sx={{ color: 'text.primary', fontWeight: 500 }}>
+              {total} {total === 1 ? 'finding' : 'findings'}
+            </Box>
+          </Typography>
+        </Box>
+      </Stack>
 
-      {/* Severity stat cards — click to filter, click again to clear */}
-      <Grid container spacing={2} mb={3}>
-        {([
-          { label: 'Critical', value: counts.critical, color: 'error', key: 'critical' },
-          { label: 'High',     value: counts.high,     color: 'warning', key: 'high' },
-          { label: 'Medium',   value: counts.medium,   color: 'info', key: 'medium' },
-          { label: 'Low',      value: counts.low,      color: 'muted', key: 'low' },
-        ] as const).map((s) => (
-          <Grid key={s.label} size={{ xs: 6, sm: 3 }}>
-            <StatCard
-              value={s.value}
-              label={severity === s.key ? `${s.label} · filtering` : s.label}
-              color={s.color}
-              active={severity === s.key}
-              onClick={() => toggleSeverity(s.key)}
-            />
-          </Grid>
-        ))}
-      </Grid>
+      {/* Severity pills + search */}
+      <Card sx={{ mb: 2 }}>
+        <CardContent sx={{ py: 1.25, px: 1.75, '&:last-child': { pb: 1.25 } }}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.25} alignItems={{ md: 'center' }}>
+            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+              <StatusPill label="All" count={total} active={severity === 'all'} onClick={() => { setSeverity('all'); setPage(0); }} />
+              <StatusPill label="Critical" color="#ef4444" count={counts.critical} active={severity === 'critical'} onClick={() => toggleSeverity('critical')} />
+              <StatusPill label="High" color="#f59e0b" count={counts.high} active={severity === 'high'} onClick={() => toggleSeverity('high')} />
+              <StatusPill label="Medium" color="#22d3ee" count={counts.medium} active={severity === 'medium'} onClick={() => toggleSeverity('medium')} />
+              <StatusPill label="Low" color="#94a3b8" count={counts.low} active={severity === 'low'} onClick={() => toggleSeverity('low')} />
+            </Stack>
 
-      {/* Work-state filter chips + source dropdown */}
-      <Stack direction="row" spacing={1} alignItems="center" mb={3} flexWrap="wrap" useFlexGap>
+            <Box sx={{ flex: 1 }} />
+
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <TextField
+                size="small" placeholder="Search title, CVE, or asset" value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: search ? (
+                      <IconButton size="small" onClick={() => setSearch('')}>
+                        <ClearIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    ) : null,
+                  },
+                }}
+                sx={{ width: 280 }}
+              />
+              <FormControl size="small" sx={{ minWidth: 140 }}>
+                <InputLabel>Source</InputLabel>
+                <Select value={source} label="Source" onChange={(e) => { setSource(e.target.value); setPage(0); }}>
+                  {SOURCES.map((s) => (
+                    <MenuItem key={s} value={s}>{formatLabel(s)}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {hasFilters && (
+                <Button size="small" onClick={clearAll} sx={{ textTransform: 'none', color: 'text.secondary' }}>
+                  Clear
+                </Button>
+              )}
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      {/* Work-state pills — secondary toggle row */}
+      <Stack direction="row" spacing={1} alignItems="center" mb={2} flexWrap="wrap" useFlexGap>
+        <Typography sx={{ fontSize: 11, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: 0.6, mr: 0.5 }}>
+          Work state
+        </Typography>
         {WORK_STATE_TABS.map((t) => {
           const isActive = workState === t.key;
           return (
@@ -147,15 +217,6 @@ export function FindingsPage() {
             />
           );
         })}
-        <Box sx={{ flex: 1 }} />
-        <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel>Source</InputLabel>
-          <Select value={source} label="Source" onChange={(e) => { setSource(e.target.value); setPage(0); }}>
-            {SOURCES.map((s) => (
-              <MenuItem key={s} value={s}>{formatLabel(s)}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
       </Stack>
 
       {/* Table */}
@@ -181,14 +242,17 @@ export function FindingsPage() {
                     <CircularProgress size={24} />
                   </TableCell>
                 </TableRow>
-              ) : !findings?.length ? (
+              ) : !visibleFindings.length ? (
                 <TableRow>
                   <TableCell colSpan={8} sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
-                    No findings match the current filters.
+                    {hasFilters ? 'No findings match the current filters.' : 'No findings.'}
+                    {hasFilters && (
+                      <>{' '}<Button size="small" onClick={clearAll} sx={{ textTransform: 'none' }}>Clear filters</Button></>
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
-                findings.map((f) => (
+                visibleFindings.map((f) => (
                   <TableRow key={f.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/findings/${f.id}`)}>
                     <TableCell>
                       <Chip
