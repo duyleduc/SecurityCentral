@@ -6,6 +6,7 @@ import { API_BASE } from '../config';
 interface User {
   id: string;
   email: string;
+  name?: string;
   role: string;
 }
 

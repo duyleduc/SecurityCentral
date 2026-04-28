@@ -237,7 +237,7 @@ export async function getByToken(rawToken: string) {
 
 interface AcceptInvitationResult {
   readonly tokens: TokenPair;
-  readonly user: { id: string; email: string; role: string; orgId: string };
+  readonly user: { id: string; email: string; name: string; role: string; orgId: string };
 }
 
 export async function acceptInvitation(rawToken: string, password: string): Promise<AcceptInvitationResult> {
@@ -280,6 +280,6 @@ export async function acceptInvitation(rawToken: string, password: string): Prom
   const tokens = signTokenPair({ sub: user.id, org: user.orgId, role: user.role });
   return {
     tokens,
-    user: { id: user.id, email: user.email, role: user.role, orgId: user.orgId },
+    user: { id: user.id, email: user.email, name: user.name, role: user.role, orgId: user.orgId },
   };
 }

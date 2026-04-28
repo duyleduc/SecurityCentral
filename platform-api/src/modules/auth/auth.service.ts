@@ -20,7 +20,7 @@ interface RegisterInput {
 
 interface RegisterResult {
   readonly tokens: TokenPair;
-  readonly user: { id: string; email: string; role: string };
+  readonly user: { id: string; email: string; name: string; role: string };
   readonly org: { id: string; name: string; slug: string };
 }
 
@@ -60,7 +60,7 @@ export async function register(input: RegisterInput): Promise<RegisterResult> {
 
   return {
     tokens,
-    user: { id: user.id, email: user.email, role: user.role },
+    user: { id: user.id, email: user.email, name: user.name, role: user.role },
     org: { id: org.id, name: org.name, slug: org.slug },
   };
 }
@@ -74,7 +74,7 @@ interface LoginInput {
   readonly password: string;
 }
 
-export async function login(input: LoginInput): Promise<{ tokens: TokenPair; user: { id: string; email: string; role: string; orgId: string } }> {
+export async function login(input: LoginInput): Promise<{ tokens: TokenPair; user: { id: string; email: string; name: string; role: string; orgId: string } }> {
   const user = await prisma.user.findUnique({ where: { email: input.email } });
 
   if (!user) {
@@ -90,7 +90,7 @@ export async function login(input: LoginInput): Promise<{ tokens: TokenPair; use
 
   return {
     tokens,
-    user: { id: user.id, email: user.email, role: user.role, orgId: user.orgId },
+    user: { id: user.id, email: user.email, name: user.name, role: user.role, orgId: user.orgId },
   };
 }
 

@@ -1,15 +1,23 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Grid, Table, TableBody, TableCell, TableContainer,
+  Box, Typography, Card, Grid, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Chip, CircularProgress, Stack,
 } from '@mui/material';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import LockIcon from '@mui/icons-material/Lock';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import StorageIcon from '@mui/icons-material/Storage';
+import DnsIcon from '@mui/icons-material/Dns';
+import CodeIcon from '@mui/icons-material/Code';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import ReportProblemIcon from '@mui/icons-material/ReportProblem';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import { useDashboardSummary, useDashboardTopRisks, useDashboardAssets } from '../../api/hooks';
 import { ScopeBanner } from '../../components/ScopeBanner';
-import { ScoreRing, StatCard, SectionCard, AlertRow, StatusDot } from '../../components/design';
+import { ScoreRing, SectionCard, AlertRow, StatusDot } from '../../components/design';
+import { useAuth } from '../../auth/AuthContext';
 import { useProjectScope, useScopedNavigate } from '../../lib/useProjectScope';
 import { workStateFromFindingStatus } from '../../lib/status';
 import { WorkStateChip } from '../../components/status';
@@ -52,6 +60,12 @@ export function DashboardOverviewPage() {
   const navigate = useNavigate();
   const scopedNavigate = useScopedNavigate();
   const { projectId } = useProjectScope();
+  const { user } = useAuth();
+  // Use the first word of the full name as the friendly greeting form.
+  // Fall back to the local-part of the email if name is missing (older sessions).
+  const firstName = (user?.name?.trim().split(/\s+/)[0])
+    || user?.email?.split('@')[0]
+    || '';
   const { data: summary, isLoading: summaryLoading } = useDashboardSummary(projectId);
   const { data: topRisks, isLoading: risksLoading } = useDashboardTopRisks(projectId);
   const { data: assets } = useDashboardAssets(projectId);
@@ -95,8 +109,10 @@ export function DashboardOverviewPage() {
   return (
     <Box>
       {/* Greeting */}
-      <Stack direction="row" alignItems="baseline" spacing={1.5} sx={{ mb: 0.5 }}>
-        <Typography variant="h4">{greeting()}.</Typography>
+      <Stack direction="row" alignItems="baseline" spacing={1.5} sx={{ mb: 0.5 }} flexWrap="wrap" useFlexGap>
+        <Typography variant="h4">
+          {greeting()}{firstName ? `, ${firstName}` : ''}.
+        </Typography>
         <Typography variant="body2" color="text.secondary">
           Here's what needs you today.
         </Typography>
@@ -111,58 +127,87 @@ export function DashboardOverviewPage() {
           : undefined}
       />
 
-      {/* Score + asset stat cards */}
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3, alignItems: 'stretch' }}>
-        {/* Score card */}
-        <Box sx={{
-          flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 2,
-          background: 'rgba(15, 23, 42, 0.7)', border: '1px solid', borderColor: 'divider',
-          borderRadius: 2, px: 2.5, py: 2,
-        }}>
-          <ScoreRing score={score} />
-          <Box>
-            <Typography sx={{ fontSize: 11, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: 0.8 }}>
-              Security score
-            </Typography>
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <Typography sx={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }}>{score}</Typography>
-              <Chip label={grade.letter} size="small" color={grade.color} sx={{ fontWeight: 700 }} />
-            </Stack>
-            <Typography sx={{ fontSize: 12, color: 'text.disabled', mt: 0.25 }}>
-              {findings?.total ?? 0} open findings
-            </Typography>
-          </Box>
-        </Box>
-
-        <StatCard
-          value={healthyServers}
-          label={`Healthy servers · ${atRiskServers} at-risk`}
-          color="success"
-          onClick={() => scopedNavigate('/servers')}
-        />
-        <StatCard
-          value={healthyEndpoints}
-          label={`Healthy domains · ${criticalEndpoints} critical`}
-          color={criticalEndpoints > 0 ? 'warning' : 'success'}
-          onClick={() => scopedNavigate('/domains')}
-        />
-        <StatCard
-          value={reposNeedingAttention}
-          label="Repos need attention"
-          color={reposNeedingAttention > 0 ? 'warning' : 'success'}
-          onClick={() => scopedNavigate('/repositories')}
-        />
-      </Stack>
-
-      {/* Severity strip — clickable filters into Findings */}
+      {/* Hero row — security score + asset summaries */}
       <Grid container spacing={2} mb={3}>
-        {(['critical', 'high', 'medium', 'low'] as const).map((sev) => (
-          <Grid key={sev} size={{ xs: 6, sm: 3 }}>
-            <StatCard
-              value={findings?.[sev] ?? 0}
-              label={sev.charAt(0).toUpperCase() + sev.slice(1)}
-              color={sev === 'critical' ? 'error' : sev === 'high' ? 'warning' : sev === 'medium' ? 'info' : 'muted'}
-              onClick={() => scopedNavigate(`/findings?severity=${sev}`)}
+        {/* Security score — distinct hero card with the conic ring */}
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <Card sx={{ p: 2, height: '100%' }}>
+            <Stack direction="row" alignItems="center" spacing={2}>
+              <ScoreRing score={score} size={64} />
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontSize: 11, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  Security score
+                </Typography>
+                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mt: 0.25 }}>
+                  <Typography sx={{ fontSize: 26, fontWeight: 700, lineHeight: 1.1 }}>{score}</Typography>
+                  <Chip label={grade.letter} size="small" color={grade.color} sx={{ fontWeight: 700, height: 20, '& .MuiChip-label': { px: 0.75 } }} />
+                </Stack>
+                <Typography sx={{ fontSize: 12, color: 'text.disabled', mt: 0.25 }}>
+                  {findings?.total ?? 0} open finding{findings?.total === 1 ? '' : 's'}
+                </Typography>
+              </Box>
+            </Stack>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <AssetCard
+            icon={<StorageIcon />}
+            iconColor="#22c55e"
+            label="Servers"
+            total={counts?.servers ?? 0}
+            stats={[
+              { label: 'healthy', value: healthyServers, color: '#22c55e' },
+              { label: 'at-risk', value: atRiskServers, color: '#f59e0b' },
+            ]}
+            onClick={() => scopedNavigate('/servers')}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <AssetCard
+            icon={<DnsIcon />}
+            iconColor={criticalEndpoints > 0 ? '#ef4444' : '#22c55e'}
+            label="Domains"
+            total={counts?.domains ?? 0}
+            stats={[
+              { label: 'healthy', value: healthyEndpoints, color: '#22c55e' },
+              { label: 'critical', value: criticalEndpoints, color: '#ef4444' },
+            ]}
+            onClick={() => scopedNavigate('/domains')}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <AssetCard
+            icon={<CodeIcon />}
+            iconColor={reposNeedingAttention > 0 ? '#f59e0b' : '#22c55e'}
+            label="Repositories"
+            total={counts?.repositories ?? 0}
+            stats={[
+              { label: 'need attention', value: reposNeedingAttention, color: '#f59e0b' },
+              { label: 'healthy', value: (counts?.repositories ?? 0) - reposNeedingAttention, color: '#22c55e' },
+            ]}
+            onClick={() => scopedNavigate('/repositories')}
+          />
+        </Grid>
+      </Grid>
+
+      {/* Severity strip — icon-led tiles, clickable filters into Findings */}
+      <Grid container spacing={2} mb={3}>
+        {([
+          { sev: 'critical' as const, label: 'Critical', icon: <ErrorOutlineIcon />,        color: '#ef4444' },
+          { sev: 'high' as const,     label: 'High',     icon: <ReportProblemIcon />,       color: '#f59e0b' },
+          { sev: 'medium' as const,   label: 'Medium',   icon: <InfoOutlinedIcon />,        color: '#22d3ee' },
+          { sev: 'low' as const,      label: 'Low',      icon: <RemoveCircleOutlineIcon />, color: '#94a3b8' },
+        ]).map((s) => (
+          <Grid key={s.sev} size={{ xs: 6, sm: 3 }}>
+            <SeverityTile
+              icon={s.icon}
+              color={s.color}
+              label={s.label}
+              count={findings?.[s.sev] ?? 0}
+              onClick={() => scopedNavigate(`/findings?severity=${s.sev}`)}
             />
           </Grid>
         ))}
@@ -260,5 +305,106 @@ export function DashboardOverviewPage() {
         )}
       </SectionCard>
     </Box>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AssetCard — icon avatar + total count + per-status mini stats.
+// Used for Servers / Domains / Repos on the dashboard hero row.
+// ---------------------------------------------------------------------------
+
+interface AssetCardProps {
+  icon: ReactNode;
+  iconColor: string;
+  label: string;
+  total: number;
+  stats: Array<{ label: string; value: number; color: string }>;
+  onClick?: () => void;
+}
+
+function AssetCard({ icon, iconColor, label, total, stats, onClick }: AssetCardProps) {
+  return (
+    <Card
+      onClick={onClick}
+      sx={{
+        p: 2, height: '100%', cursor: onClick ? 'pointer' : 'default',
+        transition: 'border-color 0.15s, transform 0.15s',
+        '&:hover': onClick ? { borderColor: `${iconColor}55` } : undefined,
+      }}
+    >
+      <Stack direction="row" alignItems="center" spacing={1.5} mb={1.25}>
+        <Box sx={{
+          width: 40, height: 40, borderRadius: 1.5, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: `${iconColor}1f`,
+          color: iconColor,
+          '& svg': { fontSize: 22 },
+        }}>
+          {icon}
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography sx={{ fontSize: 11, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+            {label}
+          </Typography>
+          <Typography sx={{ fontSize: 26, fontWeight: 700, lineHeight: 1.1 }}>
+            {total}
+          </Typography>
+        </Box>
+      </Stack>
+      <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap>
+        {stats.map((s) => (
+          <Stack key={s.label} direction="row" alignItems="center" spacing={0.5}>
+            <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: s.color }} />
+            <Typography sx={{ fontSize: 12, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
+              <Box component="span" sx={{ color: s.color, fontWeight: 600 }}>{s.value}</Box>{' '}{s.label}
+            </Typography>
+          </Stack>
+        ))}
+      </Stack>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SeverityTile — icon + count + label, severity-coloured.
+// ---------------------------------------------------------------------------
+
+interface SeverityTileProps {
+  icon: ReactNode;
+  color: string;
+  label: string;
+  count: number;
+  onClick?: () => void;
+}
+
+function SeverityTile({ icon, color, label, count, onClick }: SeverityTileProps) {
+  return (
+    <Card
+      onClick={onClick}
+      sx={{
+        p: 1.75, height: '100%', cursor: onClick ? 'pointer' : 'default',
+        transition: 'border-color 0.15s',
+        '&:hover': onClick ? { borderColor: `${color}55` } : undefined,
+      }}
+    >
+      <Stack direction="row" alignItems="center" spacing={1.5}>
+        <Box sx={{
+          width: 36, height: 36, borderRadius: 1.5, flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: `${color}1f`, color,
+          '& svg': { fontSize: 20 },
+        }}>
+          {icon}
+        </Box>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography sx={{ fontSize: 11, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+            {label}
+          </Typography>
+          <Typography sx={{ fontSize: 24, fontWeight: 700, color, lineHeight: 1.1 }}>
+            {count}
+          </Typography>
+        </Box>
+      </Stack>
+    </Card>
   );
 }
